@@ -500,7 +500,8 @@ export async function updateLocation(
   callerId: string,
   isAdmin: boolean,
   locationId: string,
-  input: UpdateLocationInput
+  input: UpdateLocationInput,
+  auditReason: string | null = null
 ): Promise<LocationDetail> {
   const current = await getVisibleLocationOrNull(supabase, locationId);
   if (!current) {
@@ -571,6 +572,19 @@ export async function updateLocation(
   }
   if (use_case_ids !== undefined) {
     await replaceTags(supabase, locationId, "location_use_cases", "use_case_id", use_case_ids);
+  }
+
+  // Admin Console: content edits (not just status) an admin makes to someone else's listing are
+  // audited too -- which fields, never their values (a description can be long; the listing itself
+  // is the record of what it now says).
+  const changedFields = [
+    ...Object.keys(fields),
+    ...(category_ids !== undefined ? ["category_ids"] : []),
+    ...(amenity_ids !== undefined ? ["amenity_ids"] : []),
+    ...(use_case_ids !== undefined ? ["use_case_ids"] : []),
+  ];
+  if (isAdmin && current.host_id !== callerId && changedFields.length > 0) {
+    await writeAuditLog(callerId, "ADMIN_UPDATED_LOCATION", "location", locationId, auditReason, { fields: changedFields });
   }
 
   return getLocation(supabase, locationId);

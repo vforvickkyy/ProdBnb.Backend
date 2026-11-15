@@ -266,6 +266,7 @@ export class CashfreeProvider implements PaymentProvider {
           return_url: input.returnUrl,
           notify_url: input.notifyUrl,
         },
+        ...(input.expiresAt ? { order_expiry_time: input.expiresAt.toISOString() } : {}),
       }),
     });
 
@@ -275,6 +276,22 @@ export class CashfreeProvider implements PaymentProvider {
       checkout: { payment_session_id: body.payment_session_id ?? null, order_id: body.order_id },
       raw: body,
     };
+  }
+
+  /**
+   * Looks up an order id that can never exist. Cashfree authenticates before it resolves the
+   * order, so 401/403 means the app id/secret were rejected, while 404 means they were accepted.
+   * Reads nothing real, writes nothing, and never returns the response body.
+   */
+  async checkCredentials(): Promise<{ ok: boolean; detail: string }> {
+    const res = await fetch(`${this.baseUrl}/pg/orders/pb_healthcheck_${Date.now()}`, { method: "GET", headers: this.headers });
+    if (res.status === 404) {
+      return { ok: true, detail: `Credentials accepted (${env.CASHFREE_ENV} environment).` };
+    }
+    if (res.status === 401 || res.status === 403) {
+      return { ok: false, detail: `Credentials rejected by Cashfree (HTTP ${res.status}).` };
+    }
+    return { ok: res.ok, detail: `Unexpected response from Cashfree (HTTP ${res.status}).` };
   }
 
   async fetchOrder(providerOrderId: string): Promise<FetchOrderResult> {

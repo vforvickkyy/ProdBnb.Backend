@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { callerHasRole } from "../../middleware/requireRole";
+import { callerHasAdminPermission } from "../admin/permissions";
 import { created, ok } from "../../utils/respond";
 import { getAvailability } from "./availability.service";
 import {
@@ -19,8 +19,10 @@ import { createBlock, deleteBlock, listBlocks, updateBlock } from "./blocks.serv
 import { createOverride, deleteOverride, listOverrides, updateOverride } from "./overrides.service";
 import { createRule, deleteRule, listRules, updateRule } from "./rules.service";
 
+// Admin Console: "may this caller act as an administrator here" is a team-role permission,
+// not bare admin-role membership -- see src/modules/admin/permissions.ts.
 async function isCallerAdmin(req: Request): Promise<boolean> {
-  return callerHasRole(req.supabase!, req.user!.id, "admin");
+  return callerHasAdminPermission(req, "locations.moderate");
 }
 
 // --- public computed availability ---

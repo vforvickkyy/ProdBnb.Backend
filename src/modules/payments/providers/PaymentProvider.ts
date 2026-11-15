@@ -37,6 +37,12 @@ export interface CreateOrderInput {
   returnUrl: string;
   /** This server's own webhook endpoint -- always server-constructed, never client-influenced. */
   notifyUrl: string;
+  /**
+   * Admin Console: when the order must stop being payable. Set only while unpaid-hold expiry is
+   * on, so a booking's hold and its checkout can never disagree about how long the booker has.
+   * Omitted otherwise, leaving the provider's own default -- exactly the pre-Admin-Console payload.
+   */
+  expiresAt?: Date;
 }
 
 export interface CreateOrderResult {
@@ -187,6 +193,12 @@ export interface VerifyWebhookInput {
 export interface PaymentProvider {
   readonly name: PaymentProviderName;
   createOrder(input: CreateOrderInput): Promise<CreateOrderResult>;
+  /**
+   * Admin Console integrations check: are the configured credentials accepted by the provider?
+   * Must not create, change or reveal anything. Optional -- a provider without one reports
+   * "not checkable" rather than a fabricated success.
+   */
+  checkCredentials?(): Promise<{ ok: boolean; detail: string }>;
   /**
    * The authoritative server-side read of an order: its status, what the
    * provider believes it is for, and a fresh checkout payload for resuming it.

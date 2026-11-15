@@ -185,3 +185,17 @@ export class APNsProvider implements NotificationProvider {
     }
   }
 }
+
+/**
+ * Admin Console integrations check: can the configured key actually sign an APNs provider token?
+ * Proves the key, team id and key id are usable together; it cannot prove Apple will accept a
+ * push (that needs a real device token). Never returns or logs the key or the token.
+ */
+export function checkApnsSigning(): { ok: boolean; detail: string } {
+  try {
+    getJwt();
+    return { ok: true, detail: "Provider token signed successfully with the configured key." };
+  } catch (error) {
+    return { ok: false, detail: error instanceof Error ? error.message.slice(0, 200) : "Signing failed." };
+  }
+}

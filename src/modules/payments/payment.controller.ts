@@ -1,13 +1,15 @@
 import { Request, Response } from "express";
 import { writeAuditLog } from "../admin/audit.service";
-import { callerHasRole } from "../../middleware/requireRole";
+import { callerHasAdminPermission } from "../admin/permissions";
 import { created, ok } from "../../utils/respond";
 import { BookingIdParam } from "../bookings/bookings.schema";
 import { CreatePaymentInput, CreateRefundInput, PaymentIdParam } from "./payment.schema";
 import { createPayment, createRefund, getPayment, handleWebhook, listPaymentsForBooking, listRefunds, verifyPayment } from "./payment.service";
 
+// Admin Console: "may this caller act as an administrator here" is a team-role permission,
+// not bare admin-role membership -- see src/modules/admin/permissions.ts.
 async function isCallerAdmin(req: Request): Promise<boolean> {
-  return callerHasRole(req.supabase!, req.user!.id, "admin");
+  return callerHasAdminPermission(req, "payments.refund");
 }
 
 export async function postPayment(req: Request, res: Response): Promise<void> {

@@ -10,6 +10,11 @@ declare global {
       };
       /** Supabase client scoped to the calling user's JWT — RLS applies. */
       supabase?: SupabaseClient;
+      /**
+       * Memoised admin team role (src/modules/admin/permissions.ts). `undefined` = not looked up
+       * yet; `null` = looked up, caller is not an admin.
+       */
+      adminTeamRole?: "super_admin" | "moderator" | "support" | "finance" | null;
       /** Populated by middleware/validate.ts — parsed, schema-validated request data. */
       valid?: {
         body?: unknown;

@@ -25,16 +25,39 @@ import { adminListLocationsQuerySchema, locationIdParamSchema } from "../src/mod
 import { createRefundSchema, paymentIdParamSchema } from "../src/modules/payments/payment.schema";
 import { listUsersQuerySchema } from "../src/modules/users/users.schema";
 import {
+  addTeamMemberSchema,
+  adminConversationsQuerySchema,
   adminListPaymentsQuerySchema,
   adminListRefundsQuerySchema,
+  adminUpdateLocationSchema,
   adminUserIdParamSchema,
+  analyticsQuerySchema,
+  attentionQuerySchema,
+  auditActionSchema,
   auditLogQuerySchema,
+  auditTargetTypeSchema,
+  catalogItemParamSchema,
+  catalogKindParamSchema,
+  catalogNameSchema,
+  conversationIdParamSchema,
   deliveryAttemptsQuerySchema,
+  integrationsQuerySchema,
+  locationMediaParamSchema,
+  locationSectionParamSchema,
+  messageAccessLogQuerySchema,
   noBodySchema,
+  openConversationSchema,
+  optionalReasonSchema,
   rejectLocationSchema,
+  setTeamRoleSchema,
   suspendLocationSchema,
   suspendUserSchema,
+  teamRoleSchema,
+  teamUserIdParamSchema,
+  updateSettingsSchema,
+  userRoleParamSchema,
 } from "../src/modules/admin/admin.schema";
+import { ADMIN_PERMISSIONS } from "../src/modules/admin/permissions";
 
 extendZodWithOpenApi(z);
 
@@ -132,6 +155,8 @@ const dashboardSummarySchema = z
         created_at: z.string().datetime(),
       })
     ),
+    unpaid_holds: z.number().int(),
+    payments_needing_attention: z.number().int(),
   })
   .openapi("DashboardSummary");
 
@@ -183,6 +208,23 @@ const adminUserDetailSchema = z
   })
   .openapi("AdminUserDetail");
 
+// The detail view (and every mutation that returns a user) carries more than a list row does.
+const adminUserFullDetailSchema = adminUserDetailSchema
+  .extend({
+    team_role: teamRoleSchema.nullable(),
+    contact: z.object({
+      phone: z.string().nullable(),
+      address_line1: z.string().nullable(),
+      address_line2: z.string().nullable(),
+      address_city: z.string().nullable(),
+      address_region: z.string().nullable(),
+      address_country: z.string().nullable(),
+      address_postal_code: z.string().nullable(),
+    }),
+    billing: z.object({ company_name: z.string().nullable(), gst_number: z.string().nullable(), updated_at: z.string().datetime() }).nullable(),
+  })
+  .openapi("AdminUserFullDetail");
+
 registry.registerPath({
   method: "get",
   path: "/users",
@@ -200,7 +242,7 @@ registry.registerPath({
   summary: "User detail: profile + roles + email (Admin Auth API) + counts",
   security,
   request: { params: adminUserIdParamSchema },
-  responses: { "200": okResponse(adminUserDetailSchema), ...errorResponses },
+  responses: { "200": okResponse(adminUserFullDetailSchema), ...errorResponses },
 });
 
 registry.registerPath({
@@ -210,7 +252,7 @@ registry.registerPath({
   summary: "Suspend a user (reason required) -- cascades to their published locations only",
   security,
   request: { params: adminUserIdParamSchema, body: jsonBody(suspendUserSchema) },
-  responses: { "200": okResponse(adminUserDetailSchema), ...errorResponses },
+  responses: { "200": okResponse(adminUserFullDetailSchema), ...errorResponses },
 });
 
 registry.registerPath({
@@ -220,7 +262,7 @@ registry.registerPath({
   summary: "Restore a suspended user -- republishes only locations its own suspension put down",
   security,
   request: { params: adminUserIdParamSchema, body: jsonBody(noBodySchema) },
-  responses: { "200": okResponse(adminUserDetailSchema), ...errorResponses },
+  responses: { "200": okResponse(adminUserFullDetailSchema), ...errorResponses },
 });
 
 // -- Locations ------------------------------------------------------------
@@ -322,9 +364,11 @@ const bookingLocationRefSchema = z.object({
   id: z.string().uuid(),
   title: z.string(),
   city: z.string(),
+  region: z.string().nullable(),
   timezone: z.string(),
   host_id: z.string().uuid(),
   host: nameRefSchema,
+  primary_media_url: z.string().nullable(),
 });
 
 const paymentSummarySchema = z.object({
@@ -358,8 +402,13 @@ const bookingDetailSchema = z
     cancelled_at: z.string().datetime().nullable(),
     cancelled_by: z.string().uuid().nullable(),
     cancellation_reason: z.string().nullable(),
+    hold_expired_at: z.string().datetime().nullable(),
   })
   .openapi("BookingDetail");
+
+// Admin booking reads add when an unpaid active booking's hold lapses (null when paid, inactive,
+// or unpaid-hold expiry is off).
+const adminBookingSchema = bookingDetailSchema.extend({ hold_expires_at: z.string().datetime().nullable() }).openapi("AdminBooking");
 
 registry.registerPath({
   method: "get",
@@ -368,7 +417,7 @@ registry.registerPath({
   summary: "List bookings (booker_id/host_id/location_id/status/start_after/start_before filters)",
   security,
   request: { query: listBookingsQuerySchema },
-  responses: { "200": paginatedResponse(bookingDetailSchema), ...errorResponses },
+  responses: { "200": paginatedResponse(adminBookingSchema), ...errorResponses },
 });
 
 registry.registerPath({
@@ -378,7 +427,7 @@ registry.registerPath({
   summary: "Booking detail",
   security,
   request: { params: bookingIdParamSchema },
-  responses: { "200": okResponse(bookingDetailSchema), ...errorResponses },
+  responses: { "200": okResponse(adminBookingSchema), ...errorResponses },
 });
 
 registry.registerPath({
@@ -516,18 +565,8 @@ const auditLogEntrySchema = z
   .object({
     id: z.string().uuid(),
     admin_id: z.string().uuid(),
-    action: z.enum([
-      "ADMIN_APPROVED_LOCATION",
-      "ADMIN_REJECTED_LOCATION",
-      "ADMIN_SUSPENDED_LOCATION",
-      "ADMIN_RESTORED_LOCATION",
-      "ADMIN_UPDATED_LOCATION_STATUS",
-      "ADMIN_SUSPENDED_USER",
-      "ADMIN_RESTORED_USER",
-      "ADMIN_CANCELLED_BOOKING",
-      "ADMIN_CREATED_REFUND",
-    ]),
-    target_type: z.enum(["location", "user", "booking", "payment"]),
+    action: auditActionSchema,
+    target_type: auditTargetTypeSchema,
     target_id: z.string().uuid(),
     reason: z.string().nullable(),
     metadata: z.record(z.unknown()),
@@ -545,6 +584,481 @@ registry.registerPath({
   responses: { "200": paginatedResponse(auditLogEntrySchema), ...errorResponses },
 });
 
+// ============================================================================
+// Admin Console
+// ============================================================================
+
+const permissionSchema = z.enum(ADMIN_PERMISSIONS);
+
+// -- Me & team ------------------------------------------------------------------
+
+const adminMeSchema = z
+  .object({
+    user_id: z.string().uuid(),
+    email: z.string().nullable(),
+    first_name: z.string().nullable(),
+    last_name: z.string().nullable(),
+    team_role: teamRoleSchema,
+    permissions: z.array(permissionSchema),
+  })
+  .openapi("AdminMe");
+
+registry.registerPath({
+  method: "get",
+  path: "/me",
+  tags: ["Admin", "Team"],
+  summary: "The calling admin: team role and the exact permissions it grants",
+  security,
+  responses: { "200": okResponse(adminMeSchema), ...errorResponses },
+});
+
+const teamMemberSchema = z
+  .object({
+    user_id: z.string().uuid(),
+    team_role: teamRoleSchema,
+    first_name: z.string().nullable(),
+    last_name: z.string().nullable(),
+    avatar_url: z.string().nullable(),
+    status: z.string(),
+    email: z.string().nullable(),
+    created_by: z.string().uuid().nullable(),
+    created_at: z.string().datetime(),
+    updated_at: z.string().datetime(),
+  })
+  .openapi("TeamMember");
+
+registry.registerPath({
+  method: "get",
+  path: "/team",
+  tags: ["Admin", "Team"],
+  summary: "Every admin and their team role",
+  security,
+  responses: { "200": okResponse(z.array(teamMemberSchema)), ...errorResponses },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/team",
+  tags: ["Admin", "Team"],
+  summary: "Add an existing account to the admin team by email (super admin)",
+  security,
+  request: { body: jsonBody(addTeamMemberSchema) },
+  responses: { "201": createdResponse(teamMemberSchema), ...errorResponses },
+});
+
+registry.registerPath({
+  method: "put",
+  path: "/team/{userId}",
+  tags: ["Admin", "Team"],
+  summary: "Set a team role (super admin). The last super admin cannot be demoted (409).",
+  security,
+  request: { params: teamUserIdParamSchema, body: jsonBody(setTeamRoleSchema) },
+  responses: { "200": okResponse(teamMemberSchema), ...errorResponses },
+});
+
+registry.registerPath({
+  method: "delete",
+  path: "/team/{userId}",
+  tags: ["Admin", "Team"],
+  summary: "Remove from the admin team (super admin). Booker/host roles are kept.",
+  security,
+  request: { params: teamUserIdParamSchema },
+  responses: { "200": okResponse(z.object({ removed: z.boolean() })), ...errorResponses },
+});
+
+// -- Settings -------------------------------------------------------------------
+
+const platformSettingsSchema = z
+  .object({
+    id: z.string().uuid(),
+    platform_fee_bps: z.number().int(),
+    tax_bps: z.number().int(),
+    unpaid_hold_minutes: z.number().int().nullable(),
+    updated_by: z.string().uuid().nullable(),
+    updated_at: z.string().datetime(),
+  })
+  .openapi("PlatformSettings");
+
+registry.registerPath({
+  method: "get",
+  path: "/settings",
+  tags: ["Admin", "Settings"],
+  summary: "Platform fee, tax and unpaid-hold window",
+  security,
+  responses: { "200": okResponse(platformSettingsSchema), ...errorResponses },
+});
+
+registry.registerPath({
+  method: "patch",
+  path: "/settings",
+  tags: ["Admin", "Settings"],
+  summary: "Change platform settings (super admin). Applies to new bookings only; audited.",
+  security,
+  request: { body: jsonBody(updateSettingsSchema) },
+  responses: { "200": okResponse(platformSettingsSchema), ...errorResponses },
+});
+
+// -- Integrations ------------------------------------------------------------------
+
+const integrationSettingSchema = z
+  .object({
+    key: z.string(),
+    kind: z.enum(["secret", "identifier", "public"]),
+    set: z.boolean(),
+    display: z.string().nullable(),
+  })
+  .openapi("IntegrationSetting");
+
+const integrationStatusSchema = z
+  .object({
+    id: z.string(),
+    name: z.string(),
+    purpose: z.string(),
+    status: z.enum(["ok", "warning", "error", "disabled", "unchecked"]),
+    detail: z.string(),
+    latency_ms: z.number().int().nullable(),
+    settings: z.array(integrationSettingSchema),
+  })
+  .openapi("IntegrationStatus");
+
+const integrationsReportSchema = z
+  .object({
+    checked_at: z.string().datetime(),
+    live_checks: z.boolean(),
+    deployment: z.object({
+      node_env: z.string(),
+      vercel_env: z.string().nullable(),
+      region: z.string().nullable(),
+      commit_sha: z.string().nullable(),
+      commit_ref: z.string().nullable(),
+      commit_message: z.string().nullable(),
+      deployment_url: z.string().nullable(),
+    }),
+    integrations: z.array(integrationStatusSchema),
+  })
+  .openapi("IntegrationsReport");
+
+registry.registerPath({
+  method: "get",
+  path: "/system/integrations",
+  tags: ["Admin", "System"],
+  summary: "Every integration's configuration status (never a secret value); ?check=true runs live checks",
+  security,
+  request: { query: integrationsQuerySchema },
+  responses: { "200": okResponse(integrationsReportSchema), ...errorResponses },
+});
+
+// -- Analytics ----------------------------------------------------------------------
+
+const analyticsSchema = z
+  .object({
+    range: z.object({ from: z.string(), to: z.string(), bucket: z.string(), timezone: z.string(), currency: z.string() }),
+    totals: z.object({
+      new_users: z.number().int(),
+      new_listings: z.number().int(),
+      published_listings: z.number().int(),
+      bookings_created: z.number().int(),
+      bookings_paid: z.number().int(),
+      gmv_minor: z.number().int(),
+      refunds_minor: z.number().int(),
+      platform_fee_minor: z.number().int(),
+      payment_success_rate: z.number().nullable(),
+      cancellations: z.number().int(),
+      expired_holds: z.number().int(),
+      other_currency_payments: z.number().int(),
+    }),
+    series: z.array(
+      z.object({
+        bucket_start: z.string(),
+        new_users: z.number().int(),
+        bookings_created: z.number().int(),
+        bookings_paid: z.number().int(),
+        gmv_minor: z.number().int(),
+      })
+    ),
+    status_breakdown: z.record(z.number().int()),
+    booking_type_breakdown: z.record(z.number().int()),
+    top_locations: z.array(
+      z.object({ id: z.string().uuid(), title: z.string(), city: z.string(), paid_bookings: z.number().int(), gmv_minor: z.number().int() })
+    ),
+    top_cities: z.array(z.object({ city: z.string(), bookings: z.number().int() })),
+  })
+  .openapi("Analytics");
+
+registry.registerPath({
+  method: "get",
+  path: "/analytics",
+  tags: ["Admin", "Analytics"],
+  summary: "Marketplace analytics for a range (bucketed by day/week/month in the given time zone)",
+  security,
+  request: { query: analyticsQuerySchema },
+  responses: { "200": okResponse(analyticsSchema), ...errorResponses },
+});
+
+// -- People ---------------------------------------------------------------------------
+
+registry.registerPath({
+  method: "post",
+  path: "/users/{id}/roles/{role}",
+  tags: ["Admin", "Users"],
+  summary: "Grant booker/host on a user's behalf (audited). 'admin' is the team API's job.",
+  security,
+  request: { params: userRoleParamSchema },
+  responses: { "201": createdResponse(adminUserFullDetailSchema), ...errorResponses },
+});
+
+registry.registerPath({
+  method: "delete",
+  path: "/users/{id}/roles/{role}",
+  tags: ["Admin", "Users"],
+  summary: "Revoke booker/host (audited). Existing listings are not touched.",
+  security,
+  request: { params: userRoleParamSchema },
+  responses: { "200": okResponse(adminUserFullDetailSchema), ...errorResponses },
+});
+
+// -- Listing moderation -------------------------------------------------------------------
+
+registry.registerPath({
+  method: "patch",
+  path: "/locations/{id}",
+  tags: ["Admin", "Locations"],
+  summary: "Correct a listing's content (not status). Audited with the fields changed.",
+  security,
+  request: { params: locationIdParamSchema, body: jsonBody(adminUpdateLocationSchema) },
+  responses: { "200": okResponse(locationDetailSchema), ...errorResponses },
+});
+
+const sectionSummarySchema = z
+  .object({
+    id: z.string().uuid(),
+    location_id: z.string().uuid(),
+    name: z.string(),
+    description: z.string().nullable(),
+    created_at: z.string().datetime(),
+    updated_at: z.string().datetime(),
+    cover: publicMediaItemSchema.nullable(),
+    photo_count: z.number().int(),
+  })
+  .openapi("LocationSectionSummary");
+
+registry.registerPath({
+  method: "get",
+  path: "/locations/{id}/gallery",
+  tags: ["Admin", "Locations"],
+  summary: "Every photo on a listing: the general gallery and each section's",
+  security,
+  request: { params: locationIdParamSchema },
+  responses: {
+    "200": okResponse(
+      z
+        .object({
+          general: z.array(publicMediaItemSchema),
+          sections: z.array(z.object({ section: sectionSummarySchema, media: z.array(publicMediaItemSchema) })),
+        })
+        .openapi("LocationGallery")
+    ),
+    ...errorResponses,
+  },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/locations/{id}/media/{mediaId}/remove",
+  tags: ["Admin", "Locations"],
+  summary: "Remove a photo/video from a listing (deletes the stored object; audited)",
+  security,
+  request: { params: locationMediaParamSchema, body: jsonBody(optionalReasonSchema) },
+  responses: { "200": okResponse(z.object({ deleted: z.boolean() })), ...errorResponses },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/locations/{id}/sections/{sectionId}/remove",
+  tags: ["Admin", "Locations"],
+  summary: "Remove an empty section from a listing (audited)",
+  security,
+  request: { params: locationSectionParamSchema, body: jsonBody(optionalReasonSchema) },
+  responses: { "200": okResponse(z.object({ deleted: z.boolean() })), ...errorResponses },
+});
+
+// -- Catalog --------------------------------------------------------------------------------
+
+const adminCatalogItemSchema = z
+  .object({ id: z.string().uuid(), name: z.string(), created_at: z.string().datetime(), usage_count: z.number().int() })
+  .openapi("AdminCatalogItem");
+
+registry.registerPath({
+  method: "get",
+  path: "/catalog/{kind}",
+  tags: ["Admin", "Catalog"],
+  summary: "Categories / amenities / use-cases, with how many listings use each",
+  security,
+  request: { params: catalogKindParamSchema },
+  responses: { "200": okResponse(z.array(adminCatalogItemSchema)), ...errorResponses },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/catalog/{kind}",
+  tags: ["Admin", "Catalog"],
+  summary: "Add a catalog option (audited; duplicate names are 409)",
+  security,
+  request: { params: catalogKindParamSchema, body: jsonBody(catalogNameSchema) },
+  responses: { "201": createdResponse(adminCatalogItemSchema), ...errorResponses },
+});
+
+registry.registerPath({
+  method: "patch",
+  path: "/catalog/{kind}/{itemId}",
+  tags: ["Admin", "Catalog"],
+  summary: "Rename a catalog option (audited)",
+  security,
+  request: { params: catalogItemParamSchema, body: jsonBody(catalogNameSchema) },
+  responses: { "200": okResponse(adminCatalogItemSchema), ...errorResponses },
+});
+
+registry.registerPath({
+  method: "delete",
+  path: "/catalog/{kind}/{itemId}",
+  tags: ["Admin", "Catalog"],
+  summary: "Delete an unused catalog option (409 while any listing uses it; audited)",
+  security,
+  request: { params: catalogItemParamSchema },
+  responses: { "200": okResponse(z.object({ deleted: z.boolean() })), ...errorResponses },
+});
+
+// -- Booking actions --------------------------------------------------------------------------
+
+for (const [action, summary, body] of [
+  ["confirm", "Confirm on the host's behalf (audited)", noBodySchema],
+  ["reject", "Reject on the host's behalf, optional reason (audited)", bookingActionSchema],
+  ["complete", "Mark completed (audited)", noBodySchema],
+] as const) {
+  registry.registerPath({
+    method: "post",
+    path: `/bookings/{id}/${action}`,
+    tags: ["Admin", "Bookings"],
+    summary,
+    security,
+    request: { params: bookingIdParamSchema, body: jsonBody(body) },
+    responses: { "200": okResponse(bookingDetailSchema), ...errorResponses },
+  });
+}
+
+// -- Payments ---------------------------------------------------------------------------------
+
+registry.registerPath({
+  method: "post",
+  path: "/payments/{id}/verify",
+  tags: ["Admin", "Payments"],
+  summary: "Re-check a payment with the provider (same guarded path as the webhook; audited)",
+  security,
+  request: { params: paymentIdParamSchema, body: jsonBody(noBodySchema) },
+  responses: { "200": okResponse(adminPaymentDetailSchema.omit({ booking: true })), ...errorResponses },
+});
+
+const paymentNeedingAttentionSchema = adminPaymentDetailSchema
+  .extend({
+    booking_status: z.string(),
+    hold_expired: z.boolean(),
+    cancelled_at: z.string().datetime().nullable(),
+    refunded_minor_units: z.number().int(),
+  })
+  .openapi("PaymentNeedingAttention");
+
+registry.registerPath({
+  method: "get",
+  path: "/payments/attention",
+  tags: ["Admin", "Payments"],
+  summary: "Money taken for a cancelled/rejected booking and not yet fully refunded",
+  security,
+  request: { query: attentionQuerySchema },
+  responses: { "200": paginatedResponse(paymentNeedingAttentionSchema), ...errorResponses },
+});
+
+// -- Dispute message access ---------------------------------------------------------------------
+
+const personRefSchema = z.object({ id: z.string().uuid(), first_name: z.string().nullable(), last_name: z.string().nullable() });
+
+const adminConversationSummarySchema = z
+  .object({
+    id: z.string().uuid(),
+    booker: personRefSchema,
+    host: personRefSchema.nullable(),
+    location: z.object({ id: z.string().uuid(), title: z.string(), city: z.string() }).nullable(),
+    booking_id: z.string().uuid().nullable(),
+    message_count: z.number().int(),
+    last_message_at: z.string().datetime(),
+    created_at: z.string().datetime(),
+  })
+  .openapi("AdminConversationSummary");
+
+registry.registerPath({
+  method: "get",
+  path: "/conversations",
+  tags: ["Admin", "Messaging"],
+  summary: "Find conversations -- metadata only, never message text",
+  security,
+  request: { query: adminConversationsQuerySchema },
+  responses: { "200": paginatedResponse(adminConversationSummarySchema), ...errorResponses },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/conversations/{id}/access",
+  tags: ["Admin", "Messaging"],
+  summary: "Read a conversation for a stated reason. Writes a permanent access record first.",
+  security,
+  request: { params: conversationIdParamSchema, body: jsonBody(openConversationSchema) },
+  responses: {
+    "200": okResponse(
+      z
+        .object({
+          conversation: adminConversationSummarySchema,
+          messages: z.array(
+            z.object({
+              id: z.string().uuid(),
+              sender_id: z.string().uuid(),
+              sender_role: z.enum(["booker", "host", "other"]),
+              body: z.string(),
+              created_at: z.string().datetime(),
+            })
+          ),
+          truncated: z.boolean(),
+          access_id: z.string().uuid(),
+        })
+        .openapi("AdminConversationTranscript")
+    ),
+    ...errorResponses,
+  },
+});
+
+registry.registerPath({
+  method: "get",
+  path: "/message-access-log",
+  tags: ["Admin", "Messaging"],
+  summary: "Every admin read of private correspondence, with its reason (append-only)",
+  security,
+  request: { query: messageAccessLogQuerySchema },
+  responses: {
+    "200": paginatedResponse(
+      z
+        .object({
+          id: z.string().uuid(),
+          admin_user_id: z.string().uuid(),
+          admin: nameRefSchema,
+          conversation_id: z.string().uuid(),
+          action: z.string(),
+          reason: z.string(),
+          created_at: z.string().datetime(),
+        })
+        .openapi("MessageAccessLogEntry")
+    ),
+    ...errorResponses,
+  },
+});
+
 const generator = new OpenApiGeneratorV3(registry.definitions);
 const document = generator.generateDocument({
   openapi: "3.0.0",
@@ -552,8 +1066,9 @@ const document = generator.generateDocument({
     title: "ProdBnb Admin API",
     version: "1.0.0",
     description:
-      "The /v1/admin/* surface only (Phase 11). Every endpoint requires a Supabase access token " +
-      "for a user holding the 'admin' role. Base path is mounted at /v1/admin on the ProdBnb backend.",
+      "The /v1/admin/* surface only (Phase 11; Admin Console). Every endpoint requires a Supabase access " +
+      "token for a user holding the 'admin' role, and each names the admin team-role permission it needs " +
+      "(see GET /me). Base path is mounted at /v1/admin on the ProdBnb backend.",
   },
   servers: [{ url: "/v1/admin" }],
 });

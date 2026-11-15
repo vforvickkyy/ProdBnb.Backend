@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { requireAuth } from "../../middleware/auth";
 import { requireRole } from "../../middleware/requireRole";
+import { requirePermission } from "../admin/permissions";
 import { validate } from "../../middleware/validate";
 import { getMe, listUsers, patchMe } from "./users.controller";
 import { listUsersQuerySchema, updateProfileSchema } from "./users.schema";
@@ -17,6 +18,7 @@ usersRouter.get(
   "/admin/users",
   requireAuth,
   requireRole("admin"),
+  requirePermission("users.view"),
   validate({ query: listUsersQuerySchema }),
   listUsers
 );

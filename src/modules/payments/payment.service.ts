@@ -3,6 +3,7 @@ import { SupabaseClient } from "@supabase/supabase-js";
 import { env } from "../../config/env";
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from "../../errors/AppError";
 import { adminClient } from "../../lib/supabase";
+import { getPlatformSettings } from "../platform/settings.service";
 import { getBooking } from "../bookings/bookings.service";
 import {
   notifyBookingRequestReceived,
@@ -347,6 +348,30 @@ async function resumeInFlightPayment(
 }
 
 /**
+ * Cashfree's minimum order lifetime is 15 minutes; one more keeps a clock skew between us and the
+ * provider from tipping a valid request under it.
+ */
+const MIN_CHECKOUT_LIFETIME_MS = 16 * 60_000;
+
+/**
+ * Admin Console: how long a new checkout stays payable, or `undefined` while unpaid-hold expiry is
+ * off (the provider's own default then applies, exactly as before).
+ *
+ * The order lives until the booking's hold would lapse, and never less than the provider minimum.
+ * Recorded on the payment row as `expires_at`, which is what `expire_unpaid_bookings()` reads to
+ * keep a booking alive while its checkout can still succeed -- the hold is extended by a live
+ * checkout, never cut short underneath one.
+ */
+async function checkoutExpiryFor(bookingCreatedAt: string): Promise<Date | undefined> {
+  const { unpaid_hold_minutes } = await getPlatformSettings();
+  if (unpaid_hold_minutes === null) {
+    return undefined;
+  }
+  const holdEnds = new Date(bookingCreatedAt).getTime() + unpaid_hold_minutes * 60_000;
+  return new Date(Math.max(holdEnds, Date.now() + MIN_CHECKOUT_LIFETIME_MS));
+}
+
+/**
  * Only the booker themselves may pay for their own booking, only while it's
  * still `requested`/`confirmed` (Phase 6A statuses, unmodified -- payment
  * never adds a new one). The booking's own immutable price snapshot
@@ -420,6 +445,7 @@ export async function createPayment(
   const paymentId = randomUUID();
   const providerOrderId = `pb_${paymentId.replace(/-/g, "")}`;
   const provider = getPaymentProvider();
+  const expiresAt = await checkoutExpiryFor(booking.created_at);
 
   const { error: insertError } = await adminClient.from("payments").insert({
     id: paymentId,
@@ -429,6 +455,7 @@ export async function createPayment(
     status: "created",
     amount_minor_units: booking.pricing.total_amount_minor_units,
     currency: booking.pricing.currency,
+    expires_at: expiresAt?.toISOString() ?? null,
   });
   if (insertError) {
     // The partial unique indexes (payments_one_inflight_per_booking,
@@ -450,6 +477,7 @@ export async function createPayment(
       customer: { id: callerId, email: bookerEmail, phone: input.customer_phone },
       returnUrl: input.return_url ?? `${env.API_BASE_URL}/v1/payments/return`,
       notifyUrl: `${env.API_BASE_URL}/v1/payments/webhooks/cashfree`,
+      ...(expiresAt ? { expiresAt } : {}),
     });
   } catch (err) {
     await adminClient

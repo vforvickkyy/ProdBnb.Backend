@@ -1104,6 +1104,12 @@ cursor.
 
 ## Admin (Phase 11)
 
+> **Admin Console:** the admin surface now also covers team roles, platform settings, unpaid-hold
+> expiry, dispute message access, catalog management, listing moderation, booking/payment
+> operations, analytics and integrations status, and every route names the team-role permission it
+> needs. See [`docs/ADMIN_CONSOLE.md`](ADMIN_CONSOLE.md) for the full list; the contract is
+> `docs/admin-openapi.json`.
+
 Every endpoint below requires authentication **and** the `admin` role, enforced once at the
 router level (`src/modules/admin/admin.routes.ts`) — a booker/host gets `403` from any of them,
 verified explicitly in each `tests/admin-*.test.ts` file. See

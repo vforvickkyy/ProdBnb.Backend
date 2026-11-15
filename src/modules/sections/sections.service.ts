@@ -1,4 +1,5 @@
 import { SupabaseClient } from "@supabase/supabase-js";
+import { writeAuditLog } from "../admin/audit.service";
 import { ConflictError, NotFoundError, ValidationError } from "../../errors/AppError";
 import {
   assertLocationManageable,
@@ -313,9 +314,10 @@ export async function deleteSection(
   callerId: string,
   isAdmin: boolean,
   locationId: string,
-  sectionId: string
+  sectionId: string,
+  reason: string | null = null
 ): Promise<void> {
-  await assertLocationManageable(supabase, callerId, isAdmin, locationId);
+  const location = await assertLocationManageable(supabase, callerId, isAdmin, locationId);
   await assertSectionBelongsToLocation(supabase, locationId, sectionId);
 
   const { count, error: countError } = await supabase
@@ -341,5 +343,10 @@ export async function deleteSection(
 
   if (error) {
     throw error;
+  }
+
+  // Admin Console: audited when an admin removes a section from someone else's listing.
+  if (isAdmin && location.host_id !== callerId) {
+    await writeAuditLog(callerId, "ADMIN_DELETED_SECTION", "section", sectionId, reason, { location_id: locationId });
   }
 }

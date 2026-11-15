@@ -11,6 +11,8 @@ import {
 } from "../notifications/notification.service";
 import { BookingType } from "../pricing/pricing.schema";
 import { BookingActionInput, CreateBookingInput, ListBookingsQuery } from "./bookings.schema";
+import { getPlatformSettings, platformCharges } from "../platform/settings.service";
+import { expireUnpaidHolds } from "./holds";
 import { calculateBookingPrice, getActivePricing } from "./pricing";
 
 const EXCLUSION_VIOLATION = "23P01";
@@ -48,7 +50,7 @@ const BOOKING_COLUMNS = `
   id, location_id, booker_id, booking_type, start_at, end_at, status,
   base_amount_minor_units, platform_fee_minor_units, tax_minor_units, discount_minor_units,
   total_amount_minor_units, currency,
-  cancelled_at, cancelled_by, cancellation_reason,
+  cancelled_at, cancelled_by, cancellation_reason, hold_expired_at,
   created_at, updated_at
 `;
 
@@ -219,6 +221,7 @@ interface RawBookingRow {
   cancelled_at: string | null;
   cancelled_by: string | null;
   cancellation_reason: string | null;
+  hold_expired_at: string | null;
   created_at: string;
   updated_at: string;
   locations: RawLocationRef;
@@ -249,6 +252,12 @@ export interface BookingDetail {
   cancelled_at: string | null;
   cancelled_by: string | null;
   cancellation_reason: string | null;
+  /**
+   * Admin Console. Set when this booking was auto-cancelled because payment was not completed
+   * within the platform's unpaid-hold window -- how a client tells an expiry apart from a person
+   * cancelling. Additive; `null` for every other booking.
+   */
+  hold_expired_at: string | null;
   /**
    * Phase 29.18-F. Present only when the caller is the **host** of this booking's location.
    *
@@ -297,6 +306,7 @@ function toBookingDetail(row: RawBookingRow): BookingDetail {
     cancelled_at: row.cancelled_at,
     cancelled_by: row.cancelled_by,
     cancellation_reason: row.cancellation_reason,
+    hold_expired_at: row.hold_expired_at ?? null,
   };
 }
 
@@ -388,6 +398,11 @@ export async function createBooking(
 
   const interval = await resolveInterval(supabase, input.location_id, input);
 
+  // Admin Console: release any lapsed unpaid hold on this location first, so a slot an abandoned
+  // checkout was squatting on is bookable the moment its hold runs out -- not up to a minute later
+  // when the pg_cron sweep gets to it. A no-op (no round trip) while expiry is off.
+  await expireUnpaidHolds(input.location_id);
+
   const { data: available, error: availabilityError } = await supabase.rpc("is_interval_available", {
     _location_id: input.location_id,
     _start_at: interval.start_at,
@@ -408,6 +423,10 @@ export async function createBooking(
     interval.end_at,
     location.timezone
   );
+  // Admin Console: platform fee and tax from platform_settings, applied on top of the location's own
+  // price. Both default to 0, in which case `charges.total_amount_minor_units === base` and every
+  // booking prices exactly as it always has. The snapshot below records whichever rates applied.
+  const charges = platformCharges(pricing.base_amount_minor_units, await getPlatformSettings());
   const status = location.instant_booking_enabled ? "confirmed" : "requested";
 
   // Every authorization/business-rule check above already ran against the
@@ -427,7 +446,9 @@ export async function createBooking(
       end_at: interval.end_at,
       status,
       base_amount_minor_units: pricing.base_amount_minor_units,
-      total_amount_minor_units: pricing.total_amount_minor_units,
+      platform_fee_minor_units: charges.platform_fee_minor_units,
+      tax_minor_units: charges.tax_minor_units,
+      total_amount_minor_units: charges.total_amount_minor_units,
       currency: pricing.currency,
     })
     .select(BOOKING_DETAIL_SELECT)
@@ -581,9 +602,24 @@ export async function listBookings(
   if (gateOnPayment) {
     select = select.replace("payments (", "payments!inner (");
   }
+  // Admin Console payment_state filter. A separately-aliased embed, so the `payments` array every
+  // booking already carries is never filtered by it: `!inner` + settled statuses keeps only paid
+  // bookings; a plain embed filtered to settled statuses and then required to be empty (`is null`,
+  // PostgREST's anti-join) keeps only unpaid ones.
+  if (query.payment_state === "paid") {
+    select = `${select}, settled_payments:payments!inner ( id )`;
+  } else if (query.payment_state === "unpaid") {
+    select = `${select}, settled_payments:payments ( id )`;
+  }
   let request = supabase.from("bookings").select(select, { count: "exact" });
   if (gateOnPayment) {
     request = request.in("payments.status", SETTLED_PAYMENT_STATUSES);
+  }
+  if (query.payment_state) {
+    request = request.in("settled_payments.status", SETTLED_PAYMENT_STATUSES);
+    if (query.payment_state === "unpaid") {
+      request = request.is("settled_payments", null);
+    }
   }
   if (query.location_id) {
     request = request.eq("location_id", query.location_id);

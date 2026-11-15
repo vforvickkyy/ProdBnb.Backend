@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { callerHasRole } from "../../middleware/requireRole";
+import { callerHasAdminPermission } from "../admin/permissions";
 import { created, ok } from "../../utils/respond";
 import {
   CompleteUploadInput,
@@ -10,8 +10,10 @@ import {
 } from "./media.schema";
 import { completeUpload, deleteMedia, listMedia, reorderMedia, requestUpload } from "./media.service";
 
+// Admin Console: "may this caller act as an administrator here" is a team-role permission,
+// not bare admin-role membership -- see src/modules/admin/permissions.ts.
 async function isCallerAdmin(req: Request): Promise<boolean> {
-  return callerHasRole(req.supabase!, req.user!.id, "admin");
+  return callerHasAdminPermission(req, "locations.moderate");
 }
 
 export async function postRequestUpload(req: Request, res: Response): Promise<void> {

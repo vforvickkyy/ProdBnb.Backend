@@ -31,36 +31,20 @@ All DNS records are CNAMEs (no A records, no apex complications).
 
 ## Vercel + Express: how this repo is actually structured for it
 
-Vercel's "zero-config" Express auto-detection (scanning for `app.ts`/`index.ts`/`server.ts` at a
-few fixed paths) does **not** cleanly fit this repo: it found both `src/app.ts` (exports a
-`createApp()` factory, not an app instance) and `src/index.ts` (calls `app.listen()`, but doesn't
-import `express` directly) as candidates and picked the wrong one (`src/app.ts`) — confirmed
-empirically with `vercel dev --local` before relying on it, not assumed. Rather than restructure
-the existing module layout to fit that heuristic, this repo uses Vercel's other, fully explicit,
-unambiguous convention instead:
+Vercel's native **Express** framework preset (Project Settings → Framework Preset: Express) loads
+`src/app.ts` directly and requires its **default export to be the app instance**. So:
 
-- **`api/index.ts`** — the only Vercel-specific file in this repo. Imports `createApp()` from
-  `../src/app` and does `export default app`. Vercel wraps this as a single Vercel Function using
-  Fluid compute and forwards the raw Node `(req, res)` through to it — every existing Express
-  behavior (routing, middleware order, the raw-body Cashfree webhook handling) is unaffected.
-  Verified locally with `vercel dev --local`: the function loads and correctly runs the real
-  Express app (confirmed via its own 404 JSON envelope on an unmatched route).
-- **`vercel.json`** — a single catch-all rewrite (`"/(.*)" → "/api"`) so every path (`/health`,
-  `/v1/*`, not just `/api/*`) reaches this one function, plus `"regions": ["sin1"]` to co-locate
-  with the Singapore Supabase projects (Hobby plan supports one custom region; Pro supports up to
-  5). **This exact rewrite could not be locally verified** — `vercel dev --local` (deliberately
-  used to avoid linking/creating a Vercel project before you'd approved it) does not fully emulate
-  `vercel.json` rewrites/routing the same way a real deployment does; direct requests to `/api`
-  itself were confirmed working, isolating the untested part specifically to the rewrite mechanism.
-  **This must be the first thing verified once staging is actually deployed** — hit `/health`
-  and confirm it resolves, before anything else.
-- **`api/tsconfig.json`** — extends the root `tsconfig.json` with `noEmit: true` and an `include`
-  covering both `api/` and `src/`, purely so `npm run typecheck` catches errors in `api/index.ts`
-  too. Deliberately **not** added to the root `tsconfig.json`'s own `include` — that would shift
-  `npm run build`'s computed output structure and break `dist/index.js`/`npm start`, which must
-  keep working unchanged for local dev and any non-Vercel Node host.
-- `src/index.ts` (the `app.listen()` + graceful-SIGTERM entrypoint) is **unaffected and still used
-  for local dev** (`npm run dev`) — Vercel never imports or executes this file.
+- **`src/app.ts`** builds the one app (`createApp()`) and `export default`s that instance. Every
+  Express behaviour (routing, middleware order, the raw-body Cashfree webhook) is unaffected.
+- **`src/index.ts`** (`app.listen()` + graceful SIGTERM) imports that same instance and is used only
+  for local dev (`npm run dev`) and any non-Vercel Node host. Vercel never executes it.
+- **`vercel.json`** only pins the region (`"regions": ["sin1"]`, co-located with the Singapore
+  Supabase projects). There is no rewrite and no `api/` directory.
+
+> History: Phase 13 first shipped an `api/index.ts` entrypoint plus a catch-all rewrite to work
+> around Vercel picking the wrong file. Commit `1acfd06` ("consolidate vercel express entrypoint")
+> removed both: with two entrypoints Vercel built two app instances and split traffic between them.
+> Older notes that mention `api/index.ts` describe that superseded setup.
 
 ## What's out of scope here
 
@@ -121,7 +105,7 @@ either to anything else; the app will refuse to boot (by design).
 
 1. New Vercel Project, connected to this GitHub repo, watching the environment's branch
    (`staging` / `production`).
-2. No build command override needed — `vercel.json` + `api/index.ts` are zero-config from here;
+2. No build command override needed — the Express preset + `src/app.ts`'s default export are zero-config;
    Vercel detects and bundles the Express app itself rather than running this repo's own
    `npm run build` script for the deployed Function.
 3. Set every environment variable per the matrix in `docs/ENVIRONMENT.md`. **`API_BASE_URL` is the
@@ -131,10 +115,8 @@ either to anything else; the app will refuse to boot (by design).
    never reconcile. Set it to `https://staging-api.prodbnb.com` / `https://api.prodbnb.com`
    explicitly and verify it with a real webhook round-trip (see the runbook) — don't trust that
    it's set correctly just because the deploy succeeded.
-4. **First live check, before anything else**: `GET /health` on the deployed URL. This is the one
-   thing that could not be verified locally (see "Vercel + Express" above) — confirm the
-   `vercel.json` rewrite is actually routing top-level paths to the function before assuming
-   anything else works.
+4. **First live check, before anything else**: `GET /health` on the deployed URL — confirms the
+   Express preset is serving top-level paths before assuming anything else works.
 
 ### 4. Admin Panel on Vercel
 

@@ -2,6 +2,7 @@ import { Router } from "express";
 import { requireAuth } from "../../middleware/auth";
 import { optionalAuth } from "../../middleware/optionalAuth";
 import { requireRole } from "../../middleware/requireRole";
+import { requirePermission } from "../admin/permissions";
 import { validate } from "../../middleware/validate";
 import { getSearchResults } from "../search/search.controller";
 import { searchLocationsQuerySchema } from "../search/search.schema";
@@ -37,6 +38,7 @@ locationsRouter.get(
   "/admin/locations",
   requireAuth,
   requireRole("admin"),
+  requirePermission("locations.view"),
   validate({ query: adminListLocationsQuerySchema }),
   getAdminLocations
 );

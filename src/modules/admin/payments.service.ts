@@ -126,3 +126,57 @@ export async function listAllRefunds(supabase: SupabaseClient, query: AdminListR
   }
   return { data: (data ?? []) as unknown as AdminRefundDetail[], total: count ?? 0 };
 }
+
+// -- Admin Console: payments needing attention ------------------------------------------------
+
+export interface PaymentNeedingAttention extends AdminPaymentDetail {
+  /** Why it needs a human: what happened to the booking after money was taken. */
+  booking_status: string;
+  hold_expired: boolean;
+  cancelled_at: string | null;
+  refunded_minor_units: number;
+}
+
+/**
+ * Money taken for a booking that is no longer going ahead -- `cancelled` (by a person, or by
+ * unpaid-hold expiry when a delayed payment settled after the hold lapsed) or `rejected` -- and not
+ * yet fully refunded. Payment success deliberately never changes booking status and cancellation
+ * deliberately never auto-refunds (Phase 7: no refund *policy* engine exists), so every one of
+ * these is a decision an admin has to make. The Admin Console surfaces them as a queue instead of
+ * relying on someone noticing.
+ */
+export async function listPaymentsNeedingAttention(
+  supabase: SupabaseClient,
+  page: number,
+  pageSize: number
+): Promise<{ data: PaymentNeedingAttention[]; total: number }> {
+  const from = (page - 1) * pageSize;
+  const select = PAYMENT_COLUMNS.replace(
+    "booking:bookings ( id, location_id, booker_id,",
+    "booking:bookings!inner ( id, location_id, booker_id, status, hold_expired_at, cancelled_at,"
+  ).replace("updated_at,\n", "updated_at, refunds:payment_refunds ( amount_minor_units, status ),\n");
+
+  const { data, error, count } = await supabase
+    .from("payments")
+    .select(select, { count: "exact" })
+    .in("status", ["success", "partially_refunded"])
+    .in("booking.status", ["cancelled", "rejected"])
+    .order("created_at", { ascending: false })
+    .range(from, from + pageSize - 1);
+  if (error) {
+    throw error;
+  }
+
+  type Row = AdminPaymentDetail & {
+    booking: (BookingContext & { status: string; hold_expired_at: string | null; cancelled_at: string | null }) | null;
+    refunds: { amount_minor_units: number; status: string }[] | null;
+  };
+  const rows = ((data ?? []) as unknown as Row[]).map(({ refunds, ...row }) => ({
+    ...row,
+    booking_status: row.booking?.status ?? "unknown",
+    hold_expired: Boolean(row.booking?.hold_expired_at),
+    cancelled_at: row.booking?.cancelled_at ?? null,
+    refunded_minor_units: (refunds ?? []).filter((r) => r.status === "success").reduce((sum, r) => sum + r.amount_minor_units, 0),
+  }));
+  return { data: rows, total: count ?? 0 };
+}

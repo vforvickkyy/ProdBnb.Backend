@@ -11,9 +11,25 @@ export type AuditAction =
   | "ADMIN_SUSPENDED_USER"
   | "ADMIN_RESTORED_USER"
   | "ADMIN_CANCELLED_BOOKING"
-  | "ADMIN_CREATED_REFUND";
+  | "ADMIN_CREATED_REFUND"
+  // Admin Console (migration 20261115095000_admin_audit_vocabulary.sql)
+  | "ADMIN_CONFIRMED_BOOKING"
+  | "ADMIN_REJECTED_BOOKING"
+  | "ADMIN_COMPLETED_BOOKING"
+  | "ADMIN_VERIFIED_PAYMENT"
+  | "ADMIN_UPDATED_LOCATION"
+  | "ADMIN_DELETED_MEDIA"
+  | "ADMIN_DELETED_SECTION"
+  | "ADMIN_CREATED_CATALOG_ITEM"
+  | "ADMIN_UPDATED_CATALOG_ITEM"
+  | "ADMIN_DELETED_CATALOG_ITEM"
+  | "ADMIN_GRANTED_ROLE"
+  | "ADMIN_REVOKED_ROLE"
+  | "ADMIN_SET_TEAM_ROLE"
+  | "ADMIN_REMOVED_TEAM_MEMBER"
+  | "ADMIN_UPDATED_SETTINGS";
 
-export type AuditTargetType = "location" | "user" | "booking" | "payment";
+export type AuditTargetType = "location" | "user" | "booking" | "payment" | "media" | "section" | "catalog_item" | "settings";
 
 export interface AuditLogEntry {
   id: string;

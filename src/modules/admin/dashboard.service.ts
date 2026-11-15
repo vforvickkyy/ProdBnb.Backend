@@ -19,6 +19,10 @@ export interface DashboardSummary {
   payment_activity_30d: { count: number; total_amount_minor_units: number };
   refund_activity_30d: { count: number; total_amount_minor_units: number };
   recent_admin_actions: { id: string; action: string; target_type: string; target_id: string; created_at: string }[];
+  /** Admin Console: active (requested/confirmed) bookings with no settled payment -- holding a slot unpaid. */
+  unpaid_holds: number;
+  /** Admin Console: money taken for a cancelled/rejected booking and not yet fully refunded. */
+  payments_needing_attention: number;
 }
 
 export async function getDashboardSummary(supabase: SupabaseClient): Promise<DashboardSummary> {
@@ -35,6 +39,8 @@ export async function getDashboardSummary(supabase: SupabaseClient): Promise<Das
     recentPaymentsRes,
     recentRefundsRes,
     recentAuditRes,
+    unpaidHoldsRes,
+    attentionRes,
   ] = await Promise.all([
     supabase.from("profiles").select("id", { count: "exact", head: true }),
     supabase
@@ -57,6 +63,17 @@ export async function getDashboardSummary(supabase: SupabaseClient): Promise<Das
       .select("id, action, target_type, target_id, created_at")
       .order("created_at", { ascending: false })
       .limit(5),
+    supabase
+      .from("bookings")
+      .select("id, settled:payments ( id )", { count: "exact", head: true })
+      .in("status", ["requested", "confirmed"])
+      .in("settled.status", ["success", "partially_refunded", "refunded"])
+      .is("settled", null),
+    supabase
+      .from("payments")
+      .select("id, booking:bookings!inner ( id )", { count: "exact", head: true })
+      .in("status", ["success", "partially_refunded"])
+      .in("booking.status", ["cancelled", "rejected"]),
   ]);
 
   if (totalUsersRes.error) throw totalUsersRes.error;
@@ -68,6 +85,8 @@ export async function getDashboardSummary(supabase: SupabaseClient): Promise<Das
   if (recentPaymentsRes.error) throw recentPaymentsRes.error;
   if (recentRefundsRes.error) throw recentRefundsRes.error;
   if (recentAuditRes.error) throw recentAuditRes.error;
+  if (unpaidHoldsRes.error) throw unpaidHoldsRes.error;
+  if (attentionRes.error) throw attentionRes.error;
 
   const totalUsers = totalUsersRes.count ?? 0;
   const activeHosts = activeHostsRes.count ?? 0;
@@ -93,5 +112,7 @@ export async function getDashboardSummary(supabase: SupabaseClient): Promise<Das
       total_amount_minor_units: sum(recentRefundsRes.data),
     },
     recent_admin_actions: recentAuditRes.data ?? [],
+    unpaid_holds: unpaidHoldsRes.count ?? 0,
+    payments_needing_attention: attentionRes.count ?? 0,
   };
 }

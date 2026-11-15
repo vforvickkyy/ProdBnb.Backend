@@ -1,4 +1,4 @@
-import { DeleteObjectCommand, HeadObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import { DeleteObjectCommand, HeadBucketCommand, HeadObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { env } from "../config/env";
 
@@ -72,4 +72,18 @@ export async function headObject(key: string): Promise<R2ObjectInfo | null> {
 
 export async function deleteObject(key: string): Promise<void> {
   await client.send(new DeleteObjectCommand({ Bucket: env.R2_BUCKET_NAME, Key: key }));
+}
+
+/**
+ * Admin Console integrations check: can these credentials reach this bucket at all? A HeadBucket
+ * reads no object and writes nothing. Throws with the SDK's error name only -- never credentials.
+ */
+export async function checkBucketAccess(): Promise<void> {
+  try {
+    await client.send(new HeadBucketCommand({ Bucket: env.R2_BUCKET_NAME }));
+  } catch (error) {
+    const status = (error as { $metadata?: { httpStatusCode?: number } }).$metadata?.httpStatusCode;
+    const name = (error as { name?: string }).name ?? "Error";
+    throw new Error(status ? `${name} (HTTP ${status})` : name);
+  }
 }

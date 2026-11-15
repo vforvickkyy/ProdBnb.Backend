@@ -3,7 +3,7 @@
   "info": {
     "title": "ProdBnb Admin API",
     "version": "1.0.0",
-    "description": "The /v1/admin/* surface only (Phase 11). Every endpoint requires a Supabase access token for a user holding the 'admin' role. Base path is mounted at /v1/admin on the ProdBnb backend."
+    "description": "The /v1/admin/* surface only (Phase 11; Admin Console). Every endpoint requires a Supabase access token for a user holding the 'admin' role, and each names the admin team-role permission it needs (see GET /me). Base path is mounted at /v1/admin on the ProdBnb backend."
   },
   "servers": [
     {
@@ -128,6 +128,12 @@
                 "created_at"
               ]
             }
+          },
+          "unpaid_holds": {
+            "type": "integer"
+          },
+          "payments_needing_attention": {
+            "type": "integer"
           }
         },
         "required": [
@@ -139,7 +145,9 @@
           "recent_bookings",
           "payment_activity_30d",
           "refund_activity_30d",
-          "recent_admin_actions"
+          "recent_admin_actions",
+          "unpaid_holds",
+          "payments_needing_attention"
         ]
       },
       "SystemStatus": {
@@ -268,6 +276,98 @@
           "last_sign_in_at",
           "locations_count",
           "bookings_count"
+        ]
+      },
+      "AdminUserFullDetail": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/AdminUserDetail"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "team_role": {
+                "type": "string",
+                "nullable": true,
+                "enum": [
+                  "super_admin",
+                  "moderator",
+                  "support",
+                  "finance"
+                ]
+              },
+              "contact": {
+                "type": "object",
+                "properties": {
+                  "phone": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "address_line1": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "address_line2": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "address_city": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "address_region": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "address_country": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "address_postal_code": {
+                    "type": "string",
+                    "nullable": true
+                  }
+                },
+                "required": [
+                  "phone",
+                  "address_line1",
+                  "address_line2",
+                  "address_city",
+                  "address_region",
+                  "address_country",
+                  "address_postal_code"
+                ]
+              },
+              "billing": {
+                "type": "object",
+                "nullable": true,
+                "properties": {
+                  "company_name": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "gst_number": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "updated_at": {
+                    "type": "string",
+                    "format": "date-time"
+                  }
+                },
+                "required": [
+                  "company_name",
+                  "gst_number",
+                  "updated_at"
+                ]
+              }
+            },
+            "required": [
+              "team_role",
+              "contact",
+              "billing"
+            ]
+          }
         ]
       },
       "CatalogRef": {
@@ -558,6 +658,10 @@
               "city": {
                 "type": "string"
               },
+              "region": {
+                "type": "string",
+                "nullable": true
+              },
               "timezone": {
                 "type": "string"
               },
@@ -567,15 +671,21 @@
               },
               "host": {
                 "$ref": "#/components/schemas/NameRef"
+              },
+              "primary_media_url": {
+                "type": "string",
+                "nullable": true
               }
             },
             "required": [
               "id",
               "title",
               "city",
+              "region",
               "timezone",
               "host_id",
-              "host"
+              "host",
+              "primary_media_url"
             ]
           },
           "booker_id": {
@@ -692,6 +802,11 @@
           "cancellation_reason": {
             "type": "string",
             "nullable": true
+          },
+          "hold_expired_at": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
           }
         },
         "required": [
@@ -709,7 +824,28 @@
           "updated_at",
           "cancelled_at",
           "cancelled_by",
-          "cancellation_reason"
+          "cancellation_reason",
+          "hold_expired_at"
+        ]
+      },
+      "AdminBooking": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/BookingDetail"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "hold_expires_at": {
+                "type": "string",
+                "nullable": true,
+                "format": "date-time"
+              }
+            },
+            "required": [
+              "hold_expires_at"
+            ]
+          }
         ]
       },
       "AdminPaymentDetail": {
@@ -1027,7 +1163,22 @@
               "ADMIN_SUSPENDED_USER",
               "ADMIN_RESTORED_USER",
               "ADMIN_CANCELLED_BOOKING",
-              "ADMIN_CREATED_REFUND"
+              "ADMIN_CREATED_REFUND",
+              "ADMIN_CONFIRMED_BOOKING",
+              "ADMIN_REJECTED_BOOKING",
+              "ADMIN_COMPLETED_BOOKING",
+              "ADMIN_VERIFIED_PAYMENT",
+              "ADMIN_UPDATED_LOCATION",
+              "ADMIN_DELETED_MEDIA",
+              "ADMIN_DELETED_SECTION",
+              "ADMIN_CREATED_CATALOG_ITEM",
+              "ADMIN_UPDATED_CATALOG_ITEM",
+              "ADMIN_DELETED_CATALOG_ITEM",
+              "ADMIN_GRANTED_ROLE",
+              "ADMIN_REVOKED_ROLE",
+              "ADMIN_SET_TEAM_ROLE",
+              "ADMIN_REMOVED_TEAM_MEMBER",
+              "ADMIN_UPDATED_SETTINGS"
             ]
           },
           "target_type": {
@@ -1036,7 +1187,11 @@
               "location",
               "user",
               "booking",
-              "payment"
+              "payment",
+              "media",
+              "section",
+              "catalog_item",
+              "settings"
             ]
           },
           "target_id": {
@@ -1066,6 +1221,840 @@
           "target_id",
           "reason",
           "metadata",
+          "created_at"
+        ]
+      },
+      "AdminMe": {
+        "type": "object",
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "email": {
+            "type": "string",
+            "nullable": true
+          },
+          "first_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "last_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "team_role": {
+            "type": "string",
+            "enum": [
+              "super_admin",
+              "moderator",
+              "support",
+              "finance"
+            ]
+          },
+          "permissions": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "dashboard.view",
+                "analytics.view",
+                "users.view",
+                "users.manage",
+                "locations.view",
+                "locations.moderate",
+                "catalog.manage",
+                "bookings.view",
+                "bookings.manage",
+                "payments.view",
+                "payments.verify",
+                "payments.refund",
+                "messages.access",
+                "notifications.diagnostics",
+                "audit.view",
+                "team.manage",
+                "settings.view",
+                "settings.manage",
+                "system.view"
+              ]
+            }
+          }
+        },
+        "required": [
+          "user_id",
+          "email",
+          "first_name",
+          "last_name",
+          "team_role",
+          "permissions"
+        ]
+      },
+      "TeamMember": {
+        "type": "object",
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "team_role": {
+            "type": "string",
+            "enum": [
+              "super_admin",
+              "moderator",
+              "support",
+              "finance"
+            ]
+          },
+          "first_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "last_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "avatar_url": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string",
+            "nullable": true
+          },
+          "created_by": {
+            "type": "string",
+            "nullable": true,
+            "format": "uuid"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "user_id",
+          "team_role",
+          "first_name",
+          "last_name",
+          "avatar_url",
+          "status",
+          "email",
+          "created_by",
+          "created_at",
+          "updated_at"
+        ]
+      },
+      "PlatformSettings": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "platform_fee_bps": {
+            "type": "integer"
+          },
+          "tax_bps": {
+            "type": "integer"
+          },
+          "unpaid_hold_minutes": {
+            "type": "integer",
+            "nullable": true
+          },
+          "updated_by": {
+            "type": "string",
+            "nullable": true,
+            "format": "uuid"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "platform_fee_bps",
+          "tax_bps",
+          "unpaid_hold_minutes",
+          "updated_by",
+          "updated_at"
+        ]
+      },
+      "IntegrationSetting": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "secret",
+              "identifier",
+              "public"
+            ]
+          },
+          "set": {
+            "type": "boolean"
+          },
+          "display": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "key",
+          "kind",
+          "set",
+          "display"
+        ]
+      },
+      "IntegrationStatus": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "purpose": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "warning",
+              "error",
+              "disabled",
+              "unchecked"
+            ]
+          },
+          "detail": {
+            "type": "string"
+          },
+          "latency_ms": {
+            "type": "integer",
+            "nullable": true
+          },
+          "settings": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/IntegrationSetting"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "purpose",
+          "status",
+          "detail",
+          "latency_ms",
+          "settings"
+        ]
+      },
+      "IntegrationsReport": {
+        "type": "object",
+        "properties": {
+          "checked_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "live_checks": {
+            "type": "boolean"
+          },
+          "deployment": {
+            "type": "object",
+            "properties": {
+              "node_env": {
+                "type": "string"
+              },
+              "vercel_env": {
+                "type": "string",
+                "nullable": true
+              },
+              "region": {
+                "type": "string",
+                "nullable": true
+              },
+              "commit_sha": {
+                "type": "string",
+                "nullable": true
+              },
+              "commit_ref": {
+                "type": "string",
+                "nullable": true
+              },
+              "commit_message": {
+                "type": "string",
+                "nullable": true
+              },
+              "deployment_url": {
+                "type": "string",
+                "nullable": true
+              }
+            },
+            "required": [
+              "node_env",
+              "vercel_env",
+              "region",
+              "commit_sha",
+              "commit_ref",
+              "commit_message",
+              "deployment_url"
+            ]
+          },
+          "integrations": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/IntegrationStatus"
+            }
+          }
+        },
+        "required": [
+          "checked_at",
+          "live_checks",
+          "deployment",
+          "integrations"
+        ]
+      },
+      "Analytics": {
+        "type": "object",
+        "properties": {
+          "range": {
+            "type": "object",
+            "properties": {
+              "from": {
+                "type": "string"
+              },
+              "to": {
+                "type": "string"
+              },
+              "bucket": {
+                "type": "string"
+              },
+              "timezone": {
+                "type": "string"
+              },
+              "currency": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "from",
+              "to",
+              "bucket",
+              "timezone",
+              "currency"
+            ]
+          },
+          "totals": {
+            "type": "object",
+            "properties": {
+              "new_users": {
+                "type": "integer"
+              },
+              "new_listings": {
+                "type": "integer"
+              },
+              "published_listings": {
+                "type": "integer"
+              },
+              "bookings_created": {
+                "type": "integer"
+              },
+              "bookings_paid": {
+                "type": "integer"
+              },
+              "gmv_minor": {
+                "type": "integer"
+              },
+              "refunds_minor": {
+                "type": "integer"
+              },
+              "platform_fee_minor": {
+                "type": "integer"
+              },
+              "payment_success_rate": {
+                "type": "number",
+                "nullable": true
+              },
+              "cancellations": {
+                "type": "integer"
+              },
+              "expired_holds": {
+                "type": "integer"
+              },
+              "other_currency_payments": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "new_users",
+              "new_listings",
+              "published_listings",
+              "bookings_created",
+              "bookings_paid",
+              "gmv_minor",
+              "refunds_minor",
+              "platform_fee_minor",
+              "payment_success_rate",
+              "cancellations",
+              "expired_holds",
+              "other_currency_payments"
+            ]
+          },
+          "series": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "bucket_start": {
+                  "type": "string"
+                },
+                "new_users": {
+                  "type": "integer"
+                },
+                "bookings_created": {
+                  "type": "integer"
+                },
+                "bookings_paid": {
+                  "type": "integer"
+                },
+                "gmv_minor": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "bucket_start",
+                "new_users",
+                "bookings_created",
+                "bookings_paid",
+                "gmv_minor"
+              ]
+            }
+          },
+          "status_breakdown": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer"
+            }
+          },
+          "booking_type_breakdown": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer"
+            }
+          },
+          "top_locations": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "city": {
+                  "type": "string"
+                },
+                "paid_bookings": {
+                  "type": "integer"
+                },
+                "gmv_minor": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "id",
+                "title",
+                "city",
+                "paid_bookings",
+                "gmv_minor"
+              ]
+            }
+          },
+          "top_cities": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "city": {
+                  "type": "string"
+                },
+                "bookings": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "city",
+                "bookings"
+              ]
+            }
+          }
+        },
+        "required": [
+          "range",
+          "totals",
+          "series",
+          "status_breakdown",
+          "booking_type_breakdown",
+          "top_locations",
+          "top_cities"
+        ]
+      },
+      "LocationSectionSummary": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "location_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "cover": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/PublicMediaItem"
+              },
+              {
+                "nullable": true
+              }
+            ]
+          },
+          "photo_count": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "location_id",
+          "name",
+          "description",
+          "created_at",
+          "updated_at",
+          "cover",
+          "photo_count"
+        ]
+      },
+      "LocationGallery": {
+        "type": "object",
+        "properties": {
+          "general": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PublicMediaItem"
+            }
+          },
+          "sections": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "section": {
+                  "$ref": "#/components/schemas/LocationSectionSummary"
+                },
+                "media": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PublicMediaItem"
+                  }
+                }
+              },
+              "required": [
+                "section",
+                "media"
+              ]
+            }
+          }
+        },
+        "required": [
+          "general",
+          "sections"
+        ]
+      },
+      "AdminCatalogItem": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "usage_count": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "created_at",
+          "usage_count"
+        ]
+      },
+      "PaymentNeedingAttention": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/AdminPaymentDetail"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "booking_status": {
+                "type": "string"
+              },
+              "hold_expired": {
+                "type": "boolean"
+              },
+              "cancelled_at": {
+                "type": "string",
+                "nullable": true,
+                "format": "date-time"
+              },
+              "refunded_minor_units": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "booking_status",
+              "hold_expired",
+              "cancelled_at",
+              "refunded_minor_units"
+            ]
+          }
+        ]
+      },
+      "AdminConversationSummary": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "booker": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "first_name": {
+                "type": "string",
+                "nullable": true
+              },
+              "last_name": {
+                "type": "string",
+                "nullable": true
+              }
+            },
+            "required": [
+              "id",
+              "first_name",
+              "last_name"
+            ]
+          },
+          "host": {
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "first_name": {
+                "type": "string",
+                "nullable": true
+              },
+              "last_name": {
+                "type": "string",
+                "nullable": true
+              }
+            },
+            "required": [
+              "id",
+              "first_name",
+              "last_name"
+            ]
+          },
+          "location": {
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "title": {
+                "type": "string"
+              },
+              "city": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "title",
+              "city"
+            ]
+          },
+          "booking_id": {
+            "type": "string",
+            "nullable": true,
+            "format": "uuid"
+          },
+          "message_count": {
+            "type": "integer"
+          },
+          "last_message_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "booker",
+          "host",
+          "location",
+          "booking_id",
+          "message_count",
+          "last_message_at",
+          "created_at"
+        ]
+      },
+      "AdminConversationTranscript": {
+        "type": "object",
+        "properties": {
+          "conversation": {
+            "$ref": "#/components/schemas/AdminConversationSummary"
+          },
+          "messages": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "sender_id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "sender_role": {
+                  "type": "string",
+                  "enum": [
+                    "booker",
+                    "host",
+                    "other"
+                  ]
+                },
+                "body": {
+                  "type": "string"
+                },
+                "created_at": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              },
+              "required": [
+                "id",
+                "sender_id",
+                "sender_role",
+                "body",
+                "created_at"
+              ]
+            }
+          },
+          "truncated": {
+            "type": "boolean"
+          },
+          "access_id": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "conversation",
+          "messages",
+          "truncated",
+          "access_id"
+        ]
+      },
+      "MessageAccessLogEntry": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "admin_user_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "admin": {
+            "$ref": "#/components/schemas/NameRef"
+          },
+          "conversation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "action": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "admin_user_id",
+          "admin",
+          "conversation_id",
+          "action",
+          "reason",
           "created_at"
         ]
       }
@@ -1324,7 +2313,7 @@
                   "type": "object",
                   "properties": {
                     "data": {
-                      "$ref": "#/components/schemas/AdminUserDetail"
+                      "$ref": "#/components/schemas/AdminUserFullDetail"
                     }
                   },
                   "required": [
@@ -1402,7 +2391,7 @@
                   "type": "object",
                   "properties": {
                     "data": {
-                      "$ref": "#/components/schemas/AdminUserDetail"
+                      "$ref": "#/components/schemas/AdminUserFullDetail"
                     }
                   },
                   "required": [
@@ -1472,7 +2461,7 @@
                   "type": "object",
                   "properties": {
                     "data": {
-                      "$ref": "#/components/schemas/AdminUserDetail"
+                      "$ref": "#/components/schemas/AdminUserFullDetail"
                     }
                   },
                   "required": [
@@ -1649,6 +2638,166 @@
             "in": "path"
           }
         ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/LocationDetail"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Admin",
+          "Locations"
+        ],
+        "summary": "Correct a listing's content (not status). Audited with the fields changed.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "description": {
+                    "type": "string",
+                    "maxLength": 5000
+                  },
+                  "address_line1": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 200
+                  },
+                  "address_line2": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 200
+                  },
+                  "city": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120
+                  },
+                  "region": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 120
+                  },
+                  "country": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120
+                  },
+                  "postal_code": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 20
+                  },
+                  "latitude": {
+                    "type": "number",
+                    "nullable": true,
+                    "minimum": -90,
+                    "maximum": 90
+                  },
+                  "longitude": {
+                    "type": "number",
+                    "nullable": true,
+                    "minimum": -180,
+                    "maximum": 180
+                  },
+                  "capacity": {
+                    "type": "integer",
+                    "nullable": true,
+                    "minimum": 0,
+                    "exclusiveMinimum": true
+                  },
+                  "timezone": {
+                    "type": "string"
+                  },
+                  "instant_booking_enabled": {
+                    "type": "boolean"
+                  },
+                  "category_ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "maxItems": 20
+                  },
+                  "amenity_ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "maxItems": 30
+                  },
+                  "use_case_ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "maxItems": 10
+                  },
+                  "reason": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1000
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
             "description": "OK",
@@ -2054,6 +3203,31 @@
           },
           {
             "schema": {
+              "type": "string",
+              "enum": [
+                "created_at_desc",
+                "start_at_desc"
+              ],
+              "default": "created_at_desc"
+            },
+            "required": false,
+            "name": "sort",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "paid",
+                "unpaid"
+              ]
+            },
+            "required": false,
+            "name": "payment_state",
+            "in": "query"
+          },
+          {
+            "schema": {
               "type": "integer",
               "minimum": 1,
               "default": 1
@@ -2085,7 +3259,7 @@
                     "data": {
                       "type": "array",
                       "items": {
-                        "$ref": "#/components/schemas/BookingDetail"
+                        "$ref": "#/components/schemas/AdminBooking"
                       }
                     },
                     "meta": {
@@ -2163,7 +3337,7 @@
                   "type": "object",
                   "properties": {
                     "data": {
-                      "$ref": "#/components/schemas/BookingDetail"
+                      "$ref": "#/components/schemas/AdminBooking"
                     }
                   },
                   "required": [
@@ -2845,7 +4019,11 @@
                 "location",
                 "user",
                 "booking",
-                "payment"
+                "payment",
+                "media",
+                "section",
+                "catalog_item",
+                "settings"
               ]
             },
             "required": false,
@@ -2882,7 +4060,22 @@
                 "ADMIN_SUSPENDED_USER",
                 "ADMIN_RESTORED_USER",
                 "ADMIN_CANCELLED_BOOKING",
-                "ADMIN_CREATED_REFUND"
+                "ADMIN_CREATED_REFUND",
+                "ADMIN_CONFIRMED_BOOKING",
+                "ADMIN_REJECTED_BOOKING",
+                "ADMIN_COMPLETED_BOOKING",
+                "ADMIN_VERIFIED_PAYMENT",
+                "ADMIN_UPDATED_LOCATION",
+                "ADMIN_DELETED_MEDIA",
+                "ADMIN_DELETED_SECTION",
+                "ADMIN_CREATED_CATALOG_ITEM",
+                "ADMIN_UPDATED_CATALOG_ITEM",
+                "ADMIN_DELETED_CATALOG_ITEM",
+                "ADMIN_GRANTED_ROLE",
+                "ADMIN_REVOKED_ROLE",
+                "ADMIN_SET_TEAM_ROLE",
+                "ADMIN_REMOVED_TEAM_MEMBER",
+                "ADMIN_UPDATED_SETTINGS"
               ]
             },
             "required": false,
@@ -2941,6 +4134,2042 @@
                       "type": "array",
                       "items": {
                         "$ref": "#/components/schemas/AuditLogEntry"
+                      }
+                    },
+                    "meta": {
+                      "type": "object",
+                      "properties": {
+                        "page": {
+                          "type": "integer"
+                        },
+                        "pageSize": {
+                          "type": "integer"
+                        },
+                        "total": {
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "page",
+                        "pageSize",
+                        "total"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "meta"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/me": {
+      "get": {
+        "tags": [
+          "Admin",
+          "Team"
+        ],
+        "summary": "The calling admin: team role and the exact permissions it grants",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AdminMe"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/team": {
+      "get": {
+        "tags": [
+          "Admin",
+          "Team"
+        ],
+        "summary": "Every admin and their team role",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/TeamMember"
+                      }
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Admin",
+          "Team"
+        ],
+        "summary": "Add an existing account to the admin team by email (super admin)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "maxLength": 320,
+                    "format": "email"
+                  },
+                  "team_role": {
+                    "type": "string",
+                    "enum": [
+                      "super_admin",
+                      "moderator",
+                      "support",
+                      "finance"
+                    ]
+                  }
+                },
+                "required": [
+                  "email",
+                  "team_role"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/TeamMember"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/team/{userId}": {
+      "put": {
+        "tags": [
+          "Admin",
+          "Team"
+        ],
+        "summary": "Set a team role (super admin). The last super admin cannot be demoted (409).",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "userId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "team_role": {
+                    "type": "string",
+                    "enum": [
+                      "super_admin",
+                      "moderator",
+                      "support",
+                      "finance"
+                    ]
+                  }
+                },
+                "required": [
+                  "team_role"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/TeamMember"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Admin",
+          "Team"
+        ],
+        "summary": "Remove from the admin team (super admin). Booker/host roles are kept.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "userId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "removed": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "removed"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/settings": {
+      "get": {
+        "tags": [
+          "Admin",
+          "Settings"
+        ],
+        "summary": "Platform fee, tax and unpaid-hold window",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PlatformSettings"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Admin",
+          "Settings"
+        ],
+        "summary": "Change platform settings (super admin). Applies to new bookings only; audited.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "platform_fee_bps": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 5000
+                  },
+                  "tax_bps": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 5000
+                  },
+                  "unpaid_hold_minutes": {
+                    "type": "integer",
+                    "nullable": true,
+                    "minimum": 5,
+                    "maximum": 10080
+                  },
+                  "reason": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 500
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PlatformSettings"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/system/integrations": {
+      "get": {
+        "tags": [
+          "Admin",
+          "System"
+        ],
+        "summary": "Every integration's configuration status (never a secret value); ?check=true runs live checks",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "default": "false"
+            },
+            "required": false,
+            "name": "check",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/IntegrationsReport"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/analytics": {
+      "get": {
+        "tags": [
+          "Admin",
+          "Analytics"
+        ],
+        "summary": "Marketplace analytics for a range (bucketed by day/week/month in the given time zone)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "required": true,
+            "name": "from",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "required": true,
+            "name": "to",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "day",
+                "week",
+                "month"
+              ],
+              "default": "day"
+            },
+            "required": false,
+            "name": "bucket",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "default": "Asia/Kolkata"
+            },
+            "required": false,
+            "name": "tz",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Analytics"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/users/{id}/roles/{role}": {
+      "post": {
+        "tags": [
+          "Admin",
+          "Users"
+        ],
+        "summary": "Grant booker/host on a user's behalf (audited). 'admin' is the team API's job.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "booker",
+                "host"
+              ]
+            },
+            "required": true,
+            "name": "role",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AdminUserFullDetail"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Admin",
+          "Users"
+        ],
+        "summary": "Revoke booker/host (audited). Existing listings are not touched.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "booker",
+                "host"
+              ]
+            },
+            "required": true,
+            "name": "role",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AdminUserFullDetail"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/locations/{id}/gallery": {
+      "get": {
+        "tags": [
+          "Admin",
+          "Locations"
+        ],
+        "summary": "Every photo on a listing: the general gallery and each section's",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/LocationGallery"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/locations/{id}/media/{mediaId}/remove": {
+      "post": {
+        "tags": [
+          "Admin",
+          "Locations"
+        ],
+        "summary": "Remove a photo/video from a listing (deletes the stored object; audited)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "mediaId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "reason": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1000
+                  }
+                },
+                "default": {},
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "deleted": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "deleted"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/locations/{id}/sections/{sectionId}/remove": {
+      "post": {
+        "tags": [
+          "Admin",
+          "Locations"
+        ],
+        "summary": "Remove an empty section from a listing (audited)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "sectionId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "reason": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1000
+                  }
+                },
+                "default": {},
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "deleted": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "deleted"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/catalog/{kind}": {
+      "get": {
+        "tags": [
+          "Admin",
+          "Catalog"
+        ],
+        "summary": "Categories / amenities / use-cases, with how many listings use each",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "categories",
+                "amenities",
+                "use-cases"
+              ]
+            },
+            "required": true,
+            "name": "kind",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/AdminCatalogItem"
+                      }
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Admin",
+          "Catalog"
+        ],
+        "summary": "Add a catalog option (audited; duplicate names are 409)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "categories",
+                "amenities",
+                "use-cases"
+              ]
+            },
+            "required": true,
+            "name": "kind",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 80
+                  }
+                },
+                "required": [
+                  "name"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AdminCatalogItem"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/catalog/{kind}/{itemId}": {
+      "patch": {
+        "tags": [
+          "Admin",
+          "Catalog"
+        ],
+        "summary": "Rename a catalog option (audited)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "categories",
+                "amenities",
+                "use-cases"
+              ]
+            },
+            "required": true,
+            "name": "kind",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "itemId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 80
+                  }
+                },
+                "required": [
+                  "name"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AdminCatalogItem"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Admin",
+          "Catalog"
+        ],
+        "summary": "Delete an unused catalog option (409 while any listing uses it; audited)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "categories",
+                "amenities",
+                "use-cases"
+              ]
+            },
+            "required": true,
+            "name": "kind",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "itemId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "deleted": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "deleted"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/bookings/{id}/confirm": {
+      "post": {
+        "tags": [
+          "Admin",
+          "Bookings"
+        ],
+        "summary": "Confirm on the host's behalf (audited)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {},
+                "default": {},
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/BookingDetail"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/bookings/{id}/reject": {
+      "post": {
+        "tags": [
+          "Admin",
+          "Bookings"
+        ],
+        "summary": "Reject on the host's behalf, optional reason (audited)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "reason": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 500
+                  }
+                },
+                "default": {},
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/BookingDetail"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/bookings/{id}/complete": {
+      "post": {
+        "tags": [
+          "Admin",
+          "Bookings"
+        ],
+        "summary": "Mark completed (audited)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {},
+                "default": {},
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/BookingDetail"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/payments/{id}/verify": {
+      "post": {
+        "tags": [
+          "Admin",
+          "Payments"
+        ],
+        "summary": "Re-check a payment with the provider (same guarded path as the webhook; audited)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {},
+                "default": {},
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "booking_id": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "provider": {
+                          "type": "string"
+                        },
+                        "provider_order_id": {
+                          "type": "string"
+                        },
+                        "provider_reference_id": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "created",
+                            "pending",
+                            "success",
+                            "failed",
+                            "cancelled",
+                            "refunded",
+                            "partially_refunded"
+                          ]
+                        },
+                        "amount_minor_units": {
+                          "type": "integer"
+                        },
+                        "currency": {
+                          "type": "string"
+                        },
+                        "failure_reason": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "created_at": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "updated_at": {
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "booking_id",
+                        "provider",
+                        "provider_order_id",
+                        "provider_reference_id",
+                        "status",
+                        "amount_minor_units",
+                        "currency",
+                        "failure_reason",
+                        "created_at",
+                        "updated_at"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/payments/attention": {
+      "get": {
+        "tags": [
+          "Admin",
+          "Payments"
+        ],
+        "summary": "Money taken for a cancelled/rejected booking and not yet fully refunded",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            },
+            "required": false,
+            "name": "page",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            },
+            "required": false,
+            "name": "pageSize",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/PaymentNeedingAttention"
+                      }
+                    },
+                    "meta": {
+                      "type": "object",
+                      "properties": {
+                        "page": {
+                          "type": "integer"
+                        },
+                        "pageSize": {
+                          "type": "integer"
+                        },
+                        "total": {
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "page",
+                        "pageSize",
+                        "total"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "meta"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/conversations": {
+      "get": {
+        "tags": [
+          "Admin",
+          "Messaging"
+        ],
+        "summary": "Find conversations -- metadata only, never message text",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": false,
+            "name": "booker_id",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": false,
+            "name": "host_id",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": false,
+            "name": "location_id",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": false,
+            "name": "booking_id",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            },
+            "required": false,
+            "name": "page",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            },
+            "required": false,
+            "name": "pageSize",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/AdminConversationSummary"
+                      }
+                    },
+                    "meta": {
+                      "type": "object",
+                      "properties": {
+                        "page": {
+                          "type": "integer"
+                        },
+                        "pageSize": {
+                          "type": "integer"
+                        },
+                        "total": {
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "page",
+                        "pageSize",
+                        "total"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "meta"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/conversations/{id}/access": {
+      "post": {
+        "tags": [
+          "Admin",
+          "Messaging"
+        ],
+        "summary": "Read a conversation for a stated reason. Writes a permanent access record first.",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "reason": {
+                    "type": "string",
+                    "minLength": 10,
+                    "maxLength": 1000
+                  }
+                },
+                "required": [
+                  "reason"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AdminConversationTranscript"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/message-access-log": {
+      "get": {
+        "tags": [
+          "Admin",
+          "Messaging"
+        ],
+        "summary": "Every admin read of private correspondence, with its reason (append-only)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": false,
+            "name": "conversation_id",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": false,
+            "name": "admin_user_id",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            },
+            "required": false,
+            "name": "page",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            },
+            "required": false,
+            "name": "pageSize",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/MessageAccessLogEntry"
                       }
                     },
                     "meta": {

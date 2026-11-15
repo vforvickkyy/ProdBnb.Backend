@@ -46,9 +46,13 @@ The Admin Panel is a **separate frontend project/repository** — it is never bu
 backend repo, and this backend never ships its `SUPABASE_SERVICE_ROLE_KEY`/`CASHFREE_SECRET_KEY`/
 `APNS_PRIVATE_KEY`/R2 secrets to it. It signs in via the same Supabase Auth project as every other
 client and calls this backend's `/v1/admin/*` REST API with the resulting access token — see
-[`docs/DATABASE.md`](docs/DATABASE.md#admin-control--admin-panel-phase-11). Located at
-`../ProdBnb Admin` (a sibling of this repo), consuming the generated OpenAPI contract at
-`docs/admin-openapi.json` (`npm run generate:openapi` in this repo regenerates it).
+[`docs/DATABASE.md`](docs/DATABASE.md#admin-control--admin-panel-phase-11). It lives in
+its own repository (`ProdBnb-Admin`, checked out as a sibling of this one) and consumes the
+generated OpenAPI contract at `docs/admin-openapi.json` (`npm run generate:openapi` in this repo
+regenerates it). The **Admin Console** features — admin team roles, platform fee/tax and
+unpaid-hold expiry settings, dispute message access, catalog management, analytics and the
+integrations & secrets status page — are documented in
+[`docs/ADMIN_CONSOLE.md`](docs/ADMIN_CONSOLE.md).
 
 ## Stack
 
@@ -116,7 +120,8 @@ docs/               Architecture, database, and API documentation
 ```
 
 Each `src/modules/<name>` is self-contained (`users`, `roles`, `locations`, `catalog`, `media`,
-`search`, `availability`, `bookings`, `pricing`, `payments`, `devices`, `notifications`, `admin`).
+`search`, `availability`, `bookings`, `pricing`, `payments`, `devices`, `notifications`,
+`messaging`, `sections`, `billing`, `platform`, `admin`).
 Future features are added the same way, as new module folders, without touching existing ones.
 `payments/providers/` holds the provider-agnostic `PaymentProvider` interface plus one adapter per
 payment provider (`CashfreeProvider` today) — see

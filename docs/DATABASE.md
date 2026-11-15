@@ -2221,7 +2221,12 @@ as a decision, not an oversight.
 
 ## Granting the admin role
 
-There's no endpoint for this — deliberately. `admin` is powerful enough that granting it should
+> **Admin Console:** day-to-day, admins are added, re-roled and removed from the Admin Panel's Team
+> page (`/v1/admin/team`, super admin only — see [`ADMIN_CONSOLE.md`](ADMIN_CONSOLE.md)). The SQL
+> below remains the **bootstrap** for the very first admin; a `user_roles` `admin` row inserted this
+> way becomes a **super admin** automatically (trigger `on_user_role_admin_change`).
+
+There's no self-service endpoint for this — deliberately. `admin` is powerful enough that granting it should
 require direct database access with the service-role key, not a request any authenticated user
 could send. To grant it (local stack or the linked project, using the `service_role` key):
 

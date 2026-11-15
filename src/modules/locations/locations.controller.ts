@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { callerHasRole } from "../../middleware/requireRole";
+import { callerHasAdminPermission } from "../admin/permissions";
 import { created, ok } from "../../utils/respond";
 import {
   AdminListLocationsQuery,
@@ -38,14 +38,14 @@ export async function postLocation(req: Request, res: Response): Promise<void> {
 export async function patchLocation(req: Request, res: Response): Promise<void> {
   const { id } = req.valid!.params as LocationIdParam;
   const input = req.valid!.body as UpdateLocationInput;
-  const isAdmin = await callerHasRole(req.supabase!, req.user!.id, "admin");
+  const isAdmin = await callerHasAdminPermission(req, "locations.moderate");
   const location = await updateLocation(req.supabase!, req.user!.id, isAdmin, id, input);
   ok(res, location);
 }
 
 export async function deleteLocationHandler(req: Request, res: Response): Promise<void> {
   const { id } = req.valid!.params as LocationIdParam;
-  const isAdmin = await callerHasRole(req.supabase!, req.user!.id, "admin");
+  const isAdmin = await callerHasAdminPermission(req, "locations.moderate");
   await deleteLocation(req.supabase!, req.user!.id, isAdmin, id);
   ok(res, { id, deleted: true });
 }

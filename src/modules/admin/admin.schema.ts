@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { updateLocationSchema } from "../locations/locations.schema";
 
 const uuid = z.string().uuid();
 
@@ -83,11 +84,28 @@ export const auditActionSchema = z.enum([
   "ADMIN_RESTORED_USER",
   "ADMIN_CANCELLED_BOOKING",
   "ADMIN_CREATED_REFUND",
+  "ADMIN_CONFIRMED_BOOKING",
+  "ADMIN_REJECTED_BOOKING",
+  "ADMIN_COMPLETED_BOOKING",
+  "ADMIN_VERIFIED_PAYMENT",
+  "ADMIN_UPDATED_LOCATION",
+  "ADMIN_DELETED_MEDIA",
+  "ADMIN_DELETED_SECTION",
+  "ADMIN_CREATED_CATALOG_ITEM",
+  "ADMIN_UPDATED_CATALOG_ITEM",
+  "ADMIN_DELETED_CATALOG_ITEM",
+  "ADMIN_GRANTED_ROLE",
+  "ADMIN_REVOKED_ROLE",
+  "ADMIN_SET_TEAM_ROLE",
+  "ADMIN_REMOVED_TEAM_MEMBER",
+  "ADMIN_UPDATED_SETTINGS",
 ]);
+
+export const auditTargetTypeSchema = z.enum(["location", "user", "booking", "payment", "media", "section", "catalog_item", "settings"]);
 
 export const auditLogQuerySchema = z
   .object({
-    target_type: z.enum(["location", "user", "booking", "payment"]).optional(),
+    target_type: auditTargetTypeSchema.optional(),
     target_id: uuid.optional(),
     admin_id: uuid.optional(),
     // Phase 14: finding "every rejection this week" required pulling every
@@ -103,3 +121,156 @@ export const auditLogQuerySchema = z
     path: ["created_before"],
   });
 export type AuditLogQuery = z.infer<typeof auditLogQuerySchema>;
+
+// ============================================================================
+// Admin Console
+// ============================================================================
+
+const page = z.coerce.number().int().min(1).default(1);
+const pageSize = z.coerce.number().int().min(1).max(100).default(20);
+
+// -- Team ---------------------------------------------------------------------
+
+export const teamRoleSchema = z.enum(["super_admin", "moderator", "support", "finance"]);
+
+export const teamUserIdParamSchema = z.object({ userId: uuid });
+export type TeamUserIdParam = z.infer<typeof teamUserIdParamSchema>;
+
+export const setTeamRoleSchema = z.object({ team_role: teamRoleSchema }).strict();
+export type SetTeamRoleInput = z.infer<typeof setTeamRoleSchema>;
+
+export const addTeamMemberSchema = z
+  .object({ email: z.string().trim().email().max(320), team_role: teamRoleSchema })
+  .strict();
+export type AddTeamMemberInput = z.infer<typeof addTeamMemberSchema>;
+
+// -- Platform settings ----------------------------------------------------------
+
+/**
+ * Basis points, integers (1 bp = 0.01%; 1800 = 18%). Capped at 50% each -- a guard against a
+ * mistyped value (e.g. 180000 meant as 18%), not a business limit. `unpaid_hold_minutes: null`
+ * turns expiry off; the 5-minute floor stops a hold expiring under someone mid-checkout, the
+ * 7-day ceiling keeps it a hold rather than a reservation.
+ */
+export const updateSettingsSchema = z
+  .object({
+    platform_fee_bps: z.number().int().min(0).max(5000).optional(),
+    tax_bps: z.number().int().min(0).max(5000).optional(),
+    unpaid_hold_minutes: z.number().int().min(5).max(10080).nullable().optional(),
+    reason: z.string().trim().min(1).max(500).optional(),
+  })
+  .strict()
+  .refine((d) => d.platform_fee_bps !== undefined || d.tax_bps !== undefined || d.unpaid_hold_minutes !== undefined, {
+    message: "Provide at least one setting to change.",
+  });
+export type UpdateSettingsInput = z.infer<typeof updateSettingsSchema>;
+
+// -- Catalog -------------------------------------------------------------------
+
+export const catalogKindSchema = z.enum(["categories", "amenities", "use-cases"]);
+export const catalogKindParamSchema = z.object({ kind: catalogKindSchema });
+export type CatalogKindParam = z.infer<typeof catalogKindParamSchema>;
+export const catalogItemParamSchema = z.object({ kind: catalogKindSchema, itemId: uuid });
+export type CatalogItemParam = z.infer<typeof catalogItemParamSchema>;
+export const catalogNameSchema = z.object({ name: z.string().trim().min(1).max(80) }).strict();
+export type CatalogNameInput = z.infer<typeof catalogNameSchema>;
+
+// -- Listing moderation ----------------------------------------------------------
+
+export const optionalReasonSchema = z
+  .object({ reason: z.string().trim().min(1).max(1000).optional() })
+  .strict()
+  .default({});
+export type OptionalReasonInput = z.infer<typeof optionalReasonSchema>;
+
+export const locationMediaParamSchema = z.object({ id: uuid, mediaId: uuid });
+export type LocationMediaParam = z.infer<typeof locationMediaParamSchema>;
+export const locationSectionParamSchema = z.object({ id: uuid, sectionId: uuid });
+export type LocationSectionParam = z.infer<typeof locationSectionParamSchema>;
+
+/**
+ * Content an admin may correct on someone's listing: exactly the host's own editable fields
+ * (derived from updateLocationSchema, so the two can never drift), minus `status` -- which only
+ * moves through the audited moderation actions -- plus an optional reason for the audit entry.
+ */
+export const adminUpdateLocationSchema = updateLocationSchema
+  .innerType()
+  .omit({ status: true })
+  .extend({ reason: z.string().trim().min(1).max(1000).optional() })
+  .strict()
+  .refine((d) => Object.keys(d).some((k) => k !== "reason"), { message: "Provide at least one field to update." });
+export type AdminUpdateLocationInput = z.infer<typeof adminUpdateLocationSchema>;
+
+// -- People ---------------------------------------------------------------------
+
+export const userRoleParamSchema = z.object({ id: uuid, role: z.enum(["booker", "host"]) });
+export type UserRoleParam = z.infer<typeof userRoleParamSchema>;
+
+// -- Dispute message access -------------------------------------------------------
+
+export const adminConversationsQuerySchema = z.object({
+  booker_id: uuid.optional(),
+  host_id: uuid.optional(),
+  location_id: uuid.optional(),
+  booking_id: uuid.optional(),
+  page,
+  pageSize,
+});
+export type AdminConversationsQuery = z.infer<typeof adminConversationsQuerySchema>;
+
+export const conversationIdParamSchema = z.object({ id: uuid });
+export type ConversationIdParam = z.infer<typeof conversationIdParamSchema>;
+
+/**
+ * A real sentence, not a checkbox: at least 10 characters. The database also refuses a blank
+ * reason (admin_message_access_reason CHECK), but "x" would satisfy that.
+ */
+export const openConversationSchema = z
+  .object({ reason: z.string().trim().min(10, "Explain why you need to read this conversation (at least 10 characters).").max(1000) })
+  .strict();
+export type OpenConversationInput = z.infer<typeof openConversationSchema>;
+
+export const messageAccessLogQuerySchema = z.object({
+  conversation_id: uuid.optional(),
+  admin_user_id: uuid.optional(),
+  page,
+  pageSize,
+});
+export type MessageAccessLogQuery = z.infer<typeof messageAccessLogQuerySchema>;
+
+// -- Analytics / integrations -------------------------------------------------------
+
+export const analyticsQuerySchema = z
+  .object({
+    from: z.string().datetime({ offset: true }),
+    to: z.string().datetime({ offset: true }),
+    bucket: z.enum(["day", "week", "month"]).default("day"),
+    tz: z
+      .string()
+      .default("Asia/Kolkata")
+      .refine((value) => {
+        try {
+          new Intl.DateTimeFormat("en-US", { timeZone: value });
+          return true;
+        } catch {
+          return false;
+        }
+      }, "Must be an IANA time zone, e.g. Asia/Kolkata."),
+  })
+  .refine((d) => new Date(d.to) > new Date(d.from), { message: "to must be after from.", path: ["to"] })
+  .refine((d) => new Date(d.to).getTime() - new Date(d.from).getTime() <= 400 * 86_400_000, {
+    message: "Range can be at most 400 days.",
+    path: ["from"],
+  });
+export type AnalyticsQuery = z.infer<typeof analyticsQuerySchema>;
+
+export const integrationsQuerySchema = z.object({
+  check: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((v) => v === "true"),
+});
+export type IntegrationsQuery = z.infer<typeof integrationsQuerySchema>;
+
+export const attentionQuerySchema = z.object({ page, pageSize });
+export type AttentionQuery = z.infer<typeof attentionQuerySchema>;

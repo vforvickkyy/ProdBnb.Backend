@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { SupabaseClient } from "@supabase/supabase-js";
+import { writeAuditLog } from "../admin/audit.service";
 import { env } from "../../config/env";
 import { NotFoundError, ValidationError } from "../../errors/AppError";
 import { deleteObject, headObject, objectKeyFor, presignUpload } from "../../lib/r2";
@@ -374,9 +375,10 @@ export async function deleteMedia(
   callerId: string,
   isAdmin: boolean,
   locationId: string,
-  mediaId: string
+  mediaId: string,
+  reason: string | null = null
 ): Promise<void> {
-  await assertCanManageLocation(supabase, callerId, isAdmin, locationId);
+  const location = await assertLocationManageable(supabase, callerId, isAdmin, locationId);
 
   const { data, error } = await supabase
     .from("location_media")
@@ -405,5 +407,11 @@ export async function deleteMedia(
   const { error: deleteError } = await supabase.from("location_media").delete().eq("id", mediaId).eq("location_id", locationId);
   if (deleteError) {
     throw deleteError;
+  }
+
+  // Admin Console: an admin removing a photo from someone else's listing is a moderation act --
+  // audited whichever route it came through. A host deleting their own photo is not.
+  if (isAdmin && location.host_id !== callerId) {
+    await writeAuditLog(callerId, "ADMIN_DELETED_MEDIA", "media", mediaId, reason, { location_id: locationId });
   }
 }

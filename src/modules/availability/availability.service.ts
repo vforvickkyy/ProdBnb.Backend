@@ -1,5 +1,6 @@
 import { SupabaseClient } from "@supabase/supabase-js";
 import { NotFoundError } from "../../errors/AppError";
+import { expireUnpaidHolds } from "../bookings/holds";
 import { getVisibleLocationOrNull } from "../locations/locations.service";
 import { AvailabilityQuery } from "./availability.schema";
 
@@ -42,6 +43,10 @@ export async function getAvailability(
   if (!location) {
     throw new NotFoundError("Location not found.");
   }
+
+  // Admin Console: lapsed unpaid holds are released before availability is computed, so the
+  // calendar never shows a slot as taken by a checkout that was abandoned. No-op while expiry is off.
+  await expireUnpaidHolds(locationId);
 
   const { data, error } = await supabase.rpc("get_location_availability", {
     _location_id: locationId,

@@ -21,7 +21,10 @@ import { approveLocation, rejectLocation, restoreLocation, suspendLocation } fro
 import { listDeliveryAttempts } from "./notifications.service";
 import { getAdminPayment, listAllPayments, listAllRefunds } from "./payments.service";
 import { getSystemStatus } from "./system.service";
-import { getAdminUserDetail, restoreUser, suspendUser } from "./users.service";
+import { assertMaySuspend, getAdminUserDetail, restoreUser, suspendUser } from "./users.service";
+import { withHoldDeadline } from "./console.controller";
+import { callerHasAdminPermission } from "./permissions";
+import { getPlatformSettings } from "../platform/settings.service";
 import { created, ok } from "../../utils/respond";
 
 export async function getDashboard(req: Request, res: Response): Promise<void> {
@@ -48,6 +51,7 @@ export async function getUserDetail(req: Request, res: Response): Promise<void> 
 export async function postSuspendUser(req: Request, res: Response): Promise<void> {
   const { id } = req.valid!.params as AdminUserIdParam;
   const { reason } = req.valid!.body as SuspendUserInput;
+  await assertMaySuspend(req.user!.id, id, await callerHasAdminPermission(req, "team.manage"));
   const user = await suspendUser(req.supabase!, req.user!.id, id, reason);
   ok(res, user);
 }
@@ -101,13 +105,15 @@ export async function getAdminBookings(req: Request, res: Response): Promise<voi
   // Phase 29.14-D: admin oversight is deliberately NOT payment-gated -- an unpaid booking is
   // exactly the kind an admin needs to be able to find.
   const { data, total } = await listBookings(req.supabase!, query, { includeUnpaidForHost: true });
-  ok(res, data, 200, { page: query.page, pageSize: query.pageSize, total });
+  const { unpaid_hold_minutes } = await getPlatformSettings();
+  ok(res, data.map((b) => withHoldDeadline(b, unpaid_hold_minutes)), 200, { page: query.page, pageSize: query.pageSize, total });
 }
 
 export async function getAdminBookingDetail(req: Request, res: Response): Promise<void> {
   const { id } = req.valid!.params as BookingIdParam;
   const booking = await getBooking(req.supabase!, id);
-  ok(res, booking);
+  const { unpaid_hold_minutes } = await getPlatformSettings();
+  ok(res, withHoldDeadline(booking, unpaid_hold_minutes));
 }
 
 export async function postAdminCancelBooking(req: Request, res: Response): Promise<void> {
