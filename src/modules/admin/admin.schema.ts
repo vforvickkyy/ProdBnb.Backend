@@ -124,6 +124,13 @@ export const auditActionSchema = z.enum([
   "ADMIN_CREATED_RELEASE",
   "ADMIN_UPDATED_RELEASE",
   "ADMIN_DELETED_RELEASE",
+  // Website (Console 3)
+  "ADMIN_CONNECTED_SITE_INTEGRATION",
+  "ADMIN_DISCONNECTED_SITE_INTEGRATION",
+  "ADMIN_ADDED_DOMAIN",
+  "ADMIN_UPDATED_DOMAIN",
+  "ADMIN_REMOVED_DOMAIN",
+  "ADMIN_SET_PRIMARY_DOMAIN",
 ]);
 
 export const auditTargetTypeSchema = z.enum([
@@ -142,6 +149,8 @@ export const auditTargetTypeSchema = z.enum([
   "feature_flag",
   "incident",
   "release",
+  "site_integration",
+  "site",
 ]);
 
 export const auditLogQuerySchema = z
@@ -198,12 +207,20 @@ export const updateSettingsSchema = z
     platform_fee_bps: z.number().int().min(0).max(5000).optional(),
     tax_bps: z.number().int().min(0).max(5000).optional(),
     unpaid_hold_minutes: z.number().int().min(5).max(10080).nullable().optional(),
+    availability_requires_login: z.boolean().optional(),
     reason: z.string().trim().min(1).max(500).optional(),
   })
   .strict()
-  .refine((d) => d.platform_fee_bps !== undefined || d.tax_bps !== undefined || d.unpaid_hold_minutes !== undefined, {
-    message: "Provide at least one setting to change.",
-  });
+  .refine(
+    (d) =>
+      d.platform_fee_bps !== undefined ||
+      d.tax_bps !== undefined ||
+      d.unpaid_hold_minutes !== undefined ||
+      d.availability_requires_login !== undefined,
+    {
+      message: "Provide at least one setting to change.",
+    }
+  );
 export type UpdateSettingsInput = z.infer<typeof updateSettingsSchema>;
 
 // -- Catalog -------------------------------------------------------------------

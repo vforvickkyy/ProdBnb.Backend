@@ -44,6 +44,7 @@ import {
 } from "./console2.controller";
 import { adminOutreachRouter } from "../outreach/outreach.routes";
 import { adminPlatformsRouter } from "../platform/releases.routes";
+import { adminSiteRouter } from "../site/site.routes";
 import { requirePermission as can } from "./permissions";
 
 /**
@@ -149,6 +150,9 @@ adminConsole2Router.use(adminOutreachRouter);
 
 // -- Platforms: release control, feature flags, incidents, releases ------------------------------
 adminConsole2Router.use(adminPlatformsRouter);
+
+// Website (Console 3): integrations (Google Maps, Vercel) and domains.
+adminConsole2Router.use(adminSiteRouter);
 
 // -- R2 browser uploads -----------------------------------------------------------------------------
 // One click on the Integrations page adds a CORS rule letting the backend's CORS_ORIGINS PUT to the

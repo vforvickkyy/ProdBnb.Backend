@@ -25,6 +25,16 @@ import { adminListLocationsQuerySchema, locationIdParamSchema } from "../src/mod
 import { createRefundSchema, paymentIdParamSchema } from "../src/modules/payments/payment.schema";
 import { listUsersQuerySchema } from "../src/modules/users/users.schema";
 import {
+  addDomainSchema,
+  domainParamSchema,
+  primaryDomainSchema,
+  saveGoogleMapsSchema,
+  saveVercelSchema,
+  siteProviderParamSchema,
+  siteProviderSchema,
+  updateDomainSchema,
+} from "../src/modules/site/site.schema";
+import {
   addTeamMemberSchema,
   adminConversationsQuerySchema,
   adminListPaymentsQuerySchema,
@@ -754,6 +764,7 @@ const platformSettingsSchema = z
     platform_fee_bps: z.number().int(),
     tax_bps: z.number().int(),
     unpaid_hold_minutes: z.number().int().nullable(),
+    availability_requires_login: z.boolean(),
     updated_by: z.string().uuid().nullable(),
     updated_at: z.string().datetime(),
   })
@@ -763,7 +774,7 @@ registry.registerPath({
   method: "get",
   path: "/settings",
   tags: ["Admin", "Settings"],
-  summary: "Platform fee, tax and unpaid-hold window",
+  summary: "Platform fee, tax, unpaid-hold window and whether availability needs a login",
   security,
   responses: { "200": okResponse(platformSettingsSchema), ...errorResponses },
 });
@@ -1875,6 +1886,143 @@ registry.registerPath({
   security,
   request: { params: releaseIdParamSchema },
   responses: { "200": okResponse(z.object({ deleted: z.boolean() })), ...errorResponses },
+});
+
+// -- Website (Console 3) -------------------------------------------------------------------------
+
+const siteIntegrationStatusSchema = z
+  .object({
+    provider: siteProviderSchema,
+    connected: z.boolean(),
+    config: z.record(z.unknown()),
+    has_secret: z.boolean(),
+    last_tested_at: z.string().datetime().nullable(),
+    last_test_ok: z.boolean().nullable(),
+    last_test_error: z.string().nullable(),
+    updated_at: z.string().datetime().nullable(),
+  })
+  .openapi("SiteIntegrationStatus");
+
+const dnsRecordSchema = z
+  .object({ type: z.enum(["A", "CNAME", "TXT"]), name: z.string(), value: z.string(), purpose: z.enum(["point", "verify"]) })
+  .openapi("DnsRecord");
+
+const siteDomainSchema = z
+  .object({
+    name: z.string(),
+    apex_name: z.string(),
+    is_apex: z.boolean(),
+    is_platform_domain: z.boolean(),
+    is_primary: z.boolean(),
+    verified: z.boolean(),
+    redirect_to: z.string().nullable(),
+    configured: z.boolean().nullable(),
+    configured_by: z.string().nullable(),
+    dns_records: z.array(dnsRecordSchema),
+    status: z.enum(["active", "redirect", "pending_dns", "pending_verification"]),
+  })
+  .openapi("SiteDomain");
+
+const siteDomainsOverviewSchema = z
+  .object({ vercel_connected: z.boolean(), primary_domain: z.string().nullable(), domains: z.array(siteDomainSchema) })
+  .openapi("SiteDomainsOverview");
+
+registry.registerPath({
+  method: "get",
+  path: "/site/integrations",
+  tags: ["Admin", "Website"],
+  summary: "Website integrations (Google Maps, Vercel): status and safe configuration only, never secrets",
+  security,
+  responses: { "200": okResponse(z.array(siteIntegrationStatusSchema)), ...errorResponses },
+});
+registry.registerPath({
+  method: "put",
+  path: "/site/integrations/google_maps",
+  tags: ["Admin", "Website"],
+  summary: "Connect Google Maps. The browser key is public by design; the optional server key goes to Vault",
+  security,
+  request: { body: jsonBody(saveGoogleMapsSchema) },
+  responses: { "200": okResponse(siteIntegrationStatusSchema), ...errorResponses },
+});
+registry.registerPath({
+  method: "put",
+  path: "/site/integrations/vercel",
+  tags: ["Admin", "Website"],
+  summary: "Connect the website's Vercel project (token goes to Vault; checked against the project first)",
+  security,
+  request: { body: jsonBody(saveVercelSchema) },
+  responses: { "200": okResponse(siteIntegrationStatusSchema), ...errorResponses },
+});
+registry.registerPath({
+  method: "post",
+  path: "/site/integrations/{provider}/test",
+  tags: ["Admin", "Website"],
+  summary: "Test a website integration",
+  security,
+  request: { params: siteProviderParamSchema },
+  responses: { "200": okResponse(z.object({ ok: z.boolean(), detail: z.string() })), ...errorResponses },
+});
+registry.registerPath({
+  method: "delete",
+  path: "/site/integrations/{provider}",
+  tags: ["Admin", "Website"],
+  summary: "Disconnect a website integration and delete its secret from Vault",
+  security,
+  request: { params: siteProviderParamSchema },
+  responses: { "200": okResponse(z.object({ removed: z.boolean() })), ...errorResponses },
+});
+registry.registerPath({
+  method: "get",
+  path: "/site/domains",
+  tags: ["Admin", "Website"],
+  summary: "The website's domains, their status and the DNS records each still needs",
+  security,
+  responses: { "200": okResponse(siteDomainsOverviewSchema), ...errorResponses },
+});
+registry.registerPath({
+  method: "post",
+  path: "/site/domains",
+  tags: ["Admin", "Website"],
+  summary: "Add a domain to the website (optionally redirecting to another of its domains)",
+  security,
+  request: { body: jsonBody(addDomainSchema) },
+  responses: { "201": createdResponse(siteDomainSchema), ...errorResponses },
+});
+registry.registerPath({
+  method: "patch",
+  path: "/site/domains/{domain}",
+  tags: ["Admin", "Website"],
+  summary: "Set or clear a domain's redirect",
+  security,
+  request: { params: domainParamSchema, body: jsonBody(updateDomainSchema) },
+  responses: { "200": okResponse(siteDomainSchema), ...errorResponses },
+});
+registry.registerPath({
+  method: "post",
+  path: "/site/domains/{domain}/verify",
+  tags: ["Admin", "Website"],
+  summary: "Re-check a domain's ownership verification and DNS",
+  security,
+  request: { params: domainParamSchema },
+  responses: { "200": okResponse(siteDomainSchema), ...errorResponses },
+});
+registry.registerPath({
+  method: "delete",
+  path: "/site/domains/{domain}",
+  tags: ["Admin", "Website"],
+  summary: "Remove a domain from the website (not the primary one, not the platform address)",
+  security,
+  request: { params: domainParamSchema },
+  responses: { "200": okResponse(z.object({ removed: z.boolean() })), ...errorResponses },
+});
+registry.registerPath({
+  method: "put",
+  path: "/site/primary-domain",
+  tags: ["Admin", "Website"],
+  summary: "Choose the primary domain (canonical URLs, sitemaps). Must be verified, configured and not redirecting",
+  security,
+  request: { body: jsonBody(primaryDomainSchema) },
+  responses: { "200": okResponse(siteDomainsOverviewSchema), ...errorResponses },
 });
 
 const generator = new OpenApiGeneratorV3(registry.definitions);

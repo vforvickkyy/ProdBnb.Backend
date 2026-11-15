@@ -9,6 +9,8 @@ import { adminRouter } from "./modules/admin/admin.routes";
 import { collectionsRouter } from "./modules/collections/collections.routes";
 import { publicOutreachRouter } from "./modules/outreach/outreach.routes";
 import { publicPlatformsRouter } from "./modules/platform/releases.routes";
+import { publicSiteRouter } from "./modules/site/site.routes";
+import { getPublicSiteConfig } from "./modules/site/integrations.service";
 import { availabilityRouter } from "./modules/availability/availability.routes";
 import { billingRouter } from "./modules/billing/billing.routes";
 import { bookingsRouter } from "./modules/bookings/bookings.routes";
@@ -58,7 +60,19 @@ export function createApp(): Express {
   app.set("trust proxy", 1);
 
   app.use(helmet());
-  app.use(cors({ origin: env.CORS_ORIGINS.length > 0 ? env.CORS_ORIGINS : false }));
+  // Browser origins allowed to call the API: CORS_ORIGINS (the admin console, staging/preview
+  // sites) plus -- Console 3 -- the website's primary domain as chosen in the admin console
+  // (Website → Domains), so switching domains never needs a backend redeploy.
+  app.use(
+    cors({
+      origin: (origin, callback) => {
+        if (!origin || env.CORS_ORIGINS.includes(origin)) return callback(null, Boolean(origin));
+        getPublicSiteConfig()
+          .then((config) => callback(null, config.site.url === origin))
+          .catch(() => callback(null, false));
+      },
+    })
+  );
 
   // Registered BEFORE the global express.json() below, and deliberately not
   // part of paymentsRouter -- Cashfree's webhook signature covers the exact
@@ -129,6 +143,7 @@ export function createApp(): Express {
   app.use("/v1", collectionsRouter);
   app.use("/v1", publicOutreachRouter);
   app.use("/v1", publicPlatformsRouter);
+  app.use("/v1", publicSiteRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

@@ -72,7 +72,7 @@ describe("availability", () => {
 
     it("returns availability for a matching weekday", async () => {
       const res = await request(app)
-        .get(`/v1/locations/${locationId}/availability`)
+        .get(`/v1/locations/${locationId}/availability`).set(authHeader(booker))
         .query({ from: MONDAY, to: MONDAY });
       expect(res.status).toBe(200);
       expect(res.body.data).toHaveLength(1);
@@ -82,7 +82,7 @@ describe("availability", () => {
 
     it("returns empty windows for a day with no rule", async () => {
       const res = await request(app)
-        .get(`/v1/locations/${locationId}/availability`)
+        .get(`/v1/locations/${locationId}/availability`).set(authHeader(booker))
         .query({ from: TUESDAY, to: TUESDAY });
       expect(res.status).toBe(200);
       expect(res.body.data[0]).toEqual({ date: TUESDAY, windows: [] });
@@ -100,7 +100,7 @@ describe("availability", () => {
         .send({ day_of_week: "monday", start_time: "14:00", end_time: "18:00" });
       await publish(gapLoc);
 
-      const res = await request(app).get(`/v1/locations/${gapLoc}/availability`).query({ from: MONDAY, to: MONDAY });
+      const res = await request(app).get(`/v1/locations/${gapLoc}/availability`).set(authHeader(booker)).query({ from: MONDAY, to: MONDAY });
       expect(res.body.data[0].windows).toHaveLength(2);
       const [morning, afternoon] = res.body.data[0].windows;
       expect(new Date(morning.end).toISOString()).toBe("2026-10-05T12:00:00.000Z");
@@ -143,7 +143,7 @@ describe("availability", () => {
         .send({ date: MONDAY, status: "unavailable" });
       expect(create.status).toBe(201);
 
-      const res = await request(app).get(`/v1/locations/${locationId}/availability`).query({ from: MONDAY, to: MONDAY });
+      const res = await request(app).get(`/v1/locations/${locationId}/availability`).set(authHeader(booker)).query({ from: MONDAY, to: MONDAY });
       expect(res.body.data[0].windows).toEqual([]);
 
       // clean up so later tests in this block aren't affected
@@ -157,7 +157,7 @@ describe("availability", () => {
         .send({ date: SUNDAY, status: "available", start_time: "10:00", end_time: "14:00" });
       expect(create.status).toBe(201);
 
-      const res = await request(app).get(`/v1/locations/${locationId}/availability`).query({ from: SUNDAY, to: SUNDAY });
+      const res = await request(app).get(`/v1/locations/${locationId}/availability`).set(authHeader(booker)).query({ from: SUNDAY, to: SUNDAY });
       expect(res.body.data[0].windows).toHaveLength(1);
       expect(new Date(res.body.data[0].windows[0].start).toISOString()).toBe("2026-10-11T10:00:00.000Z");
     });
@@ -198,7 +198,7 @@ describe("availability", () => {
         .send({ start_at: "2026-10-05T13:00:00Z", end_at: "2026-10-05T15:00:00Z", reason: "Owner using property" });
       expect(block.status).toBe(201);
 
-      const res = await request(app).get(`/v1/locations/${locationId}/availability`).query({ from: MONDAY, to: MONDAY });
+      const res = await request(app).get(`/v1/locations/${locationId}/availability`).set(authHeader(booker)).query({ from: MONDAY, to: MONDAY });
       expect(res.body.data[0].windows).toHaveLength(2);
       expect(new Date(res.body.data[0].windows[0].end).toISOString()).toBe("2026-10-05T13:00:00.000Z");
       expect(new Date(res.body.data[0].windows[1].start).toISOString()).toBe("2026-10-05T15:00:00.000Z");
@@ -213,12 +213,12 @@ describe("availability", () => {
         .send({ start_at: "2026-10-05T00:00:00Z", end_at: "2026-10-06T00:00:00Z", reason: "Renovation" });
       expect(block.status).toBe(201);
 
-      const res = await request(app).get(`/v1/locations/${locationId}/availability`).query({ from: MONDAY, to: MONDAY });
+      const res = await request(app).get(`/v1/locations/${locationId}/availability`).set(authHeader(booker)).query({ from: MONDAY, to: MONDAY });
       expect(res.body.data[0].windows).toEqual([]);
     });
 
     it("never exposes the block reason publicly, and blocks aren't publicly listable", async () => {
-      const res = await request(app).get(`/v1/locations/${locationId}/availability`).query({ from: MONDAY, to: MONDAY });
+      const res = await request(app).get(`/v1/locations/${locationId}/availability`).set(authHeader(booker)).query({ from: MONDAY, to: MONDAY });
       expect(JSON.stringify(res.body)).not.toContain("Renovation");
 
       const listRes = await request(app).get(`/v1/locations/${locationId}/blocks`);
@@ -246,7 +246,7 @@ describe("availability", () => {
         .send({ day_of_week: "monday", start_time: "09:00", end_time: "18:00" });
       await publish(locationId);
 
-      const res = await request(app).get(`/v1/locations/${locationId}/availability`).query({ from: MONDAY, to: MONDAY });
+      const res = await request(app).get(`/v1/locations/${locationId}/availability`).set(authHeader(booker)).query({ from: MONDAY, to: MONDAY });
       // 09:00 IST (UTC+5:30) = 03:30 UTC
       expect(new Date(res.body.data[0].windows[0].start).toISOString()).toBe("2026-10-05T03:30:00.000Z");
       expect(res.body.meta.timezone).toBe("Asia/Kolkata");
@@ -270,21 +270,21 @@ describe("availability", () => {
 
     it("rejects an over-90-day range", async () => {
       const res = await request(app)
-        .get(`/v1/locations/${locationId}/availability`)
+        .get(`/v1/locations/${locationId}/availability`).set(authHeader(booker))
         .query({ from: "2026-01-01", to: "2026-12-31" });
       expect(res.status).toBe(400);
     });
 
     it("rejects to before from", async () => {
       const res = await request(app)
-        .get(`/v1/locations/${locationId}/availability`)
+        .get(`/v1/locations/${locationId}/availability`).set(authHeader(booker))
         .query({ from: "2026-10-10", to: "2026-10-01" });
       expect(res.status).toBe(400);
     });
 
     it("404s availability for a nonexistent location", async () => {
       const res = await request(app)
-        .get("/v1/locations/00000000-0000-0000-0000-000000000000/availability")
+        .get("/v1/locations/00000000-0000-0000-0000-000000000000/availability").set(authHeader(booker))
         .query({ from: MONDAY, to: MONDAY });
       expect(res.status).toBe(404);
     });
@@ -358,7 +358,7 @@ describe("availability", () => {
     });
 
     it("an active booking removes its interval from computed availability, and cancelling restores it", async () => {
-      const before = await request(app).get(`/v1/locations/${locationId}/availability`).query({ from: MONDAY, to: MONDAY });
+      const before = await request(app).get(`/v1/locations/${locationId}/availability`).set(authHeader(booker)).query({ from: MONDAY, to: MONDAY });
       expect(before.body.data[0].windows).toHaveLength(1);
       expect(new Date(before.body.data[0].windows[0].start).toISOString()).toBe("2026-10-05T10:00:00.000Z");
       expect(new Date(before.body.data[0].windows[0].end).toISOString()).toBe("2026-10-05T18:00:00.000Z");
@@ -369,14 +369,14 @@ describe("availability", () => {
         .send({ location_id: locationId, start_at: "2026-10-05T13:00:00Z", end_at: "2026-10-05T15:00:00Z" });
       expect(booking.status).toBe(201);
 
-      const during = await request(app).get(`/v1/locations/${locationId}/availability`).query({ from: MONDAY, to: MONDAY });
+      const during = await request(app).get(`/v1/locations/${locationId}/availability`).set(authHeader(booker)).query({ from: MONDAY, to: MONDAY });
       expect(during.body.data[0].windows).toHaveLength(2);
       expect(new Date(during.body.data[0].windows[0].end).toISOString()).toBe("2026-10-05T13:00:00.000Z");
       expect(new Date(during.body.data[0].windows[1].start).toISOString()).toBe("2026-10-05T15:00:00.000Z");
 
       await request(app).post(`/v1/bookings/${booking.body.data.id}/cancel`).set(authHeader(bookerUser));
 
-      const after = await request(app).get(`/v1/locations/${locationId}/availability`).query({ from: MONDAY, to: MONDAY });
+      const after = await request(app).get(`/v1/locations/${locationId}/availability`).set(authHeader(booker)).query({ from: MONDAY, to: MONDAY });
       expect(after.body.data[0].windows).toHaveLength(1);
       expect(new Date(after.body.data[0].windows[0].start).toISOString()).toBe("2026-10-05T10:00:00.000Z");
       expect(new Date(after.body.data[0].windows[0].end).toISOString()).toBe("2026-10-05T18:00:00.000Z");

@@ -19,6 +19,8 @@ import { createBlock, deleteBlock, listBlocks, updateBlock } from "./blocks.serv
 import { createOverride, deleteOverride, listOverrides, updateOverride } from "./overrides.service";
 import { createRule, deleteRule, listRules, updateRule } from "./rules.service";
 import { auditAdminListingEdit } from "../admin/audit.service";
+import { AppError } from "../../errors/AppError";
+import { getPlatformSettings } from "../platform/settings.service";
 
 // Admin Console: "may this caller act as an administrator here" is a team-role permission,
 // not bare admin-role membership -- see src/modules/admin/permissions.ts.
@@ -30,6 +32,12 @@ async function isCallerAdmin(req: Request): Promise<boolean> {
 
 export async function getAvailabilityHandler(req: Request, res: Response): Promise<void> {
   const { id } = req.valid!.params as LocationIdParam;
+  // Console 3: availability is for signed-in people (an admin switch, on by default). Clients get a
+  // 401 they can turn into "Log in to check availability" -- the reason says why, distinct from an
+  // expired session.
+  if (!req.user && (await getPlatformSettings()).availability_requires_login) {
+    throw new AppError(401, "UNAUTHENTICATED", "Log in to check availability.", { reason: "login_required_for_availability" });
+  }
   const query = req.valid!.query as AvailabilityQuery;
   const { days, timezone } = await getAvailability(req.supabase!, id, query);
   ok(res, days, 200, { from: query.from, to: query.to, timezone });

@@ -17,11 +17,13 @@ export interface PlatformSettings {
   platform_fee_bps: number;
   tax_bps: number;
   unpaid_hold_minutes: number | null;
+  /** Console 3: availability is shown to signed-in people only (GET /v1/locations/:id/availability). */
+  availability_requires_login: boolean;
   updated_by: string | null;
   updated_at: string;
 }
 
-const SETTINGS_COLUMNS = "id, platform_fee_bps, tax_bps, unpaid_hold_minutes, updated_by, updated_at";
+const SETTINGS_COLUMNS = "id, platform_fee_bps, tax_bps, unpaid_hold_minutes, availability_requires_login, updated_by, updated_at";
 const CACHE_TTL_MS = 30_000;
 
 let cached: { value: PlatformSettings; at: number } | null = null;
@@ -31,6 +33,7 @@ const DEFAULTS: Omit<PlatformSettings, "id" | "updated_at"> = {
   platform_fee_bps: 0,
   tax_bps: 0,
   unpaid_hold_minutes: null,
+  availability_requires_login: true,
   updated_by: null,
 };
 
@@ -57,6 +60,7 @@ export interface PlatformSettingsPatch {
   platform_fee_bps?: number;
   tax_bps?: number;
   unpaid_hold_minutes?: number | null;
+  availability_requires_login?: boolean;
 }
 
 export async function updatePlatformSettings(actorId: string, patch: PlatformSettingsPatch): Promise<PlatformSettings> {

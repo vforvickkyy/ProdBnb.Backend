@@ -41,6 +41,9 @@ export const ADMIN_PERMISSIONS = [
   "platforms.view",
   "platforms.manage",
   "incidents.manage",
+  // Website (Console 3): domains, Google Maps and other site integrations.
+  "site.view",
+  "site.manage",
 ] as const;
 export type AdminPermission = (typeof ADMIN_PERMISSIONS)[number];
 
@@ -66,6 +69,7 @@ const BASE: readonly AdminPermission[] = [
   "audit.view",
   "settings.view",
   "platforms.view",
+  "site.view",
 ];
 
 export const ROLE_PERMISSIONS: Record<TeamRole, readonly AdminPermission[]> = {

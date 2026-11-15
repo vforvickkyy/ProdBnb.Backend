@@ -1368,7 +1368,13 @@
               "ADMIN_UPDATED_INCIDENT",
               "ADMIN_CREATED_RELEASE",
               "ADMIN_UPDATED_RELEASE",
-              "ADMIN_DELETED_RELEASE"
+              "ADMIN_DELETED_RELEASE",
+              "ADMIN_CONNECTED_SITE_INTEGRATION",
+              "ADMIN_DISCONNECTED_SITE_INTEGRATION",
+              "ADMIN_ADDED_DOMAIN",
+              "ADMIN_UPDATED_DOMAIN",
+              "ADMIN_REMOVED_DOMAIN",
+              "ADMIN_SET_PRIMARY_DOMAIN"
             ]
           },
           "target_type": {
@@ -1388,7 +1394,9 @@
               "platform",
               "feature_flag",
               "incident",
-              "release"
+              "release",
+              "site_integration",
+              "site"
             ]
           },
           "target_id": {
@@ -1479,7 +1487,9 @@
                 "channels.manage",
                 "platforms.view",
                 "platforms.manage",
-                "incidents.manage"
+                "incidents.manage",
+                "site.view",
+                "site.manage"
               ]
             }
           }
@@ -1572,6 +1582,9 @@
             "type": "integer",
             "nullable": true
           },
+          "availability_requires_login": {
+            "type": "boolean"
+          },
           "updated_by": {
             "type": "string",
             "nullable": true,
@@ -1587,6 +1600,7 @@
           "platform_fee_bps",
           "tax_bps",
           "unpaid_hold_minutes",
+          "availability_requires_login",
           "updated_by",
           "updated_at"
         ]
@@ -3621,6 +3635,176 @@
           "updated_by",
           "created_at",
           "updated_at"
+        ]
+      },
+      "SiteIntegrationStatus": {
+        "type": "object",
+        "properties": {
+          "provider": {
+            "type": "string",
+            "enum": [
+              "google_maps",
+              "vercel"
+            ]
+          },
+          "connected": {
+            "type": "boolean"
+          },
+          "config": {
+            "type": "object",
+            "additionalProperties": {
+              "nullable": true
+            }
+          },
+          "has_secret": {
+            "type": "boolean"
+          },
+          "last_tested_at": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          },
+          "last_test_ok": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "last_test_error": {
+            "type": "string",
+            "nullable": true
+          },
+          "updated_at": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "provider",
+          "connected",
+          "config",
+          "has_secret",
+          "last_tested_at",
+          "last_test_ok",
+          "last_test_error",
+          "updated_at"
+        ]
+      },
+      "DnsRecord": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "A",
+              "CNAME",
+              "TXT"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          },
+          "purpose": {
+            "type": "string",
+            "enum": [
+              "point",
+              "verify"
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "name",
+          "value",
+          "purpose"
+        ]
+      },
+      "SiteDomain": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "apex_name": {
+            "type": "string"
+          },
+          "is_apex": {
+            "type": "boolean"
+          },
+          "is_platform_domain": {
+            "type": "boolean"
+          },
+          "is_primary": {
+            "type": "boolean"
+          },
+          "verified": {
+            "type": "boolean"
+          },
+          "redirect_to": {
+            "type": "string",
+            "nullable": true
+          },
+          "configured": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "configured_by": {
+            "type": "string",
+            "nullable": true
+          },
+          "dns_records": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DnsRecord"
+            }
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "redirect",
+              "pending_dns",
+              "pending_verification"
+            ]
+          }
+        },
+        "required": [
+          "name",
+          "apex_name",
+          "is_apex",
+          "is_platform_domain",
+          "is_primary",
+          "verified",
+          "redirect_to",
+          "configured",
+          "configured_by",
+          "dns_records",
+          "status"
+        ]
+      },
+      "SiteDomainsOverview": {
+        "type": "object",
+        "properties": {
+          "vercel_connected": {
+            "type": "boolean"
+          },
+          "primary_domain": {
+            "type": "string",
+            "nullable": true
+          },
+          "domains": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SiteDomain"
+            }
+          }
+        },
+        "required": [
+          "vercel_connected",
+          "primary_domain",
+          "domains"
         ]
       }
     },
@@ -5766,7 +5950,9 @@
                 "platform",
                 "feature_flag",
                 "incident",
-                "release"
+                "release",
+                "site_integration",
+                "site"
               ]
             },
             "required": false,
@@ -5842,7 +6028,13 @@
                 "ADMIN_UPDATED_INCIDENT",
                 "ADMIN_CREATED_RELEASE",
                 "ADMIN_UPDATED_RELEASE",
-                "ADMIN_DELETED_RELEASE"
+                "ADMIN_DELETED_RELEASE",
+                "ADMIN_CONNECTED_SITE_INTEGRATION",
+                "ADMIN_DISCONNECTED_SITE_INTEGRATION",
+                "ADMIN_ADDED_DOMAIN",
+                "ADMIN_UPDATED_DOMAIN",
+                "ADMIN_REMOVED_DOMAIN",
+                "ADMIN_SET_PRIMARY_DOMAIN"
               ]
             },
             "required": false,
@@ -6267,7 +6459,7 @@
           "Admin",
           "Settings"
         ],
-        "summary": "Platform fee, tax and unpaid-hold window",
+        "summary": "Platform fee, tax, unpaid-hold window and whether availability needs a login",
         "security": [
           {
             "bearerAuth": []
@@ -6339,6 +6531,9 @@
                     "nullable": true,
                     "minimum": 5,
                     "maximum": 10080
+                  },
+                  "availability_requires_login": {
+                    "type": "boolean"
                   },
                   "reason": {
                     "type": "string",
@@ -12619,6 +12814,736 @@
                       "required": [
                         "deleted"
                       ]
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/site/integrations": {
+      "get": {
+        "tags": [
+          "Admin",
+          "Website"
+        ],
+        "summary": "Website integrations (Google Maps, Vercel): status and safe configuration only, never secrets",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/SiteIntegrationStatus"
+                      }
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/site/integrations/google_maps": {
+      "put": {
+        "tags": [
+          "Admin",
+          "Website"
+        ],
+        "summary": "Connect Google Maps. The browser key is public by design; the optional server key goes to Vault",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "browser_key": {
+                    "type": "string",
+                    "pattern": "^AIza[0-9A-Za-z_-]{35}$"
+                  },
+                  "map_id": {
+                    "type": "string",
+                    "nullable": true,
+                    "minLength": 1,
+                    "maxLength": 100
+                  },
+                  "server_key": {
+                    "type": "string",
+                    "pattern": "^AIza[0-9A-Za-z_-]{35}$"
+                  }
+                },
+                "required": [
+                  "browser_key"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/SiteIntegrationStatus"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/site/integrations/vercel": {
+      "put": {
+        "tags": [
+          "Admin",
+          "Website"
+        ],
+        "summary": "Connect the website's Vercel project (token goes to Vault; checked against the project first)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "project_id": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
+                  },
+                  "team_id": {
+                    "type": "string",
+                    "nullable": true,
+                    "minLength": 1,
+                    "maxLength": 100
+                  },
+                  "token": {
+                    "type": "string",
+                    "minLength": 20,
+                    "maxLength": 200
+                  }
+                },
+                "required": [
+                  "project_id"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/SiteIntegrationStatus"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/site/integrations/{provider}/test": {
+      "post": {
+        "tags": [
+          "Admin",
+          "Website"
+        ],
+        "summary": "Test a website integration",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "google_maps",
+                "vercel"
+              ]
+            },
+            "required": true,
+            "name": "provider",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "ok": {
+                          "type": "boolean"
+                        },
+                        "detail": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "ok",
+                        "detail"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/site/integrations/{provider}": {
+      "delete": {
+        "tags": [
+          "Admin",
+          "Website"
+        ],
+        "summary": "Disconnect a website integration and delete its secret from Vault",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "google_maps",
+                "vercel"
+              ]
+            },
+            "required": true,
+            "name": "provider",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "removed": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "removed"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/site/domains": {
+      "get": {
+        "tags": [
+          "Admin",
+          "Website"
+        ],
+        "summary": "The website's domains, their status and the DNS records each still needs",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/SiteDomainsOverview"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Admin",
+          "Website"
+        ],
+        "summary": "Add a domain to the website (optionally redirecting to another of its domains)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "maxLength": 253,
+                    "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$"
+                  },
+                  "redirect_to": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 253,
+                    "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$"
+                  }
+                },
+                "required": [
+                  "name"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/SiteDomain"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/site/domains/{domain}": {
+      "patch": {
+        "tags": [
+          "Admin",
+          "Website"
+        ],
+        "summary": "Set or clear a domain's redirect",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 253,
+              "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$"
+            },
+            "required": true,
+            "name": "domain",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "redirect_to": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 253,
+                    "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$"
+                  }
+                },
+                "required": [
+                  "redirect_to"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/SiteDomain"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Admin",
+          "Website"
+        ],
+        "summary": "Remove a domain from the website (not the primary one, not the platform address)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 253,
+              "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$"
+            },
+            "required": true,
+            "name": "domain",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "removed": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "removed"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/site/domains/{domain}/verify": {
+      "post": {
+        "tags": [
+          "Admin",
+          "Website"
+        ],
+        "summary": "Re-check a domain's ownership verification and DNS",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 253,
+              "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$"
+            },
+            "required": true,
+            "name": "domain",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/SiteDomain"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/site/primary-domain": {
+      "put": {
+        "tags": [
+          "Admin",
+          "Website"
+        ],
+        "summary": "Choose the primary domain (canonical URLs, sitemaps). Must be verified, configured and not redirecting",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "domain": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 253,
+                    "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$"
+                  }
+                },
+                "required": [
+                  "domain"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/SiteDomainsOverview"
                     }
                   },
                   "required": [

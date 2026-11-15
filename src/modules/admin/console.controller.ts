@@ -42,6 +42,7 @@ import { listPaymentsNeedingAttention } from "./payments.service";
 import { getCallerTeamRole } from "./permissions";
 import { addTeamMemberByEmail, getAdminMe, listTeam, removeTeamMember, setTeamMember } from "./team.service";
 import { grantUserRole, revokeUserRole } from "./users.service";
+import { clearSiteConfigCache } from "../site/integrations.service";
 
 /**
  * Admin Console endpoints. Every route here sits behind adminRouter's requireAuth +
@@ -104,12 +105,13 @@ export async function patchSettingsHandler(req: Request, res: Response): Promise
   const after = await updatePlatformSettings(req.user!.id, patch);
 
   const changes: Record<string, { from: unknown; to: unknown }> = {};
-  for (const key of ["platform_fee_bps", "tax_bps", "unpaid_hold_minutes"] as const) {
+  for (const key of ["platform_fee_bps", "tax_bps", "unpaid_hold_minutes", "availability_requires_login"] as const) {
     if (patch[key] !== undefined && before[key] !== after[key]) {
       changes[key] = { from: before[key], to: after[key] };
     }
   }
   await writeAuditLog(req.user!.id, "ADMIN_UPDATED_SETTINGS", "settings", after.id, reason ?? null, { changes });
+  clearSiteConfigCache();
   ok(res, after);
 }
 

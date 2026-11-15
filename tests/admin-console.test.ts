@@ -335,7 +335,7 @@ describe("Admin Console", () => {
     it("is off by default: an old unpaid booking keeps its slot", async () => {
       const { id, slot } = await book(booker, locationId);
       await backdate(id, 120);
-      await request(app).get(`/v1/locations/${locationId}/availability`).query({ from: slot.date, to: slot.date }).expect(200);
+      await request(app).get(`/v1/locations/${locationId}/availability`).set(auth(booker)).query({ from: slot.date, to: slot.date }).expect(200);
       expect((await statusOf(id)).status).toBe("requested");
     });
 
@@ -344,7 +344,7 @@ describe("Admin Console", () => {
       const { id, slot } = await book(booker, locationId);
       await backdate(id, 20);
 
-      const availability = await request(app).get(`/v1/locations/${locationId}/availability`).query({ from: slot.date, to: slot.date });
+      const availability = await request(app).get(`/v1/locations/${locationId}/availability`).set(auth(booker)).query({ from: slot.date, to: slot.date });
       expect(availability.status).toBe(200);
 
       const after = await statusOf(id);
