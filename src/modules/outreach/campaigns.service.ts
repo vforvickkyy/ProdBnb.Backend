@@ -340,7 +340,7 @@ export function apiBaseUrl(): string {
     return explicit.replace(/\/+$/, "");
   }
   const vercel = process.env.VERCEL_PROJECT_PRODUCTION_URL ?? process.env.VERCEL_URL;
-  return vercel ? `https://${vercel}` : "http://localhost:3000";
+  return vercel ? `https://${vercel}` : `http://localhost:${process.env.PORT ?? 4000}`;
 }
 
 async function isSuppressed(email: string): Promise<boolean> {

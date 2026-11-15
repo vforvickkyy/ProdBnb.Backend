@@ -30,17 +30,21 @@ produces a **super admin**.
 
 | Permission | super_admin | moderator | support | finance |
 |---|:-:|:-:|:-:|:-:|
-| dashboard.view, users.view, locations.view, bookings.view, audit.view, settings.view | ✓ | ✓ | ✓ | ✓ |
+| dashboard.view, users.view, locations.view, bookings.view, audit.view, settings.view, platforms.view | ✓ | ✓ | ✓ | ✓ |
 | users.manage (suspend/restore, grant/revoke booker/host) | ✓ | ✓ | | |
 | locations.moderate (approve/reject/suspend/restore, edit content, remove photos/sections) | ✓ | ✓ | | |
-| catalog.manage | ✓ | ✓ | | |
+| locations.create (create a listing for a host) | ✓ | ✓ | | |
+| catalog.manage (catalog items, covers, collections) | ✓ | ✓ | | |
+| campaigns.view | ✓ | ✓ | ✓ | |
+| campaigns.send (announcements, direct notifications) | ✓ | | ✓ | |
+| incidents.manage | ✓ | | ✓ | |
 | bookings.manage (cancel/confirm/reject/complete on a host's behalf) | ✓ | | ✓ | |
 | payments.view, payments.verify | ✓ | | ✓ | ✓ |
 | payments.refund | ✓ | | | ✓ |
 | messages.access (read a private conversation for a stated reason) | ✓ | | ✓ | |
 | notifications.diagnostics | ✓ | | ✓ | |
 | analytics.view | ✓ | | | ✓ |
-| team.manage, settings.manage, system.view | ✓ | | | |
+| team.manage, settings.manage, system.view, channels.manage, platforms.manage | ✓ | | | |
 
 The matrix lives in one place, `src/modules/admin/permissions.ts`; the Admin Panel reads the
 caller's permissions back from `GET /v1/admin/me` and never keeps its own copy.
@@ -176,3 +180,99 @@ every table and grants back exactly what the earlier migrations intended, table-
 
 Verified locally: the full suite (1003 tests) passes, including 15 tests that expected
 `permission denied` and previously failed against a fresh Supabase stack.
+
+---
+
+# Admin Console 2
+
+Migrations `20261115140000` … `20261115180000`. All new admin routes live in
+`src/modules/admin/console2.routes.ts` (mounted inside the admin router, so every one is admin-gated
+and names its permission). Every write is audited (`admin_audit_log`, vocabulary widened in
+`20261115140000_admin_console_2_audit_vocabulary.sql`).
+
+## Listings created for a host
+
+`POST /v1/admin/locations` takes the host's own create body plus `host_id`, `grant_host_role` and
+`status` (`draft` | `published`). The listing belongs to the host from the start (`host_id` is
+theirs; they manage it in their app). A non-host is refused unless `grant_host_role: true`, which
+grants the role in the same step (audited as `ADMIN_GRANTED_ROLE`). `GET /v1/admin/hosts/search`
+finds people by name or email (`admin_search_users()`, which reads `auth.users`).
+
+**Full editing needs no new route.** Photos (upload / reorder / cover = first photo / delete),
+pricing, opening hours, date exceptions, blocks and sections are edited through the same shared
+endpoints a host uses (`/v1/locations/:id/...`), which already accept an admin with
+`locations.moderate`. Those writes are now audited when the admin is not the owner
+(`auditAdminListingEdit`: `ADMIN_UPLOADED_MEDIA`, `ADMIN_REORDERED_MEDIA`, `ADMIN_UPDATED_PRICING`,
+`ADMIN_UPDATED_AVAILABILITY`, `ADMIN_UPDATED_SECTION`). Publishing a draft uses the shared
+`PATCH /v1/locations/:id {status}` (audited as `ADMIN_UPDATED_LOCATION_STATUS`).
+
+Admin list rows (`GET /v1/admin/locations`) now carry `cover_url`, `media_count`, `host` and
+`starting_price`.
+
+**Browser uploads need R2 CORS.** The Admin Console PUTs files straight to presigned R2 URLs. The
+bucket must allow `PUT` from the console's origin. Integrations shows an "R2 browser uploads" check;
+"Allow browser uploads" (`POST /v1/admin/system/r2-cors`) adds the rule for `CORS_ORIGINS`, keeping
+existing rules. That needs an R2 token with bucket-admin scope; with an object-only token, add the
+rule in the Cloudflare dashboard (R2 → bucket → Settings → CORS policy):
+
+```json
+[{ "AllowedOrigins": ["https://prodbnb-admin-staging.vercel.app"], "AllowedMethods": ["PUT", "GET", "HEAD"], "AllowedHeaders": ["content-type"], "MaxAgeSeconds": 3600 }]
+```
+
+## Catalog covers and collections
+
+Categories, amenities and use cases gain `description` and a cover image (presign → browser PUT →
+`PUT …/cover` verifies the object in R2 and that its key belongs to that item). Admins can tag and
+untag listings per item. Public `GET /v1/categories` (etc.) adds `description` + `cover_url`.
+
+Collections (`collections`, `collection_locations`) are curated, ordered sets of listings with a
+cover and a publish toggle. Public: `GET /v1/collections`, `GET /v1/collections/:idOrSlug` — RLS
+returns only published collections and only published listings inside them.
+
+## Messaging: channels, announcements, direct notifications
+
+**Channels** (`messaging_channels`): SMTP, APNs, FCM, Web Push. Non-secret settings in `config`; the
+secret (SMTP password, `.p8` key, service-account private key, VAPID private key) in **Supabase
+Vault**, written by `messaging_channel_save()` and read only by `messaging_channel_secret()` —
+both service-role only. No API response, log line or audit entry contains a secret; a blank secret
+on save keeps the stored one. Credentials are cached in memory for 60 s.
+
+**Push routing is per device platform** (`notifications/providers/index.ts`): iOS → APNs (the
+dashboard key if connected, else the original `APNS_*` env vars when `NOTIFICATION_PROVIDER=apns`),
+Android → FCM HTTP v1, web → Web Push (VAPID). A platform without a provider records an honest
+`skipped` attempt. Devices may now register as `android` or `web` (web needs `web_push_keys`), and
+may report `app_version`.
+
+**Campaigns** (`notification_campaigns`, `campaign_recipients`): one message over any mix of
+in-app / push / email, to everyone, a role, everyone with the app on chosen platforms, or chosen
+people. Push implies an in-app record. Lifecycle draft → (scheduled →) sending → sent | cancelled.
+The audience is expanded once in SQL; recipients are processed in leased batches (`skip locked`,
+5-minute lease) — inline for ~8 s after Send, while the campaign page is open, and every minute by
+pg_cron → pg_net → `POST /v1/internal/jobs/dispatch` (shared secret in Vault) once **Delivery
+engine** is enabled with the backend URL. Email is throttled to the SMTP channel's
+`max_per_minute`.
+
+**Old iOS builds are protected.** The iOS app in the field rejects its whole notifications list on
+an unknown type, so `announcement` notifications are only listed for clients that send
+`X-ProdBnb-Capabilities: announcements`. Push still reaches them. Users can opt out of announcement
+pushes (`notification_preferences.announcement`).
+
+**Email**: bodies are plain text with `**bold**`, `[link](https://…)` and paragraphs, everything
+else escaped. Announcement emails carry a signed one-click unsubscribe (RFC 8058,
+`List-Unsubscribe-Post`); `GET /v1/email/unsubscribe` only shows a confirm button, `POST` records
+the suppression. Direct messages ignore suppressions and carry no unsubscribe link.
+
+## Platform release control
+
+`app_platforms` (ios / android / web: status, live / latest / minimum version, store URL, update
+messages, maintenance mode), `feature_flags` (per-platform on/off + optional minimum version),
+`platform_incidents` (+ timeline), `release_plans` (promote-to-live sets the platform's live and
+latest version), `client_version_activity` (which versions signed-in clients run; pruned after 90
+days).
+
+Apps read one thing: **`GET /v1/app-config?platform=ios&version=1.4.2`** →
+`{ status, maintenance, update: { required, available, latest_version, min_supported_version,
+store_url, message }, features: { key: bool }, incidents: [...] }` (+ `web_push_public_key` for
+web). Public, cacheable for 30 s. Clients that send `X-ProdBnb-Platform` and
+`X-ProdBnb-App-Version` while signed in are counted in "Versions in use". Wiring the iOS app to
+these headers and to `/v1/app-config` is part of the next iOS release.
