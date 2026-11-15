@@ -2,13 +2,15 @@ import { SupabaseClient } from "@supabase/supabase-js";
 import { adminClient } from "../../lib/supabase";
 import { PreferenceCategory, UpdatePreferencesInput } from "./notification.schema";
 
-const CATEGORIES: PreferenceCategory[] = ["booking", "payment", "message"];
+const CATEGORIES: PreferenceCategory[] = ["booking", "payment", "message", "announcement"];
 
 export interface PreferencesView {
   booking: boolean;
   payment: boolean;
   /** Phase 27-8. Gates message push delivery only -- never in-app creation. */
   message: boolean;
+  /** Admin Console 2. Gates announcement push only; additive key, older clients ignore it. */
+  announcement: boolean;
 }
 
 /**
@@ -29,6 +31,7 @@ export async function getPreferences(supabase: SupabaseClient, userId: string): 
     // existing user: absence means enabled, so nobody had to be backfilled and
     // nobody has to open settings to start receiving message push (N-7).
     message: byCategory.get("message") ?? true,
+    announcement: byCategory.get("announcement") ?? true,
   };
 }
 

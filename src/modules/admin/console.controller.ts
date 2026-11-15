@@ -20,6 +20,7 @@ import {
   CatalogItemParam,
   CatalogKindParam,
   CatalogNameInput,
+  CatalogUpdateInput,
   ConversationIdParam,
   IntegrationsQuery,
   LocationMediaParam,
@@ -121,14 +122,14 @@ export async function getCatalogHandler(req: Request, res: Response): Promise<vo
 
 export async function postCatalogItemHandler(req: Request, res: Response): Promise<void> {
   const { kind } = req.valid!.params as CatalogKindParam;
-  const { name } = req.valid!.body as CatalogNameInput;
-  created(res, await createCatalogItem(req.user!.id, kind, name));
+  const { name, description } = req.valid!.body as CatalogNameInput;
+  created(res, await createCatalogItem(req.user!.id, kind, name, description ?? null));
 }
 
 export async function patchCatalogItemHandler(req: Request, res: Response): Promise<void> {
   const { kind, itemId } = req.valid!.params as CatalogItemParam;
-  const { name } = req.valid!.body as CatalogNameInput;
-  ok(res, await renameCatalogItem(req.user!.id, kind, itemId, name));
+  const patch = req.valid!.body as CatalogUpdateInput;
+  ok(res, await renameCatalogItem(req.user!.id, kind, itemId, patch));
 }
 
 export async function deleteCatalogItemHandler(req: Request, res: Response): Promise<void> {

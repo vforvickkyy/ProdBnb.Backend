@@ -39,6 +39,19 @@ import {
   catalogItemParamSchema,
   catalogKindParamSchema,
   catalogNameSchema,
+  catalogUpdateSchema,
+  catalogListingParamSchema,
+  catalogListingsQuerySchema,
+  collectionCreateSchema,
+  collectionIdParamSchema,
+  collectionListingParamSchema,
+  collectionUpdateSchema,
+  coverCompleteSchema,
+  coverUploadRequestSchema,
+  adminCreateLocationSchema,
+  hostSearchQuerySchema,
+  locationIdsSchema,
+  orderedLocationIdsSchema,
   conversationIdParamSchema,
   deliveryAttemptsQuerySchema,
   integrationsQuerySchema,
@@ -58,6 +71,38 @@ import {
   userRoleParamSchema,
 } from "../src/modules/admin/admin.schema";
 import { ADMIN_PERMISSIONS } from "../src/modules/admin/permissions";
+import {
+  audiencePreviewSchema,
+  audienceSchema,
+  campaignChannelSchema,
+  campaignIdParamSchema,
+  campaignRecipientsQuerySchema,
+  channelEnabledSchema,
+  channelNameSchema,
+  channelParamSchema,
+  createCampaignSchema,
+  jobsConfigSchema,
+  listCampaignsQuerySchema,
+  pushPlatformSchema,
+  saveChannelSchema,
+  sendCampaignSchema,
+  testCampaignSchema,
+  testChannelSchema,
+  updateCampaignSchema,
+} from "../src/modules/outreach/outreach.schema";
+import {
+  createFeatureFlagSchema,
+  createIncidentSchema,
+  createReleaseSchema,
+  flagIdParamSchema,
+  incidentIdParamSchema,
+  platformParamSchema,
+  releaseIdParamSchema,
+  updateFeatureFlagSchema,
+  updateIncidentSchema,
+  updatePlatformSchema,
+  updateReleaseSchema,
+} from "../src/modules/platform/releases.schema";
 
 extendZodWithOpenApi(z);
 
@@ -298,6 +343,41 @@ const locationDetailSchema = z
   })
   .openapi("LocationDetail");
 
+const startingPriceSchema = z
+  .object({ amount_minor_units: z.number().int(), currency: z.string(), booking_type: z.string() })
+  .nullable()
+  .openapi("StartingPrice");
+
+const adminLocationListItemSchema = z
+  .object({
+    id: z.string().uuid(),
+    host_id: z.string().uuid(),
+    title: z.string(),
+    description: z.string(),
+    address_line1: z.string().nullable(),
+    address_line2: z.string().nullable(),
+    city: z.string(),
+    region: z.string().nullable(),
+    country: z.string(),
+    postal_code: z.string().nullable(),
+    latitude: z.number().nullable(),
+    longitude: z.number().nullable(),
+    capacity: z.number().int().nullable(),
+    timezone: z.string(),
+    instant_booking_enabled: z.boolean(),
+    status: z.enum(["draft", "submitted", "under_review", "approved", "published", "rejected", "suspended", "archived"]),
+    moderation_reason: z.string().nullable(),
+    suspended_by_host_suspension: z.boolean(),
+    created_at: z.string().datetime(),
+    updated_at: z.string().datetime(),
+    cover_url: z.string().nullable(),
+    media_count: z.number().int(),
+    host: z.object({ id: z.string().uuid(), first_name: z.string().nullable(), last_name: z.string().nullable() }).nullable(),
+    starting_price: startingPriceSchema,
+  })
+  .openapi("AdminLocationListItem");
+
+
 registry.registerPath({
   method: "get",
   path: "/locations",
@@ -305,7 +385,7 @@ registry.registerPath({
   summary: "List locations (status/host_id/search filters)",
   security,
   request: { query: adminListLocationsQuerySchema },
-  responses: { "200": paginatedResponse(locationDetailSchema), ...errorResponses },
+  responses: { "200": paginatedResponse(adminLocationListItemSchema), ...errorResponses },
 });
 
 registry.registerPath({
@@ -885,7 +965,14 @@ registry.registerPath({
 // -- Catalog --------------------------------------------------------------------------------
 
 const adminCatalogItemSchema = z
-  .object({ id: z.string().uuid(), name: z.string(), created_at: z.string().datetime(), usage_count: z.number().int() })
+  .object({
+    id: z.string().uuid(),
+    name: z.string(),
+    description: z.string().nullable(),
+    cover_url: z.string().nullable(),
+    created_at: z.string().datetime(),
+    usage_count: z.number().int(),
+  })
   .openapi("AdminCatalogItem");
 
 registry.registerPath({
@@ -912,9 +999,9 @@ registry.registerPath({
   method: "patch",
   path: "/catalog/{kind}/{itemId}",
   tags: ["Admin", "Catalog"],
-  summary: "Rename a catalog option (audited)",
+  summary: "Rename / describe a catalog option (audited)",
   security,
-  request: { params: catalogItemParamSchema, body: jsonBody(catalogNameSchema) },
+  request: { params: catalogItemParamSchema, body: jsonBody(catalogUpdateSchema) },
   responses: { "200": okResponse(adminCatalogItemSchema), ...errorResponses },
 });
 
@@ -1057,6 +1144,737 @@ registry.registerPath({
     ),
     ...errorResponses,
   },
+});
+
+// ================================================================================================
+// Admin Console 2 -- listings for hosts, catalog covers + listings, collections, messaging, platforms
+// ================================================================================================
+
+const locationCardSchema = z
+  .object({
+    id: z.string().uuid(),
+    title: z.string(),
+    city: z.string(),
+    region: z.string().nullable(),
+    country: z.string(),
+    status: z.string(),
+    host_id: z.string().uuid(),
+    cover_url: z.string().nullable(),
+    starting_price: startingPriceSchema,
+  })
+  .openapi("LocationCard");
+
+registry.registerPath({
+  method: "post",
+  path: "/locations",
+  tags: ["Admin", "Locations"],
+  summary: "Create a listing owned by a host (optionally granting the host role; draft or published; audited)",
+  security,
+  request: { body: jsonBody(adminCreateLocationSchema) },
+  responses: { "201": createdResponse(locationDetailSchema), ...errorResponses },
+});
+
+registry.registerPath({
+  method: "get",
+  path: "/hosts/search",
+  tags: ["Admin", "Locations"],
+  summary: "Find people by name or email for the host picker (hosts first)",
+  security,
+  request: { query: hostSearchQuerySchema },
+  responses: {
+    "200": okResponse(
+      z.array(
+        z
+          .object({
+            id: z.string().uuid(),
+            first_name: z.string().nullable(),
+            last_name: z.string().nullable(),
+            email: z.string().nullable(),
+            status: z.string(),
+            is_host: z.boolean(),
+            location_count: z.number().int(),
+          })
+          .openapi("HostCandidate")
+      )
+    ),
+    ...errorResponses,
+  },
+});
+
+const coverUploadAuthorizationSchema = z
+  .object({
+    upload_url: z.string().url(),
+    storage_key: z.string(),
+    expires_at: z.string().datetime(),
+    method: z.literal("PUT"),
+    headers: z.record(z.string()),
+  })
+  .openapi("CoverUploadAuthorization");
+
+registry.registerPath({
+  method: "post",
+  path: "/catalog/{kind}/{itemId}/cover/upload",
+  tags: ["Admin", "Catalog"],
+  summary: "Presigned PUT for a catalog cover image (then PUT .../cover with the storage_key)",
+  security,
+  request: { params: catalogItemParamSchema, body: jsonBody(coverUploadRequestSchema) },
+  responses: { "201": createdResponse(coverUploadAuthorizationSchema), ...errorResponses },
+});
+registry.registerPath({
+  method: "put",
+  path: "/catalog/{kind}/{itemId}/cover",
+  tags: ["Admin", "Catalog"],
+  summary: "Set the uploaded image as the cover (verified in R2; audited)",
+  security,
+  request: { params: catalogItemParamSchema, body: jsonBody(coverCompleteSchema) },
+  responses: { "200": okResponse(adminCatalogItemSchema), ...errorResponses },
+});
+registry.registerPath({
+  method: "delete",
+  path: "/catalog/{kind}/{itemId}/cover",
+  tags: ["Admin", "Catalog"],
+  summary: "Remove the cover image (audited)",
+  security,
+  request: { params: catalogItemParamSchema },
+  responses: { "200": okResponse(adminCatalogItemSchema), ...errorResponses },
+});
+registry.registerPath({
+  method: "get",
+  path: "/catalog/{kind}/{itemId}/listings",
+  tags: ["Admin", "Catalog"],
+  summary: "Listings tagged with this category / amenity / use case",
+  security,
+  request: { params: catalogItemParamSchema, query: catalogListingsQuerySchema },
+  responses: { "200": paginatedResponse(locationCardSchema), ...errorResponses },
+});
+registry.registerPath({
+  method: "post",
+  path: "/catalog/{kind}/{itemId}/listings",
+  tags: ["Admin", "Catalog"],
+  summary: "Tag listings with this item (idempotent; audited)",
+  security,
+  request: { params: catalogItemParamSchema, body: jsonBody(locationIdsSchema) },
+  responses: { "200": okResponse(z.object({ added: z.number().int() })), ...errorResponses },
+});
+registry.registerPath({
+  method: "delete",
+  path: "/catalog/{kind}/{itemId}/listings/{locationId}",
+  tags: ["Admin", "Catalog"],
+  summary: "Untag one listing (audited)",
+  security,
+  request: { params: catalogListingParamSchema },
+  responses: { "200": okResponse(z.object({ removed: z.boolean() })), ...errorResponses },
+});
+
+const collectionSummarySchema = z
+  .object({
+    id: z.string().uuid(),
+    title: z.string(),
+    slug: z.string(),
+    description: z.string(),
+    cover_url: z.string().nullable(),
+    is_published: z.boolean(),
+    position: z.number().int(),
+    listing_count: z.number().int(),
+    created_at: z.string().datetime(),
+    updated_at: z.string().datetime(),
+  })
+  .openapi("CollectionSummary");
+const collectionDetailSchema = collectionSummarySchema.extend({ listings: z.array(locationCardSchema) }).openapi("CollectionDetail");
+
+registry.registerPath({
+  method: "get",
+  path: "/collections",
+  tags: ["Admin", "Collections"],
+  summary: "All collections, published or not",
+  security,
+  responses: { "200": okResponse(z.array(collectionSummarySchema)), ...errorResponses },
+});
+registry.registerPath({
+  method: "post",
+  path: "/collections",
+  tags: ["Admin", "Collections"],
+  summary: "Create a collection (slug unique; audited)",
+  security,
+  request: { body: jsonBody(collectionCreateSchema) },
+  responses: { "201": createdResponse(collectionDetailSchema), ...errorResponses },
+});
+registry.registerPath({
+  method: "get",
+  path: "/collections/{collectionId}",
+  tags: ["Admin", "Collections"],
+  summary: "Collection with its ordered listings",
+  security,
+  request: { params: collectionIdParamSchema },
+  responses: { "200": okResponse(collectionDetailSchema), ...errorResponses },
+});
+registry.registerPath({
+  method: "patch",
+  path: "/collections/{collectionId}",
+  tags: ["Admin", "Collections"],
+  summary: "Edit / publish / unpublish (audited)",
+  security,
+  request: { params: collectionIdParamSchema, body: jsonBody(collectionUpdateSchema) },
+  responses: { "200": okResponse(collectionDetailSchema), ...errorResponses },
+});
+registry.registerPath({
+  method: "delete",
+  path: "/collections/{collectionId}",
+  tags: ["Admin", "Collections"],
+  summary: "Delete a collection (listings themselves are untouched; audited)",
+  security,
+  request: { params: collectionIdParamSchema },
+  responses: { "200": okResponse(z.object({ deleted: z.boolean() })), ...errorResponses },
+});
+registry.registerPath({
+  method: "post",
+  path: "/collections/{collectionId}/cover/upload",
+  tags: ["Admin", "Collections"],
+  summary: "Presigned PUT for the collection cover",
+  security,
+  request: { params: collectionIdParamSchema, body: jsonBody(coverUploadRequestSchema) },
+  responses: { "201": createdResponse(coverUploadAuthorizationSchema), ...errorResponses },
+});
+registry.registerPath({
+  method: "put",
+  path: "/collections/{collectionId}/cover",
+  tags: ["Admin", "Collections"],
+  summary: "Set the uploaded cover",
+  security,
+  request: { params: collectionIdParamSchema, body: jsonBody(coverCompleteSchema) },
+  responses: { "200": okResponse(collectionDetailSchema), ...errorResponses },
+});
+registry.registerPath({
+  method: "delete",
+  path: "/collections/{collectionId}/cover",
+  tags: ["Admin", "Collections"],
+  summary: "Remove the cover",
+  security,
+  request: { params: collectionIdParamSchema },
+  responses: { "200": okResponse(collectionDetailSchema), ...errorResponses },
+});
+registry.registerPath({
+  method: "post",
+  path: "/collections/{collectionId}/listings",
+  tags: ["Admin", "Collections"],
+  summary: "Append listings (existing ones are kept in place)",
+  security,
+  request: { params: collectionIdParamSchema, body: jsonBody(locationIdsSchema) },
+  responses: { "200": okResponse(collectionDetailSchema), ...errorResponses },
+});
+registry.registerPath({
+  method: "put",
+  path: "/collections/{collectionId}/listings/order",
+  tags: ["Admin", "Collections"],
+  summary: "Replace the order (must list exactly the current listings)",
+  security,
+  request: { params: collectionIdParamSchema, body: jsonBody(orderedLocationIdsSchema) },
+  responses: { "200": okResponse(collectionDetailSchema), ...errorResponses },
+});
+registry.registerPath({
+  method: "delete",
+  path: "/collections/{collectionId}/listings/{locationId}",
+  tags: ["Admin", "Collections"],
+  summary: "Remove one listing from the collection",
+  security,
+  request: { params: collectionListingParamSchema },
+  responses: { "200": okResponse(collectionDetailSchema), ...errorResponses },
+});
+
+registry.registerPath({
+  method: "post",
+  path: "/system/r2-cors",
+  tags: ["Admin", "System"],
+  summary: "Allow browser uploads: add an R2 CORS rule for CORS_ORIGINS (super admin; audited)",
+  security,
+  responses: { "200": okResponse(z.object({ rules: z.array(z.record(z.unknown())) })), ...errorResponses },
+});
+
+// -- Messaging --------------------------------------------------------------------------------
+
+const channelStatusSchema = z
+  .object({
+    channel: channelNameSchema,
+    connected: z.boolean(),
+    source: z.enum(["dashboard", "environment"]).nullable(),
+    enabled: z.boolean(),
+    config: z.record(z.unknown()),
+    last_tested_at: z.string().datetime().nullable(),
+    last_test_ok: z.boolean().nullable(),
+    last_test_error: z.string().nullable(),
+    updated_at: z.string().datetime().nullable(),
+  })
+  .openapi("ChannelStatus");
+
+const readinessSchema = z
+  .object({ email: z.boolean(), push: z.object({ ios: z.boolean(), android: z.boolean(), web: z.boolean() }) })
+  .openapi("ChannelReadiness");
+
+const jobsStatusSchema = z
+  .object({
+    id: z.string().uuid(),
+    dispatch_url: z.string().nullable(),
+    enabled: z.boolean(),
+    last_tick_at: z.string().datetime().nullable(),
+    last_run_at: z.string().datetime().nullable(),
+    last_run_ok: z.boolean().nullable(),
+    last_run_summary: z.record(z.unknown()).nullable(),
+    updated_at: z.string().datetime(),
+    suggested_url: z.string(),
+    health: z.object({ pg_net: z.boolean(), pg_cron: z.boolean(), dispatch_job_scheduled: z.boolean() }),
+  })
+  .openapi("JobsStatus");
+
+const testResultSchema = z.object({ ok: z.boolean(), detail: z.string() }).openapi("ChannelTestResult");
+
+registry.registerPath({
+  method: "get",
+  path: "/messaging/overview",
+  tags: ["Admin", "Messaging"],
+  summary: "Channels (status only, never secrets), readiness, active devices per platform, background jobs",
+  security,
+  responses: {
+    "200": okResponse(
+      z.object({
+        channels: z.array(channelStatusSchema),
+        readiness: readinessSchema,
+        devices: z.object({ ios: z.number().int(), android: z.number().int(), web: z.number().int() }),
+        jobs: jobsStatusSchema,
+      })
+    ),
+    ...errorResponses,
+  },
+});
+registry.registerPath({
+  method: "put",
+  path: "/messaging/channels/{channel}",
+  tags: ["Admin", "Messaging"],
+  summary: "Connect / update a channel. Secrets go to Vault and are never returned; blank keeps the stored one",
+  security,
+  request: { params: channelParamSchema, body: jsonBody(saveChannelSchema) },
+  responses: { "200": okResponse(channelStatusSchema), ...errorResponses },
+});
+registry.registerPath({
+  method: "patch",
+  path: "/messaging/channels/{channel}",
+  tags: ["Admin", "Messaging"],
+  summary: "Pause / resume a connected channel",
+  security,
+  request: { params: channelParamSchema, body: jsonBody(channelEnabledSchema) },
+  responses: { "200": okResponse(channelStatusSchema), ...errorResponses },
+});
+registry.registerPath({
+  method: "delete",
+  path: "/messaging/channels/{channel}",
+  tags: ["Admin", "Messaging"],
+  summary: "Disconnect a channel and delete its secret from Vault",
+  security,
+  request: { params: channelParamSchema },
+  responses: { "200": okResponse(z.object({ removed: z.boolean() })), ...errorResponses },
+});
+registry.registerPath({
+  method: "post",
+  path: "/messaging/channels/{channel}/test",
+  tags: ["Admin", "Messaging"],
+  summary: "Test a channel: email to yourself, or push to your own devices (credential check when you have none)",
+  security,
+  request: { params: channelParamSchema, body: jsonBody(testChannelSchema) },
+  responses: { "200": okResponse(testResultSchema), ...errorResponses },
+});
+registry.registerPath({
+  method: "get",
+  path: "/messaging/jobs",
+  tags: ["Admin", "Messaging"],
+  summary: "Background job dispatch (scheduled sends) status",
+  security,
+  responses: { "200": okResponse(jobsStatusSchema), ...errorResponses },
+});
+registry.registerPath({
+  method: "put",
+  path: "/messaging/jobs",
+  tags: ["Admin", "Messaging"],
+  summary: "Enable background jobs / set the dispatch URL (audited)",
+  security,
+  request: { body: jsonBody(jobsConfigSchema) },
+  responses: { "200": okResponse(jobsStatusSchema), ...errorResponses },
+});
+
+const campaignStatsSchema = z
+  .object({
+    total: z.number().int(),
+    processed: z.number().int(),
+    in_app_created: z.number().int(),
+    push_sent: z.number().int(),
+    push_failed: z.number().int(),
+    push_no_devices: z.number().int(),
+    push_opted_out: z.number().int(),
+    email_sent: z.number().int(),
+    email_failed: z.number().int(),
+    email_unsubscribed: z.number().int(),
+    email_missing: z.number().int(),
+  })
+  .openapi("CampaignStats");
+
+const campaignSchema = z
+  .object({
+    id: z.string().uuid(),
+    name: z.string(),
+    kind: z.enum(["announcement", "direct"]),
+    channels: z.array(campaignChannelSchema),
+    platforms: z.array(pushPlatformSchema),
+    audience: audienceSchema,
+    title: z.string(),
+    body: z.string(),
+    link_url: z.string().nullable(),
+    email_subject: z.string().nullable(),
+    email_body: z.string().nullable(),
+    status: z.enum(["draft", "scheduled", "sending", "sent", "cancelled", "failed"]),
+    scheduled_at: z.string().datetime().nullable(),
+    started_at: z.string().datetime().nullable(),
+    completed_at: z.string().datetime().nullable(),
+    recipient_count: z.number().int().nullable(),
+    last_error: z.string().nullable(),
+    created_by: z.string().uuid().nullable(),
+    sent_by: z.string().uuid().nullable(),
+    created_at: z.string().datetime(),
+    updated_at: z.string().datetime(),
+    stats: campaignStatsSchema,
+  })
+  .openapi("Campaign");
+
+registry.registerPath({
+  method: "get",
+  path: "/campaigns",
+  tags: ["Admin", "Messaging"],
+  summary: "Announcements and direct notifications, newest first, with delivery stats",
+  security,
+  request: { query: listCampaignsQuerySchema },
+  responses: { "200": paginatedResponse(campaignSchema), ...errorResponses },
+});
+registry.registerPath({
+  method: "post",
+  path: "/campaigns",
+  tags: ["Admin", "Messaging"],
+  summary: "Create a draft (push implies in-app)",
+  security,
+  request: { body: jsonBody(createCampaignSchema) },
+  responses: { "201": createdResponse(campaignSchema), ...errorResponses },
+});
+registry.registerPath({
+  method: "post",
+  path: "/campaigns/audience-preview",
+  tags: ["Admin", "Messaging"],
+  summary: "How many people / emails / devices an audience reaches",
+  security,
+  request: { body: jsonBody(audiencePreviewSchema) },
+  responses: {
+    "200": okResponse(
+      z
+        .object({
+          users: z.number().int(),
+          with_email: z.number().int(),
+          devices: z.object({ ios: z.number().int(), android: z.number().int(), web: z.number().int() }),
+        })
+        .openapi("AudiencePreview")
+    ),
+    ...errorResponses,
+  },
+});
+registry.registerPath({
+  method: "post",
+  path: "/campaigns/test",
+  tags: ["Admin", "Messaging"],
+  summary: "Send the content to yourself only (your email and your own devices)",
+  security,
+  request: { body: jsonBody(testCampaignSchema) },
+  responses: {
+    "200": okResponse(
+      z.object({
+        push: z.object({ outcome: z.string(), sent: z.number().int(), failed: z.number().int() }).optional(),
+        email: testResultSchema.optional(),
+      })
+    ),
+    ...errorResponses,
+  },
+});
+registry.registerPath({
+  method: "get",
+  path: "/campaigns/{campaignId}",
+  tags: ["Admin", "Messaging"],
+  summary: "One campaign with live stats",
+  security,
+  request: { params: campaignIdParamSchema },
+  responses: { "200": okResponse(campaignSchema), ...errorResponses },
+});
+registry.registerPath({
+  method: "patch",
+  path: "/campaigns/{campaignId}",
+  tags: ["Admin", "Messaging"],
+  summary: "Edit a draft or scheduled campaign",
+  security,
+  request: { params: campaignIdParamSchema, body: jsonBody(updateCampaignSchema) },
+  responses: { "200": okResponse(campaignSchema), ...errorResponses },
+});
+registry.registerPath({
+  method: "delete",
+  path: "/campaigns/{campaignId}",
+  tags: ["Admin", "Messaging"],
+  summary: "Delete a draft",
+  security,
+  request: { params: campaignIdParamSchema },
+  responses: { "200": okResponse(z.object({ deleted: z.boolean() })), ...errorResponses },
+});
+registry.registerPath({
+  method: "post",
+  path: "/campaigns/{campaignId}/send",
+  tags: ["Admin", "Messaging"],
+  summary: "Send now (processes a first batch inline) or schedule (audited)",
+  security,
+  request: { params: campaignIdParamSchema, body: jsonBody(sendCampaignSchema) },
+  responses: { "200": okResponse(campaignSchema), ...errorResponses },
+});
+registry.registerPath({
+  method: "post",
+  path: "/campaigns/{campaignId}/cancel",
+  tags: ["Admin", "Messaging"],
+  summary: "Stop a draft / scheduled / sending campaign (audited)",
+  security,
+  request: { params: campaignIdParamSchema },
+  responses: { "200": okResponse(campaignSchema), ...errorResponses },
+});
+registry.registerPath({
+  method: "post",
+  path: "/campaigns/{campaignId}/process",
+  tags: ["Admin", "Messaging"],
+  summary: "Advance a sending campaign by one batch (the campaign page polls this)",
+  security,
+  request: { params: campaignIdParamSchema },
+  responses: { "200": okResponse(campaignSchema), ...errorResponses },
+});
+registry.registerPath({
+  method: "get",
+  path: "/campaigns/{campaignId}/recipients",
+  tags: ["Admin", "Messaging"],
+  summary: "Per-recipient delivery outcome",
+  security,
+  request: { params: campaignIdParamSchema, query: campaignRecipientsQuerySchema },
+  responses: {
+    "200": paginatedResponse(
+      z
+        .object({
+          user_id: z.string().uuid(),
+          email: z.string().nullable(),
+          first_name: z.string().nullable(),
+          last_name: z.string().nullable(),
+          in_app_status: z.string(),
+          push_status: z.string(),
+          email_status: z.string(),
+          push_sent: z.number().int(),
+          push_failed: z.number().int(),
+          error: z.string().nullable(),
+          processed_at: z.string().datetime().nullable(),
+        })
+        .openapi("CampaignRecipient")
+    ),
+    ...errorResponses,
+  },
+});
+
+// -- Platforms --------------------------------------------------------------------------------
+
+const appPlatformSchema = z
+  .object({
+    id: z.string().uuid(),
+    platform: z.enum(["ios", "android", "web"]),
+    display_name: z.string(),
+    status: z.enum(["not_launched", "in_development", "beta", "live", "maintenance", "deprecated"]),
+    live_version: z.string().nullable(),
+    latest_version: z.string().nullable(),
+    min_supported_version: z.string().nullable(),
+    store_url: z.string().nullable(),
+    update_message: z.string().nullable(),
+    force_update_message: z.string().nullable(),
+    maintenance_mode: z.boolean(),
+    maintenance_message: z.string().nullable(),
+    notes: z.string().nullable(),
+    updated_by: z.string().uuid().nullable(),
+    updated_at: z.string().datetime(),
+  })
+  .openapi("AppPlatform");
+
+const flagTargetSchema = z.object({ enabled: z.boolean(), min_version: z.string().nullable().optional() });
+const featureFlagSchema = z
+  .object({
+    id: z.string().uuid(),
+    key: z.string(),
+    name: z.string(),
+    description: z.string(),
+    targets: z.object({ ios: flagTargetSchema.optional(), android: flagTargetSchema.optional(), web: flagTargetSchema.optional() }),
+    updated_at: z.string().datetime(),
+  })
+  .openapi("FeatureFlag");
+
+const incidentSchema = z
+  .object({
+    id: z.string().uuid(),
+    title: z.string(),
+    summary: z.string(),
+    severity: z.enum(["minor", "major", "critical"]),
+    status: z.enum(["investigating", "identified", "monitoring", "resolved"]),
+    platforms: z.array(z.enum(["ios", "android", "web", "backend", "admin"])),
+    is_public: z.boolean(),
+    started_at: z.string().datetime(),
+    resolved_at: z.string().datetime().nullable(),
+    created_by: z.string().uuid().nullable(),
+    created_at: z.string().datetime(),
+    updated_at: z.string().datetime(),
+    updates: z.array(
+      z.object({
+        id: z.string().uuid(),
+        incident_id: z.string().uuid(),
+        status: z.string(),
+        message: z.string(),
+        created_by: z.string().uuid().nullable(),
+        created_at: z.string().datetime(),
+      })
+    ),
+  })
+  .openapi("PlatformIncident");
+
+const releaseSchema = z
+  .object({
+    id: z.string().uuid(),
+    platform: z.enum(["ios", "android", "web", "backend", "admin"]),
+    version: z.string(),
+    title: z.string(),
+    notes: z.string(),
+    status: z.enum(["planned", "in_progress", "in_review", "released", "cancelled"]),
+    target_date: z.string().nullable(),
+    released_at: z.string().datetime().nullable(),
+    feature_keys: z.array(z.string()),
+    created_by: z.string().uuid().nullable(),
+    updated_by: z.string().uuid().nullable(),
+    created_at: z.string().datetime(),
+    updated_at: z.string().datetime(),
+  })
+  .openapi("ReleasePlan");
+
+const pushHealthBucket = z.object({ sent: z.number().int(), failed: z.number().int(), invalid_token: z.number().int(), skipped: z.number().int() });
+
+registry.registerPath({
+  method: "get",
+  path: "/platforms",
+  tags: ["Admin", "Platforms"],
+  summary: "Platforms, feature flags, incidents, releases, versions in use and health signals",
+  security,
+  responses: {
+    "200": okResponse(
+      z
+        .object({
+          platforms: z.array(appPlatformSchema),
+          feature_flags: z.array(featureFlagSchema),
+          incidents: z.array(incidentSchema),
+          releases: z.array(releaseSchema.omit({})),
+          versions_in_use: z.array(
+            z.object({
+              platform: z.string(),
+              app_version: z.string(),
+              users: z.number().int(),
+              devices: z.number().int(),
+              last_seen: z.string().nullable(),
+            })
+          ),
+          health: z.object({
+            push_last_24h: z.record(pushHealthBucket),
+            active_devices: z.object({ ios: z.number().int(), android: z.number().int(), web: z.number().int() }),
+            backend: z.object({ environment: z.string(), commit: z.string().nullable(), region: z.string().nullable() }),
+          }),
+        })
+        .openapi("PlatformsOverview")
+    ),
+    ...errorResponses,
+  },
+});
+registry.registerPath({
+  method: "patch",
+  path: "/platforms/{platform}",
+  tags: ["Admin", "Platforms"],
+  summary: "Status, versions, update prompts, maintenance mode (super admin; audited)",
+  security,
+  request: { params: platformParamSchema, body: jsonBody(updatePlatformSchema) },
+  responses: { "200": okResponse(appPlatformSchema), ...errorResponses },
+});
+registry.registerPath({
+  method: "post",
+  path: "/feature-flags",
+  tags: ["Admin", "Platforms"],
+  summary: "Create a feature flag",
+  security,
+  request: { body: jsonBody(createFeatureFlagSchema) },
+  responses: { "201": createdResponse(featureFlagSchema), ...errorResponses },
+});
+registry.registerPath({
+  method: "patch",
+  path: "/feature-flags/{flagId}",
+  tags: ["Admin", "Platforms"],
+  summary: "Edit a feature flag's targets",
+  security,
+  request: { params: flagIdParamSchema, body: jsonBody(updateFeatureFlagSchema) },
+  responses: { "200": okResponse(featureFlagSchema), ...errorResponses },
+});
+registry.registerPath({
+  method: "delete",
+  path: "/feature-flags/{flagId}",
+  tags: ["Admin", "Platforms"],
+  summary: "Delete a feature flag",
+  security,
+  request: { params: flagIdParamSchema },
+  responses: { "200": okResponse(z.object({ deleted: z.boolean() })), ...errorResponses },
+});
+registry.registerPath({
+  method: "post",
+  path: "/incidents",
+  tags: ["Admin", "Platforms"],
+  summary: "Open an incident (public ones appear in /v1/app-config for the affected platforms)",
+  security,
+  request: { body: jsonBody(createIncidentSchema) },
+  responses: { "201": createdResponse(incidentSchema.omit({ updates: true })), ...errorResponses },
+});
+registry.registerPath({
+  method: "patch",
+  path: "/incidents/{incidentId}",
+  tags: ["Admin", "Platforms"],
+  summary: "Update an incident; `message` adds a timeline entry",
+  security,
+  request: { params: incidentIdParamSchema, body: jsonBody(updateIncidentSchema) },
+  responses: { "200": okResponse(incidentSchema.omit({ updates: true })), ...errorResponses },
+});
+registry.registerPath({
+  method: "post",
+  path: "/releases",
+  tags: ["Admin", "Platforms"],
+  summary: "Plan a release",
+  security,
+  request: { body: jsonBody(createReleaseSchema) },
+  responses: { "201": createdResponse(releaseSchema), ...errorResponses },
+});
+registry.registerPath({
+  method: "patch",
+  path: "/releases/{releaseId}",
+  tags: ["Admin", "Platforms"],
+  summary: "Update a release; promote_to_live sets the platform's live/latest version when released",
+  security,
+  request: { params: releaseIdParamSchema, body: jsonBody(updateReleaseSchema) },
+  responses: { "200": okResponse(releaseSchema), ...errorResponses },
+});
+registry.registerPath({
+  method: "delete",
+  path: "/releases/{releaseId}",
+  tags: ["Admin", "Platforms"],
+  summary: "Delete a release plan",
+  security,
+  request: { params: releaseIdParamSchema },
+  responses: { "200": okResponse(z.object({ deleted: z.boolean() })), ...errorResponses },
 });
 
 const generator = new OpenApiGeneratorV3(registry.definitions);

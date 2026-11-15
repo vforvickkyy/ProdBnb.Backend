@@ -15,6 +15,9 @@ export const notificationTypeSchema = z.enum([
   // `message_reply` key iOS already defines has no producer here and adding it
   // would be a promise the system does not keep.
   "new_message",
+  // Admin Console 2: announcements and direct messages sent from the Admin Console. Hidden from
+  // GET /v1/notifications unless the client declares support (see notification.controller.ts).
+  "announcement",
 ]);
 export type NotificationType = z.infer<typeof notificationTypeSchema>;
 
@@ -25,7 +28,7 @@ export type NotificationType = z.infer<typeof notificationTypeSchema>;
  * Kept as its own schema rather than an inline union so that widening it is a
  * single edit in one place that the database constraint can be diffed against.
  */
-export const notificationEntityTypeSchema = z.enum(["booking", "conversation"]);
+export const notificationEntityTypeSchema = z.enum(["booking", "conversation", "announcement"]);
 export type NotificationEntityType = z.infer<typeof notificationEntityTypeSchema>;
 
 export const notificationIdParamSchema = z.object({ id: uuid });
@@ -38,7 +41,7 @@ export const listNotificationsQuerySchema = z.object({
 });
 export type ListNotificationsQuery = z.infer<typeof listNotificationsQuerySchema>;
 
-export const preferenceCategorySchema = z.enum(["booking", "payment", "message"]);
+export const preferenceCategorySchema = z.enum(["booking", "payment", "message", "announcement"]);
 export type PreferenceCategory = z.infer<typeof preferenceCategorySchema>;
 
 export const updatePreferencesSchema = z
@@ -49,6 +52,7 @@ export const updatePreferencesSchema = z
     // enabled (preferences.service.ts), so adding the category opted every
     // existing user in without a backfill.
     message: z.boolean().optional(),
+    announcement: z.boolean().optional(),
   })
   .strict()
   .refine((data) => Object.keys(data).length > 0, { message: "Provide at least one preference to update." });

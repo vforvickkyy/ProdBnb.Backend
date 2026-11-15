@@ -10,7 +10,7 @@
 // providers/index.ts. Nothing in notification.service.ts, the routes, or
 // the database's core shape changes.
 
-export type NotificationProviderName = "disabled" | "apns";
+export type NotificationProviderName = "disabled" | "apns" | "fcm" | "webpush";
 
 export type DeliveryStatus = "sent" | "failed" | "invalid_token" | "skipped";
 
@@ -35,6 +35,8 @@ export interface SendPushInput {
    * grouping key at all.
    */
   threadId?: string | null;
+  /** Web Push only: the subscription's public keys (the endpoint is `deviceToken`). */
+  webPushKeys?: { p256dh: string; auth: string } | null;
 }
 
 export interface SendPushResult {

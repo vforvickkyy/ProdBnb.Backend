@@ -1,35 +1,13 @@
 import { SupabaseClient } from "@supabase/supabase-js";
+import { Request } from "express";
 import { adminClient } from "../../lib/supabase";
-import { AuditLogQuery } from "./admin.schema";
+import { z } from "zod";
+import { AuditLogQuery, auditActionSchema, auditTargetTypeSchema } from "./admin.schema";
+import { callerHasAdminPermission } from "./permissions";
 
-export type AuditAction =
-  | "ADMIN_APPROVED_LOCATION"
-  | "ADMIN_REJECTED_LOCATION"
-  | "ADMIN_SUSPENDED_LOCATION"
-  | "ADMIN_RESTORED_LOCATION"
-  | "ADMIN_UPDATED_LOCATION_STATUS"
-  | "ADMIN_SUSPENDED_USER"
-  | "ADMIN_RESTORED_USER"
-  | "ADMIN_CANCELLED_BOOKING"
-  | "ADMIN_CREATED_REFUND"
-  // Admin Console (migration 20261115095000_admin_audit_vocabulary.sql)
-  | "ADMIN_CONFIRMED_BOOKING"
-  | "ADMIN_REJECTED_BOOKING"
-  | "ADMIN_COMPLETED_BOOKING"
-  | "ADMIN_VERIFIED_PAYMENT"
-  | "ADMIN_UPDATED_LOCATION"
-  | "ADMIN_DELETED_MEDIA"
-  | "ADMIN_DELETED_SECTION"
-  | "ADMIN_CREATED_CATALOG_ITEM"
-  | "ADMIN_UPDATED_CATALOG_ITEM"
-  | "ADMIN_DELETED_CATALOG_ITEM"
-  | "ADMIN_GRANTED_ROLE"
-  | "ADMIN_REVOKED_ROLE"
-  | "ADMIN_SET_TEAM_ROLE"
-  | "ADMIN_REMOVED_TEAM_MEMBER"
-  | "ADMIN_UPDATED_SETTINGS";
-
-export type AuditTargetType = "location" | "user" | "booking" | "payment" | "media" | "section" | "catalog_item" | "settings";
+/** The closed vocabulary, mirrored 1:1 by admin_audit_log's CHECK constraints. */
+export type AuditAction = z.infer<typeof auditActionSchema>;
+export type AuditTargetType = z.infer<typeof auditTargetTypeSchema>;
 
 export interface AuditLogEntry {
   id: string;
@@ -119,4 +97,33 @@ export async function listAuditLog(supabase: SupabaseClient, query: AuditLogQuer
   }
 
   return { data: (data ?? []) as AuditLogEntry[], total: count ?? 0 };
+}
+
+/**
+ * Admin Console 2: an administrator changing SOMEONE ELSE'S listing through the shared listing
+ * endpoints (photos, pricing, timings, sections) -- the same doors a host uses for their own
+ * listing. A host editing their own listing is ordinary product use and is not audited; an admin
+ * doing it on a host's behalf is an admin action and is.
+ *
+ * Best-effort by design: it runs after the change has already succeeded, so a failed audit insert
+ * is logged loudly rather than reported to the caller as a failure of a change that did happen.
+ */
+export async function auditAdminListingEdit(
+  req: Request,
+  locationId: string,
+  action: AuditAction,
+  metadata: Record<string, unknown> = {}
+): Promise<void> {
+  try {
+    if (!req.user || !(await callerHasAdminPermission(req, "locations.moderate"))) {
+      return;
+    }
+    const { data } = await adminClient.from("locations").select("host_id").eq("id", locationId).maybeSingle();
+    if (!data || data.host_id === req.user.id) {
+      return;
+    }
+    await writeAuditLog(req.user.id, action, "location", locationId, null, { host_id: data.host_id, ...metadata });
+  } catch (error) {
+    console.error(`Failed to audit ${action} on location ${locationId}:`, error);
+  }
 }

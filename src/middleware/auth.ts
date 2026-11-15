@@ -1,5 +1,6 @@
 import { NextFunction, Request, Response } from "express";
 import { ForbiddenError, UnauthenticatedError } from "../errors/AppError";
+import { noteClientActivity } from "../lib/clientActivity";
 import { anonClient, createUserScopedClient } from "../lib/supabase";
 
 const BEARER_PREFIX = "Bearer ";
@@ -53,5 +54,6 @@ export async function requireAuth(req: Request, _res: Response, next: NextFuncti
     throw new ForbiddenError("Your account has been suspended.");
   }
 
+  noteClientActivity(req, data.user.id);
   next();
 }

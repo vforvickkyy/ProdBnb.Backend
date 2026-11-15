@@ -9,6 +9,7 @@ import {
   RequestUploadInput,
 } from "./media.schema";
 import { completeUpload, deleteMedia, listMedia, reorderMedia, requestUpload } from "./media.service";
+import { auditAdminListingEdit } from "../admin/audit.service";
 
 // Admin Console: "may this caller act as an administrator here" is a team-role permission,
 // not bare admin-role membership -- see src/modules/admin/permissions.ts.
@@ -37,6 +38,7 @@ export async function postCompleteUpload(req: Request, res: Response): Promise<v
   const isAdmin = await isCallerAdmin(req);
   const result = await completeUpload(req.supabase!, req.user!.id, isAdmin, id, mediaId, position, section_id ?? null);
   if (result.created) {
+    await auditAdminListingEdit(req, id, "ADMIN_UPLOADED_MEDIA", { media_id: mediaId, section_id: section_id ?? null });
     created(res, result.item);
     return;
   }
@@ -55,6 +57,7 @@ export async function putMediaOrder(req: Request, res: Response): Promise<void> 
   const { ordered_ids, section_id } = req.valid!.body as ReorderMediaInput;
   const isAdmin = await isCallerAdmin(req);
   const media = await reorderMedia(req.supabase!, req.user!.id, isAdmin, id, ordered_ids, section_id ?? null);
+  await auditAdminListingEdit(req, id, "ADMIN_REORDERED_MEDIA", { ordered_ids, section_id: section_id ?? null });
   ok(res, media);
 }
 

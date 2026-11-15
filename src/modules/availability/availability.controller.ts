@@ -18,6 +18,7 @@ import {
 import { createBlock, deleteBlock, listBlocks, updateBlock } from "./blocks.service";
 import { createOverride, deleteOverride, listOverrides, updateOverride } from "./overrides.service";
 import { createRule, deleteRule, listRules, updateRule } from "./rules.service";
+import { auditAdminListingEdit } from "../admin/audit.service";
 
 // Admin Console: "may this caller act as an administrator here" is a team-role permission,
 // not bare admin-role membership -- see src/modules/admin/permissions.ts.
@@ -48,6 +49,7 @@ export async function postRuleHandler(req: Request, res: Response): Promise<void
   const input = req.valid!.body as CreateRuleInput;
   const isAdmin = await isCallerAdmin(req);
   const rule = await createRule(req.supabase!, req.user!.id, isAdmin, id, input);
+  await auditAdminListingEdit(req, id, "ADMIN_UPDATED_AVAILABILITY", { kind: "rule", change: "created", id: rule.id });
   created(res, rule);
 }
 
@@ -56,6 +58,7 @@ export async function patchRuleHandler(req: Request, res: Response): Promise<voi
   const input = req.valid!.body as UpdateRuleInput;
   const isAdmin = await isCallerAdmin(req);
   const rule = await updateRule(req.supabase!, req.user!.id, isAdmin, id, ruleId, input);
+  await auditAdminListingEdit(req, id, "ADMIN_UPDATED_AVAILABILITY", { kind: "rule", change: "updated", id: ruleId, fields: Object.keys(input) });
   ok(res, rule);
 }
 
@@ -63,6 +66,7 @@ export async function deleteRuleHandler(req: Request, res: Response): Promise<vo
   const { id, ruleId } = req.valid!.params as RuleParams;
   const isAdmin = await isCallerAdmin(req);
   await deleteRule(req.supabase!, req.user!.id, isAdmin, id, ruleId);
+  await auditAdminListingEdit(req, id, "ADMIN_UPDATED_AVAILABILITY", { kind: "rule", change: "deleted", id: ruleId });
   ok(res, { id: ruleId, deleted: true });
 }
 
@@ -80,6 +84,7 @@ export async function postOverrideHandler(req: Request, res: Response): Promise<
   const input = req.valid!.body as CreateOverrideInput;
   const isAdmin = await isCallerAdmin(req);
   const override = await createOverride(req.supabase!, req.user!.id, isAdmin, id, input);
+  await auditAdminListingEdit(req, id, "ADMIN_UPDATED_AVAILABILITY", { kind: "override", change: "created", id: override.id });
   created(res, override);
 }
 
@@ -88,6 +93,7 @@ export async function patchOverrideHandler(req: Request, res: Response): Promise
   const input = req.valid!.body as UpdateOverrideInput;
   const isAdmin = await isCallerAdmin(req);
   const override = await updateOverride(req.supabase!, req.user!.id, isAdmin, id, overrideId, input);
+  await auditAdminListingEdit(req, id, "ADMIN_UPDATED_AVAILABILITY", { kind: "override", change: "updated", id: overrideId, fields: Object.keys(input) });
   ok(res, override);
 }
 
@@ -95,6 +101,7 @@ export async function deleteOverrideHandler(req: Request, res: Response): Promis
   const { id, overrideId } = req.valid!.params as OverrideParams;
   const isAdmin = await isCallerAdmin(req);
   await deleteOverride(req.supabase!, req.user!.id, isAdmin, id, overrideId);
+  await auditAdminListingEdit(req, id, "ADMIN_UPDATED_AVAILABILITY", { kind: "override", change: "deleted", id: overrideId });
   ok(res, { id: overrideId, deleted: true });
 }
 
@@ -112,6 +119,7 @@ export async function postBlockHandler(req: Request, res: Response): Promise<voi
   const input = req.valid!.body as CreateBlockInput;
   const isAdmin = await isCallerAdmin(req);
   const block = await createBlock(req.supabase!, req.user!.id, isAdmin, id, input);
+  await auditAdminListingEdit(req, id, "ADMIN_UPDATED_AVAILABILITY", { kind: "block", change: "created", id: block.id });
   created(res, block);
 }
 
@@ -120,6 +128,7 @@ export async function patchBlockHandler(req: Request, res: Response): Promise<vo
   const input = req.valid!.body as UpdateBlockInput;
   const isAdmin = await isCallerAdmin(req);
   const block = await updateBlock(req.supabase!, req.user!.id, isAdmin, id, blockId, input);
+  await auditAdminListingEdit(req, id, "ADMIN_UPDATED_AVAILABILITY", { kind: "block", change: "updated", id: blockId, fields: Object.keys(input) });
   ok(res, block);
 }
 
@@ -127,5 +136,6 @@ export async function deleteBlockHandler(req: Request, res: Response): Promise<v
   const { id, blockId } = req.valid!.params as BlockParams;
   const isAdmin = await isCallerAdmin(req);
   await deleteBlock(req.supabase!, req.user!.id, isAdmin, id, blockId);
+  await auditAdminListingEdit(req, id, "ADMIN_UPDATED_AVAILABILITY", { kind: "block", change: "deleted", id: blockId });
   ok(res, { id: blockId, deleted: true });
 }

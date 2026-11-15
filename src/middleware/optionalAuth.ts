@@ -1,4 +1,5 @@
 import { NextFunction, Request, Response } from "express";
+import { noteClientActivity } from "../lib/clientActivity";
 import { anonClient, createUserScopedClient } from "../lib/supabase";
 
 const BEARER_PREFIX = "Bearer ";
@@ -49,6 +50,7 @@ export async function optionalAuth(req: Request, _res: Response, next: NextFunct
 
   req.user = { id: data.user.id, email: data.user.email ?? null };
   req.supabase = scopedClient;
+  noteClientActivity(req, data.user.id);
 
   next();
 }

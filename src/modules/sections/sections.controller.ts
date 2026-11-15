@@ -11,6 +11,7 @@ import {
   updateSection,
 } from "./sections.service";
 import { CreateSectionInput, LocationSectionParams, UpdateSectionInput } from "./sections.schema";
+import { auditAdminListingEdit } from "../admin/audit.service";
 
 // Admin Console: "may this caller act as an administrator here" is a team-role permission,
 // not bare admin-role membership -- see src/modules/admin/permissions.ts.
@@ -37,14 +38,18 @@ export async function postSection(req: Request, res: Response): Promise<void> {
   const { id } = req.valid!.params as LocationIdOnlyParam;
   const input = req.valid!.body as CreateSectionInput;
   const isAdmin = await isCallerAdmin(req);
-  created(res, await createSection(req.supabase!, req.user!.id, isAdmin, id, input));
+  const section = await createSection(req.supabase!, req.user!.id, isAdmin, id, input);
+  await auditAdminListingEdit(req, id, "ADMIN_UPDATED_SECTION", { change: "created", section_id: section.id });
+  created(res, section);
 }
 
 export async function patchSection(req: Request, res: Response): Promise<void> {
   const { id, sectionId } = req.valid!.params as LocationSectionParams;
   const input = req.valid!.body as UpdateSectionInput;
   const isAdmin = await isCallerAdmin(req);
-  ok(res, await updateSection(req.supabase!, req.user!.id, isAdmin, id, sectionId, input));
+  const section = await updateSection(req.supabase!, req.user!.id, isAdmin, id, sectionId, input);
+  await auditAdminListingEdit(req, id, "ADMIN_UPDATED_SECTION", { change: "updated", section_id: sectionId, fields: Object.keys(input) });
+  ok(res, section);
 }
 
 export async function deleteSectionHandler(req: Request, res: Response): Promise<void> {

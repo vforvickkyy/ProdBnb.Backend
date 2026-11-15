@@ -39,6 +39,7 @@ import {
   catalogItemParamSchema,
   catalogKindParamSchema,
   catalogNameSchema,
+  catalogUpdateSchema,
   conversationIdParamSchema,
   deliveryAttemptsQuerySchema,
   integrationsQuerySchema,
@@ -85,6 +86,7 @@ import {
   postUserRoleHandler,
   putTeamMemberHandler,
 } from "./console.controller";
+import { adminConsole2Router } from "./console2.routes";
 import { requirePermission as can } from "./permissions";
 
 export const adminRouter = Router();
@@ -209,7 +211,7 @@ adminRouter.post(
 adminRouter.patch(
   "/catalog/:kind/:itemId",
   can("catalog.manage"),
-  validate({ params: catalogItemParamSchema, body: catalogNameSchema }),
+  validate({ params: catalogItemParamSchema, body: catalogUpdateSchema }),
   patchCatalogItemHandler
 );
 adminRouter.delete("/catalog/:kind/:itemId", can("catalog.manage"), validate({ params: catalogItemParamSchema }), deleteCatalogItemHandler);
@@ -291,3 +293,6 @@ adminRouter.get(
 // -- Audit log ----------------------------------------------------------
 
 adminRouter.get("/audit-log", can("audit.view"), validate({ query: auditLogQuerySchema }), getAuditLog);
+
+// -- Admin Console 2 (listings for hosts, catalog covers, collections, messaging, platforms) --------
+adminRouter.use(adminConsole2Router);

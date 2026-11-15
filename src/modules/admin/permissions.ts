@@ -21,6 +21,7 @@ export const ADMIN_PERMISSIONS = [
   "users.manage",
   "locations.view",
   "locations.moderate",
+  "locations.create",
   "catalog.manage",
   "bookings.view",
   "bookings.manage",
@@ -34,6 +35,12 @@ export const ADMIN_PERMISSIONS = [
   "settings.view",
   "settings.manage",
   "system.view",
+  "campaigns.view",
+  "campaigns.send",
+  "channels.manage",
+  "platforms.view",
+  "platforms.manage",
+  "incidents.manage",
 ] as const;
 export type AdminPermission = (typeof ADMIN_PERMISSIONS)[number];
 
@@ -43,10 +50,13 @@ export type AdminPermission = (typeof ADMIN_PERMISSIONS)[number];
  * log has used since Phase 11. Powers that change something, touch money, or open private
  * correspondence are split by job:
  *
- *  - moderator  -- listings and people: approve/reject/suspend, photos/sections, catalog, user roles
- *  - support    -- bookings and disputes: booking actions, re-checking payments, private messages
+ *  - moderator  -- listings and people: approve/reject/suspend, create listings for hosts,
+ *                  photos/sections/pricing/timings, catalog + collections, user roles
+ *  - support    -- bookings and disputes: booking actions, re-checking payments, private messages,
+ *                  announcements and direct notifications, incidents
  *  - finance    -- money: payments, refunds, analytics
- *  - super_admin -- everything, plus the team, platform settings and integrations
+ *  - super_admin -- everything, plus the team, platform settings, integrations, sending-channel
+ *                  credentials and platform release control
  */
 const BASE: readonly AdminPermission[] = [
   "dashboard.view",
@@ -55,12 +65,23 @@ const BASE: readonly AdminPermission[] = [
   "bookings.view",
   "audit.view",
   "settings.view",
+  "platforms.view",
 ];
 
 export const ROLE_PERMISSIONS: Record<TeamRole, readonly AdminPermission[]> = {
   super_admin: ADMIN_PERMISSIONS,
-  moderator: [...BASE, "users.manage", "locations.moderate", "catalog.manage"],
-  support: [...BASE, "bookings.manage", "payments.view", "payments.verify", "messages.access", "notifications.diagnostics"],
+  moderator: [...BASE, "users.manage", "locations.moderate", "locations.create", "catalog.manage", "campaigns.view"],
+  support: [
+    ...BASE,
+    "bookings.manage",
+    "payments.view",
+    "payments.verify",
+    "messages.access",
+    "notifications.diagnostics",
+    "campaigns.view",
+    "campaigns.send",
+    "incidents.manage",
+  ],
   finance: [...BASE, "analytics.view", "payments.view", "payments.verify", "payments.refund"],
 };
 

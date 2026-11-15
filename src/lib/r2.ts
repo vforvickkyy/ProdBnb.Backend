@@ -1,4 +1,13 @@
-import { DeleteObjectCommand, HeadBucketCommand, HeadObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
+import {
+  CORSRule,
+  DeleteObjectCommand,
+  GetBucketCorsCommand,
+  HeadBucketCommand,
+  HeadObjectCommand,
+  PutBucketCorsCommand,
+  PutObjectCommand,
+  S3Client,
+} from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { env } from "../config/env";
 
@@ -86,4 +95,49 @@ export async function checkBucketAccess(): Promise<void> {
     const name = (error as { name?: string }).name ?? "Error";
     throw new Error(status ? `${name} (HTTP ${status})` : name);
   }
+}
+
+/**
+ * Admin Console 2: browser uploads (the Admin Console's photo and cover uploads) PUT straight to a
+ * presigned R2 URL, which the browser only allows if the bucket's CORS rules admit the page's
+ * origin. The iOS app is not a browser and never needed this.
+ */
+export async function getBucketCorsRules(): Promise<CORSRule[]> {
+  try {
+    const result = await client.send(new GetBucketCorsCommand({ Bucket: env.R2_BUCKET_NAME }));
+    return result.CORSRules ?? [];
+  } catch (error) {
+    const name = (error as { name?: string; Code?: string }).name ?? (error as { Code?: string }).Code;
+    if (name === "NoSuchCORSConfiguration") {
+      return [];
+    }
+    throw error;
+  }
+}
+
+/** Origins in `origins` that no rule lets PUT. */
+export function originsMissingUpload(rules: CORSRule[], origins: string[]): string[] {
+  return origins.filter(
+    (origin) =>
+      !rules.some(
+        (rule) =>
+          (rule.AllowedMethods ?? []).map((m) => m.toUpperCase()).includes("PUT") &&
+          (rule.AllowedOrigins ?? []).some((allowed) => allowed === "*" || allowed === origin)
+      )
+  );
+}
+
+/** Adds one rule for `origins`, keeping every existing rule. Needs an R2 token with admin scope. */
+export async function allowBrowserUploads(origins: string[]): Promise<CORSRule[]> {
+  const existing = await getBucketCorsRules();
+  const missing = originsMissingUpload(existing, origins);
+  if (missing.length === 0) {
+    return existing;
+  }
+  const rules: CORSRule[] = [
+    ...existing,
+    { AllowedOrigins: missing, AllowedMethods: ["PUT", "GET", "HEAD"], AllowedHeaders: ["content-type"], MaxAgeSeconds: 3600 },
+  ];
+  await client.send(new PutBucketCorsCommand({ Bucket: env.R2_BUCKET_NAME, CORSConfiguration: { CORSRules: rules } }));
+  return rules;
 }

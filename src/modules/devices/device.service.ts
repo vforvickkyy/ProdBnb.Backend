@@ -3,7 +3,7 @@ import { NotFoundError } from "../../errors/AppError";
 import { adminClient } from "../../lib/supabase";
 import { RegisterDeviceInput } from "./device.schema";
 
-const DEVICE_COLUMNS = "id, user_id, platform, environment, is_active, last_seen_at, created_at, updated_at";
+const DEVICE_COLUMNS = "id, user_id, platform, environment, app_version, is_active, last_seen_at, created_at, updated_at";
 
 export interface DeviceDetail {
   id: string;
@@ -37,6 +37,10 @@ export async function registerDevice(callerId: string, input: RegisterDeviceInpu
         platform: input.platform,
         device_token: input.device_token,
         environment: input.environment ?? null,
+        // Only overwritten when sent: an older build re-registering must not erase what a newer
+        // one reported on the same device.
+        ...(input.app_version ? { app_version: input.app_version } : {}),
+        ...(input.web_push_keys ? { web_push_keys: input.web_push_keys } : {}),
         is_active: true,
         last_seen_at: new Date().toISOString(),
       },

@@ -434,13 +434,93 @@ export async function listMyLocations(
   return { data: (data as unknown as RawHostLocationRow[]).map(toHostLocationSummary), total };
 }
 
-export function listAllLocationsForAdmin(
+/** Admin Console 2: an admin listing row also carries what the Locations table shows. */
+export interface AdminLocationSummary extends LocationSummary {
+  /** The general gallery's first photo -- the listing's cover -- or null when it has none yet. */
+  cover_url: string | null;
+  media_count: number;
+  host: { id: string; first_name: string | null; last_name: string | null } | null;
+  /** Lowest ACTIVE price across booking types, for the table's "from" column. */
+  starting_price: { amount_minor_units: number; currency: string; booking_type: string } | null;
+}
+
+export interface PaginatedAdminLocations {
+  data: AdminLocationSummary[];
+  total: number;
+}
+
+export async function listAllLocationsForAdmin(
   supabase: SupabaseClient,
   page: number,
   pageSize: number,
   filters: LocationListFilters = {}
-): Promise<PaginatedLocations> {
-  return listLocations(supabase, page, pageSize, filters);
+): Promise<PaginatedAdminLocations> {
+  const { data, total } = await listLocations(supabase, page, pageSize, filters);
+  if (data.length === 0) {
+    return { data: [], total };
+  }
+
+  const ids = data.map((l) => l.id);
+  const hostIds = [...new Set(data.map((l) => l.host_id))];
+
+  // Three small batched reads for the whole page rather than one per row. They use the
+  // service-role client only because the caller has already passed requirePermission
+  // ("locations.view") on this route -- the rows being enriched are the ones RLS just returned.
+  const [mediaResult, hostResult, pricingResult] = await Promise.all([
+    adminClient
+      .from("location_media")
+      .select("location_id, storage_key, media_type, position, section_id")
+      .in("location_id", ids)
+      .order("position", { ascending: true }),
+    adminClient.from("profiles").select("id, first_name, last_name").in("id", hostIds),
+    adminClient
+      .from("location_pricing")
+      .select("location_id, booking_type, amount_minor_units, currency, is_active")
+      .in("location_id", ids)
+      .eq("is_active", true),
+  ]);
+  for (const result of [mediaResult, hostResult, pricingResult]) {
+    if (result.error) {
+      throw result.error;
+    }
+  }
+
+  const media = (mediaResult.data ?? []) as {
+    location_id: string;
+    storage_key: string;
+    media_type: string;
+    position: number;
+    section_id: string | null;
+  }[];
+  const hosts = new Map(
+    ((hostResult.data ?? []) as { id: string; first_name: string | null; last_name: string | null }[]).map((h) => [h.id, h])
+  );
+  const pricing = (pricingResult.data ?? []) as {
+    location_id: string;
+    booking_type: string;
+    amount_minor_units: number;
+    currency: string;
+  }[];
+
+  return {
+    total,
+    data: data.map((location) => {
+      const own = media.filter((m) => m.location_id === location.id);
+      const cover = own.find((m) => m.section_id === null && m.media_type === "photo") ?? own.find((m) => m.media_type === "photo");
+      const prices = pricing
+        .filter((p) => p.location_id === location.id)
+        .sort((a, b) => a.amount_minor_units - b.amount_minor_units);
+      return {
+        ...location,
+        cover_url: cover ? publicUrlFor(cover.storage_key) : null,
+        media_count: own.length,
+        host: hosts.get(location.host_id) ?? null,
+        starting_price: prices[0]
+          ? { amount_minor_units: prices[0].amount_minor_units, currency: prices[0].currency, booking_type: prices[0].booking_type }
+          : null,
+      };
+    }),
+  };
 }
 
 async function replaceTags(
@@ -613,4 +693,75 @@ export async function deleteLocation(
     }
     throw error;
   }
+}
+
+/** Admin Console 2: the compact card a catalog item or collection shows for each listing in it. */
+export interface LocationCard {
+  id: string;
+  title: string;
+  city: string;
+  region: string | null;
+  country: string;
+  status: string;
+  host_id: string;
+  cover_url: string | null;
+  starting_price: { amount_minor_units: number; currency: string; booking_type: string } | null;
+}
+
+/**
+ * Cards for `ids`, in the order given (ids that no longer exist are dropped). `client` decides
+ * visibility: pass the service-role client for admin views, the caller's client for public ones --
+ * RLS then hides unpublished listings and their photos exactly as it does everywhere else.
+ */
+export async function getLocationCards(client: SupabaseClient, ids: string[]): Promise<LocationCard[]> {
+  if (ids.length === 0) {
+    return [];
+  }
+  const [locationsResult, mediaResult, pricingResult] = await Promise.all([
+    client.from("locations").select("id, title, city, region, country, status, host_id").in("id", ids),
+    client
+      .from("location_media")
+      .select("location_id, storage_key, media_type, position, section_id")
+      .in("location_id", ids)
+      .eq("media_type", "photo")
+      .order("position", { ascending: true }),
+    client
+      .from("location_pricing")
+      .select("location_id, booking_type, amount_minor_units, currency")
+      .in("location_id", ids)
+      .eq("is_active", true),
+  ]);
+  for (const result of [locationsResult, mediaResult, pricingResult]) {
+    if (result.error) {
+      throw result.error;
+    }
+  }
+  const media = (mediaResult.data ?? []) as { location_id: string; storage_key: string; section_id: string | null }[];
+  const pricing = (pricingResult.data ?? []) as {
+    location_id: string;
+    booking_type: string;
+    amount_minor_units: number;
+    currency: string;
+  }[];
+  const byId = new Map(
+    ((locationsResult.data ?? []) as Omit<LocationCard, "cover_url" | "starting_price">[]).map((l) => [l.id, l])
+  );
+
+  return ids
+    .map((id) => byId.get(id))
+    .filter((l): l is Omit<LocationCard, "cover_url" | "starting_price"> => Boolean(l))
+    .map((l) => {
+      const own = media.filter((m) => m.location_id === l.id);
+      const cover = own.find((m) => m.section_id === null) ?? own[0];
+      const cheapest = pricing
+        .filter((p) => p.location_id === l.id)
+        .sort((a, b) => a.amount_minor_units - b.amount_minor_units)[0];
+      return {
+        ...l,
+        cover_url: cover ? publicUrlFor(cover.storage_key) : null,
+        starting_price: cheapest
+          ? { amount_minor_units: cheapest.amount_minor_units, currency: cheapest.currency, booking_type: cheapest.booking_type }
+          : null,
+      };
+    });
 }

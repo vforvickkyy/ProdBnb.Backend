@@ -370,6 +370,172 @@
           }
         ]
       },
+      "StartingPrice": {
+        "type": "object",
+        "nullable": true,
+        "properties": {
+          "amount_minor_units": {
+            "type": "integer"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "booking_type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "amount_minor_units",
+          "currency",
+          "booking_type"
+        ]
+      },
+      "AdminLocationListItem": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "host_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "address_line1": {
+            "type": "string",
+            "nullable": true
+          },
+          "address_line2": {
+            "type": "string",
+            "nullable": true
+          },
+          "city": {
+            "type": "string"
+          },
+          "region": {
+            "type": "string",
+            "nullable": true
+          },
+          "country": {
+            "type": "string"
+          },
+          "postal_code": {
+            "type": "string",
+            "nullable": true
+          },
+          "latitude": {
+            "type": "number",
+            "nullable": true
+          },
+          "longitude": {
+            "type": "number",
+            "nullable": true
+          },
+          "capacity": {
+            "type": "integer",
+            "nullable": true
+          },
+          "timezone": {
+            "type": "string"
+          },
+          "instant_booking_enabled": {
+            "type": "boolean"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "submitted",
+              "under_review",
+              "approved",
+              "published",
+              "rejected",
+              "suspended",
+              "archived"
+            ]
+          },
+          "moderation_reason": {
+            "type": "string",
+            "nullable": true
+          },
+          "suspended_by_host_suspension": {
+            "type": "boolean"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "cover_url": {
+            "type": "string",
+            "nullable": true
+          },
+          "media_count": {
+            "type": "integer"
+          },
+          "host": {
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "first_name": {
+                "type": "string",
+                "nullable": true
+              },
+              "last_name": {
+                "type": "string",
+                "nullable": true
+              }
+            },
+            "required": [
+              "id",
+              "first_name",
+              "last_name"
+            ]
+          },
+          "starting_price": {
+            "$ref": "#/components/schemas/StartingPrice"
+          }
+        },
+        "required": [
+          "id",
+          "host_id",
+          "title",
+          "description",
+          "address_line1",
+          "address_line2",
+          "city",
+          "region",
+          "country",
+          "postal_code",
+          "latitude",
+          "longitude",
+          "capacity",
+          "timezone",
+          "instant_booking_enabled",
+          "status",
+          "moderation_reason",
+          "suspended_by_host_suspension",
+          "created_at",
+          "updated_at",
+          "cover_url",
+          "media_count",
+          "host",
+          "starting_price"
+        ]
+      },
       "CatalogRef": {
         "type": "object",
         "properties": {
@@ -1178,7 +1344,31 @@
               "ADMIN_REVOKED_ROLE",
               "ADMIN_SET_TEAM_ROLE",
               "ADMIN_REMOVED_TEAM_MEMBER",
-              "ADMIN_UPDATED_SETTINGS"
+              "ADMIN_UPDATED_SETTINGS",
+              "ADMIN_CREATED_LOCATION",
+              "ADMIN_UPLOADED_MEDIA",
+              "ADMIN_REORDERED_MEDIA",
+              "ADMIN_UPDATED_PRICING",
+              "ADMIN_UPDATED_AVAILABILITY",
+              "ADMIN_UPDATED_SECTION",
+              "ADMIN_UPDATED_CATALOG_LISTINGS",
+              "ADMIN_UPDATED_CATALOG_COVER",
+              "ADMIN_CREATED_COLLECTION",
+              "ADMIN_UPDATED_COLLECTION",
+              "ADMIN_DELETED_COLLECTION",
+              "ADMIN_SENT_CAMPAIGN",
+              "ADMIN_CANCELLED_CAMPAIGN",
+              "ADMIN_CONNECTED_CHANNEL",
+              "ADMIN_DISCONNECTED_CHANNEL",
+              "ADMIN_UPDATED_JOBS_CONFIG",
+              "ADMIN_UPDATED_PLATFORM",
+              "ADMIN_UPDATED_FEATURE_FLAG",
+              "ADMIN_DELETED_FEATURE_FLAG",
+              "ADMIN_CREATED_INCIDENT",
+              "ADMIN_UPDATED_INCIDENT",
+              "ADMIN_CREATED_RELEASE",
+              "ADMIN_UPDATED_RELEASE",
+              "ADMIN_DELETED_RELEASE"
             ]
           },
           "target_type": {
@@ -1191,7 +1381,14 @@
               "media",
               "section",
               "catalog_item",
-              "settings"
+              "settings",
+              "collection",
+              "campaign",
+              "channel",
+              "platform",
+              "feature_flag",
+              "incident",
+              "release"
             ]
           },
           "target_id": {
@@ -1263,6 +1460,7 @@
                 "users.manage",
                 "locations.view",
                 "locations.moderate",
+                "locations.create",
                 "catalog.manage",
                 "bookings.view",
                 "bookings.manage",
@@ -1275,7 +1473,13 @@
                 "team.manage",
                 "settings.view",
                 "settings.manage",
-                "system.view"
+                "system.view",
+                "campaigns.view",
+                "campaigns.send",
+                "channels.manage",
+                "platforms.view",
+                "platforms.manage",
+                "incidents.manage"
               ]
             }
           }
@@ -1812,6 +2016,14 @@
           "name": {
             "type": "string"
           },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "cover_url": {
+            "type": "string",
+            "nullable": true
+          },
           "created_at": {
             "type": "string",
             "format": "date-time"
@@ -1823,6 +2035,8 @@
         "required": [
           "id",
           "name",
+          "description",
+          "cover_url",
           "created_at",
           "usage_count"
         ]
@@ -2056,6 +2270,1357 @@
           "action",
           "reason",
           "created_at"
+        ]
+      },
+      "HostCandidate": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "first_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "last_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "email": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "string"
+          },
+          "is_host": {
+            "type": "boolean"
+          },
+          "location_count": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "first_name",
+          "last_name",
+          "email",
+          "status",
+          "is_host",
+          "location_count"
+        ]
+      },
+      "CoverUploadAuthorization": {
+        "type": "object",
+        "properties": {
+          "upload_url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "storage_key": {
+            "type": "string"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "method": {
+            "type": "string",
+            "enum": [
+              "PUT"
+            ]
+          },
+          "headers": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          }
+        },
+        "required": [
+          "upload_url",
+          "storage_key",
+          "expires_at",
+          "method",
+          "headers"
+        ]
+      },
+      "LocationCard": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "title": {
+            "type": "string"
+          },
+          "city": {
+            "type": "string"
+          },
+          "region": {
+            "type": "string",
+            "nullable": true
+          },
+          "country": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "host_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "cover_url": {
+            "type": "string",
+            "nullable": true
+          },
+          "starting_price": {
+            "$ref": "#/components/schemas/StartingPrice"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "city",
+          "region",
+          "country",
+          "status",
+          "host_id",
+          "cover_url",
+          "starting_price"
+        ]
+      },
+      "CollectionSummary": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "title": {
+            "type": "string"
+          },
+          "slug": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "cover_url": {
+            "type": "string",
+            "nullable": true
+          },
+          "is_published": {
+            "type": "boolean"
+          },
+          "position": {
+            "type": "integer"
+          },
+          "listing_count": {
+            "type": "integer"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "slug",
+          "description",
+          "cover_url",
+          "is_published",
+          "position",
+          "listing_count",
+          "created_at",
+          "updated_at"
+        ]
+      },
+      "CollectionDetail": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/CollectionSummary"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "listings": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/LocationCard"
+                }
+              }
+            },
+            "required": [
+              "listings"
+            ]
+          }
+        ]
+      },
+      "ChannelStatus": {
+        "type": "object",
+        "properties": {
+          "channel": {
+            "type": "string",
+            "enum": [
+              "smtp",
+              "apns",
+              "fcm",
+              "webpush"
+            ]
+          },
+          "connected": {
+            "type": "boolean"
+          },
+          "source": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "dashboard",
+              "environment"
+            ]
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "config": {
+            "type": "object",
+            "additionalProperties": {
+              "nullable": true
+            }
+          },
+          "last_tested_at": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          },
+          "last_test_ok": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "last_test_error": {
+            "type": "string",
+            "nullable": true
+          },
+          "updated_at": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "channel",
+          "connected",
+          "source",
+          "enabled",
+          "config",
+          "last_tested_at",
+          "last_test_ok",
+          "last_test_error",
+          "updated_at"
+        ]
+      },
+      "ChannelReadiness": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "boolean"
+          },
+          "push": {
+            "type": "object",
+            "properties": {
+              "ios": {
+                "type": "boolean"
+              },
+              "android": {
+                "type": "boolean"
+              },
+              "web": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "ios",
+              "android",
+              "web"
+            ]
+          }
+        },
+        "required": [
+          "email",
+          "push"
+        ]
+      },
+      "JobsStatus": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "dispatch_url": {
+            "type": "string",
+            "nullable": true
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "last_tick_at": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          },
+          "last_run_at": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          },
+          "last_run_ok": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "last_run_summary": {
+            "type": "object",
+            "nullable": true,
+            "additionalProperties": {
+              "nullable": true
+            }
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "suggested_url": {
+            "type": "string"
+          },
+          "health": {
+            "type": "object",
+            "properties": {
+              "pg_net": {
+                "type": "boolean"
+              },
+              "pg_cron": {
+                "type": "boolean"
+              },
+              "dispatch_job_scheduled": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "pg_net",
+              "pg_cron",
+              "dispatch_job_scheduled"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "dispatch_url",
+          "enabled",
+          "last_tick_at",
+          "last_run_at",
+          "last_run_ok",
+          "last_run_summary",
+          "updated_at",
+          "suggested_url",
+          "health"
+        ]
+      },
+      "ChannelTestResult": {
+        "type": "object",
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "detail": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "ok",
+          "detail"
+        ]
+      },
+      "CampaignStats": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "integer"
+          },
+          "processed": {
+            "type": "integer"
+          },
+          "in_app_created": {
+            "type": "integer"
+          },
+          "push_sent": {
+            "type": "integer"
+          },
+          "push_failed": {
+            "type": "integer"
+          },
+          "push_no_devices": {
+            "type": "integer"
+          },
+          "push_opted_out": {
+            "type": "integer"
+          },
+          "email_sent": {
+            "type": "integer"
+          },
+          "email_failed": {
+            "type": "integer"
+          },
+          "email_unsubscribed": {
+            "type": "integer"
+          },
+          "email_missing": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total",
+          "processed",
+          "in_app_created",
+          "push_sent",
+          "push_failed",
+          "push_no_devices",
+          "push_opted_out",
+          "email_sent",
+          "email_failed",
+          "email_unsubscribed",
+          "email_missing"
+        ]
+      },
+      "Campaign": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "announcement",
+              "direct"
+            ]
+          },
+          "channels": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "in_app",
+                "push",
+                "email"
+              ]
+            }
+          },
+          "platforms": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "ios",
+                "android",
+                "web"
+              ]
+            }
+          },
+          "audience": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "all"
+                    ]
+                  }
+                },
+                "required": [
+                  "type"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "role"
+                    ]
+                  },
+                  "role": {
+                    "type": "string",
+                    "enum": [
+                      "booker",
+                      "host",
+                      "admin"
+                    ]
+                  }
+                },
+                "required": [
+                  "type",
+                  "role"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "users"
+                    ]
+                  },
+                  "user_ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "minItems": 1,
+                    "maxItems": 5000
+                  }
+                },
+                "required": [
+                  "type",
+                  "user_ids"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "platform_users"
+                    ]
+                  }
+                },
+                "required": [
+                  "type"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          },
+          "title": {
+            "type": "string"
+          },
+          "body": {
+            "type": "string"
+          },
+          "link_url": {
+            "type": "string",
+            "nullable": true
+          },
+          "email_subject": {
+            "type": "string",
+            "nullable": true
+          },
+          "email_body": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "scheduled",
+              "sending",
+              "sent",
+              "cancelled",
+              "failed"
+            ]
+          },
+          "scheduled_at": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          },
+          "started_at": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          },
+          "completed_at": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          },
+          "recipient_count": {
+            "type": "integer",
+            "nullable": true
+          },
+          "last_error": {
+            "type": "string",
+            "nullable": true
+          },
+          "created_by": {
+            "type": "string",
+            "nullable": true,
+            "format": "uuid"
+          },
+          "sent_by": {
+            "type": "string",
+            "nullable": true,
+            "format": "uuid"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "stats": {
+            "$ref": "#/components/schemas/CampaignStats"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "kind",
+          "channels",
+          "platforms",
+          "audience",
+          "title",
+          "body",
+          "link_url",
+          "email_subject",
+          "email_body",
+          "status",
+          "scheduled_at",
+          "started_at",
+          "completed_at",
+          "recipient_count",
+          "last_error",
+          "created_by",
+          "sent_by",
+          "created_at",
+          "updated_at",
+          "stats"
+        ]
+      },
+      "AudiencePreview": {
+        "type": "object",
+        "properties": {
+          "users": {
+            "type": "integer"
+          },
+          "with_email": {
+            "type": "integer"
+          },
+          "devices": {
+            "type": "object",
+            "properties": {
+              "ios": {
+                "type": "integer"
+              },
+              "android": {
+                "type": "integer"
+              },
+              "web": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "ios",
+              "android",
+              "web"
+            ]
+          }
+        },
+        "required": [
+          "users",
+          "with_email",
+          "devices"
+        ]
+      },
+      "CampaignRecipient": {
+        "type": "object",
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "email": {
+            "type": "string",
+            "nullable": true
+          },
+          "first_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "last_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "in_app_status": {
+            "type": "string"
+          },
+          "push_status": {
+            "type": "string"
+          },
+          "email_status": {
+            "type": "string"
+          },
+          "push_sent": {
+            "type": "integer"
+          },
+          "push_failed": {
+            "type": "integer"
+          },
+          "error": {
+            "type": "string",
+            "nullable": true
+          },
+          "processed_at": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "user_id",
+          "email",
+          "first_name",
+          "last_name",
+          "in_app_status",
+          "push_status",
+          "email_status",
+          "push_sent",
+          "push_failed",
+          "error",
+          "processed_at"
+        ]
+      },
+      "AppPlatform": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "platform": {
+            "type": "string",
+            "enum": [
+              "ios",
+              "android",
+              "web"
+            ]
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "not_launched",
+              "in_development",
+              "beta",
+              "live",
+              "maintenance",
+              "deprecated"
+            ]
+          },
+          "live_version": {
+            "type": "string",
+            "nullable": true
+          },
+          "latest_version": {
+            "type": "string",
+            "nullable": true
+          },
+          "min_supported_version": {
+            "type": "string",
+            "nullable": true
+          },
+          "store_url": {
+            "type": "string",
+            "nullable": true
+          },
+          "update_message": {
+            "type": "string",
+            "nullable": true
+          },
+          "force_update_message": {
+            "type": "string",
+            "nullable": true
+          },
+          "maintenance_mode": {
+            "type": "boolean"
+          },
+          "maintenance_message": {
+            "type": "string",
+            "nullable": true
+          },
+          "notes": {
+            "type": "string",
+            "nullable": true
+          },
+          "updated_by": {
+            "type": "string",
+            "nullable": true,
+            "format": "uuid"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "platform",
+          "display_name",
+          "status",
+          "live_version",
+          "latest_version",
+          "min_supported_version",
+          "store_url",
+          "update_message",
+          "force_update_message",
+          "maintenance_mode",
+          "maintenance_message",
+          "notes",
+          "updated_by",
+          "updated_at"
+        ]
+      },
+      "FeatureFlag": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "key": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "targets": {
+            "type": "object",
+            "properties": {
+              "ios": {
+                "type": "object",
+                "properties": {
+                  "enabled": {
+                    "type": "boolean"
+                  },
+                  "min_version": {
+                    "type": "string",
+                    "nullable": true
+                  }
+                },
+                "required": [
+                  "enabled"
+                ]
+              },
+              "android": {
+                "type": "object",
+                "properties": {
+                  "enabled": {
+                    "type": "boolean"
+                  },
+                  "min_version": {
+                    "type": "string",
+                    "nullable": true
+                  }
+                },
+                "required": [
+                  "enabled"
+                ]
+              },
+              "web": {
+                "type": "object",
+                "properties": {
+                  "enabled": {
+                    "type": "boolean"
+                  },
+                  "min_version": {
+                    "type": "string",
+                    "nullable": true
+                  }
+                },
+                "required": [
+                  "enabled"
+                ]
+              }
+            }
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "key",
+          "name",
+          "description",
+          "targets",
+          "updated_at"
+        ]
+      },
+      "PlatformIncident": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "title": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "minor",
+              "major",
+              "critical"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "investigating",
+              "identified",
+              "monitoring",
+              "resolved"
+            ]
+          },
+          "platforms": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "ios",
+                "android",
+                "web",
+                "backend",
+                "admin"
+              ]
+            }
+          },
+          "is_public": {
+            "type": "boolean"
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "resolved_at": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          },
+          "created_by": {
+            "type": "string",
+            "nullable": true,
+            "format": "uuid"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updates": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "incident_id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "status": {
+                  "type": "string"
+                },
+                "message": {
+                  "type": "string"
+                },
+                "created_by": {
+                  "type": "string",
+                  "nullable": true,
+                  "format": "uuid"
+                },
+                "created_at": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              },
+              "required": [
+                "id",
+                "incident_id",
+                "status",
+                "message",
+                "created_by",
+                "created_at"
+              ]
+            }
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "summary",
+          "severity",
+          "status",
+          "platforms",
+          "is_public",
+          "started_at",
+          "resolved_at",
+          "created_by",
+          "created_at",
+          "updated_at",
+          "updates"
+        ]
+      },
+      "PlatformsOverview": {
+        "type": "object",
+        "properties": {
+          "platforms": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AppPlatform"
+            }
+          },
+          "feature_flags": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FeatureFlag"
+            }
+          },
+          "incidents": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlatformIncident"
+            }
+          },
+          "releases": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                "platform": {
+                  "type": "string",
+                  "enum": [
+                    "ios",
+                    "android",
+                    "web",
+                    "backend",
+                    "admin"
+                  ]
+                },
+                "version": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "notes": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "planned",
+                    "in_progress",
+                    "in_review",
+                    "released",
+                    "cancelled"
+                  ]
+                },
+                "target_date": {
+                  "type": "string",
+                  "nullable": true
+                },
+                "released_at": {
+                  "type": "string",
+                  "nullable": true,
+                  "format": "date-time"
+                },
+                "feature_keys": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "created_by": {
+                  "type": "string",
+                  "nullable": true,
+                  "format": "uuid"
+                },
+                "updated_by": {
+                  "type": "string",
+                  "nullable": true,
+                  "format": "uuid"
+                },
+                "created_at": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "updated_at": {
+                  "type": "string",
+                  "format": "date-time"
+                }
+              },
+              "required": [
+                "id",
+                "platform",
+                "version",
+                "title",
+                "notes",
+                "status",
+                "target_date",
+                "released_at",
+                "feature_keys",
+                "created_by",
+                "updated_by",
+                "created_at",
+                "updated_at"
+              ]
+            }
+          },
+          "versions_in_use": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "platform": {
+                  "type": "string"
+                },
+                "app_version": {
+                  "type": "string"
+                },
+                "users": {
+                  "type": "integer"
+                },
+                "devices": {
+                  "type": "integer"
+                },
+                "last_seen": {
+                  "type": "string",
+                  "nullable": true
+                }
+              },
+              "required": [
+                "platform",
+                "app_version",
+                "users",
+                "devices",
+                "last_seen"
+              ]
+            }
+          },
+          "health": {
+            "type": "object",
+            "properties": {
+              "push_last_24h": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "object",
+                  "properties": {
+                    "sent": {
+                      "type": "integer"
+                    },
+                    "failed": {
+                      "type": "integer"
+                    },
+                    "invalid_token": {
+                      "type": "integer"
+                    },
+                    "skipped": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "sent",
+                    "failed",
+                    "invalid_token",
+                    "skipped"
+                  ]
+                }
+              },
+              "active_devices": {
+                "type": "object",
+                "properties": {
+                  "ios": {
+                    "type": "integer"
+                  },
+                  "android": {
+                    "type": "integer"
+                  },
+                  "web": {
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "ios",
+                  "android",
+                  "web"
+                ]
+              },
+              "backend": {
+                "type": "object",
+                "properties": {
+                  "environment": {
+                    "type": "string"
+                  },
+                  "commit": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "region": {
+                    "type": "string",
+                    "nullable": true
+                  }
+                },
+                "required": [
+                  "environment",
+                  "commit",
+                  "region"
+                ]
+              }
+            },
+            "required": [
+              "push_last_24h",
+              "active_devices",
+              "backend"
+            ]
+          }
+        },
+        "required": [
+          "platforms",
+          "feature_flags",
+          "incidents",
+          "releases",
+          "versions_in_use",
+          "health"
+        ]
+      },
+      "ReleasePlan": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "platform": {
+            "type": "string",
+            "enum": [
+              "ios",
+              "android",
+              "web",
+              "backend",
+              "admin"
+            ]
+          },
+          "version": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          },
+          "notes": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "planned",
+              "in_progress",
+              "in_review",
+              "released",
+              "cancelled"
+            ]
+          },
+          "target_date": {
+            "type": "string",
+            "nullable": true
+          },
+          "released_at": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          },
+          "feature_keys": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "created_by": {
+            "type": "string",
+            "nullable": true,
+            "format": "uuid"
+          },
+          "updated_by": {
+            "type": "string",
+            "nullable": true,
+            "format": "uuid"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "platform",
+          "version",
+          "title",
+          "notes",
+          "status",
+          "target_date",
+          "released_at",
+          "feature_keys",
+          "created_by",
+          "updated_by",
+          "created_at",
+          "updated_at"
         ]
       }
     },
@@ -2569,7 +4134,7 @@
                     "data": {
                       "type": "array",
                       "items": {
-                        "$ref": "#/components/schemas/LocationDetail"
+                        "$ref": "#/components/schemas/AdminLocationListItem"
                       }
                     },
                     "meta": {
@@ -2595,6 +4160,176 @@
                   "required": [
                     "data",
                     "meta"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Admin",
+          "Locations"
+        ],
+        "summary": "Create a listing owned by a host (optionally granting the host role; draft or published; audited)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "description": {
+                    "type": "string",
+                    "maxLength": 5000,
+                    "default": ""
+                  },
+                  "address_line1": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 200
+                  },
+                  "address_line2": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 200
+                  },
+                  "city": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120
+                  },
+                  "region": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 120
+                  },
+                  "country": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120
+                  },
+                  "postal_code": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 20
+                  },
+                  "latitude": {
+                    "type": "number",
+                    "nullable": true,
+                    "minimum": -90,
+                    "maximum": 90
+                  },
+                  "longitude": {
+                    "type": "number",
+                    "nullable": true,
+                    "minimum": -180,
+                    "maximum": 180
+                  },
+                  "capacity": {
+                    "type": "integer",
+                    "nullable": true,
+                    "minimum": 0,
+                    "exclusiveMinimum": true
+                  },
+                  "timezone": {
+                    "type": "string"
+                  },
+                  "instant_booking_enabled": {
+                    "type": "boolean"
+                  },
+                  "category_ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "maxItems": 20,
+                    "default": []
+                  },
+                  "amenity_ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "maxItems": 30,
+                    "default": []
+                  },
+                  "use_case_ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "maxItems": 10,
+                    "default": []
+                  },
+                  "host_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "grant_host_role": {
+                    "type": "boolean",
+                    "default": false
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "draft",
+                      "published"
+                    ],
+                    "default": "draft"
+                  }
+                },
+                "required": [
+                  "title",
+                  "city",
+                  "country",
+                  "host_id"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/LocationDetail"
+                    }
+                  },
+                  "required": [
+                    "data"
                   ]
                 }
               }
@@ -4024,7 +5759,14 @@
                 "media",
                 "section",
                 "catalog_item",
-                "settings"
+                "settings",
+                "collection",
+                "campaign",
+                "channel",
+                "platform",
+                "feature_flag",
+                "incident",
+                "release"
               ]
             },
             "required": false,
@@ -4076,7 +5818,31 @@
                 "ADMIN_REVOKED_ROLE",
                 "ADMIN_SET_TEAM_ROLE",
                 "ADMIN_REMOVED_TEAM_MEMBER",
-                "ADMIN_UPDATED_SETTINGS"
+                "ADMIN_UPDATED_SETTINGS",
+                "ADMIN_CREATED_LOCATION",
+                "ADMIN_UPLOADED_MEDIA",
+                "ADMIN_REORDERED_MEDIA",
+                "ADMIN_UPDATED_PRICING",
+                "ADMIN_UPDATED_AVAILABILITY",
+                "ADMIN_UPDATED_SECTION",
+                "ADMIN_UPDATED_CATALOG_LISTINGS",
+                "ADMIN_UPDATED_CATALOG_COVER",
+                "ADMIN_CREATED_COLLECTION",
+                "ADMIN_UPDATED_COLLECTION",
+                "ADMIN_DELETED_COLLECTION",
+                "ADMIN_SENT_CAMPAIGN",
+                "ADMIN_CANCELLED_CAMPAIGN",
+                "ADMIN_CONNECTED_CHANNEL",
+                "ADMIN_DISCONNECTED_CHANNEL",
+                "ADMIN_UPDATED_JOBS_CONFIG",
+                "ADMIN_UPDATED_PLATFORM",
+                "ADMIN_UPDATED_FEATURE_FLAG",
+                "ADMIN_DELETED_FEATURE_FLAG",
+                "ADMIN_CREATED_INCIDENT",
+                "ADMIN_UPDATED_INCIDENT",
+                "ADMIN_CREATED_RELEASE",
+                "ADMIN_UPDATED_RELEASE",
+                "ADMIN_DELETED_RELEASE"
               ]
             },
             "required": false,
@@ -5248,6 +7014,11 @@
                     "type": "string",
                     "minLength": 1,
                     "maxLength": 80
+                  },
+                  "description": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 500
                   }
                 },
                 "required": [
@@ -5298,7 +7069,7 @@
           "Admin",
           "Catalog"
         ],
-        "summary": "Rename a catalog option (audited)",
+        "summary": "Rename / describe a catalog option (audited)",
         "security": [
           {
             "bearerAuth": []
@@ -5339,11 +7110,13 @@
                     "type": "string",
                     "minLength": 1,
                     "maxLength": 80
+                  },
+                  "description": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 500
                   }
                 },
-                "required": [
-                  "name"
-                ],
                 "additionalProperties": false
               }
             }
@@ -6196,6 +7969,4660 @@
                   "required": [
                     "data",
                     "meta"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/hosts/search": {
+      "get": {
+        "tags": [
+          "Admin",
+          "Locations"
+        ],
+        "summary": "Find people by name or email for the host picker (hosts first)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            },
+            "required": true,
+            "name": "search",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 50,
+              "default": 20
+            },
+            "required": false,
+            "name": "limit",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "default": "false"
+            },
+            "required": false,
+            "name": "hosts_only",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/HostCandidate"
+                      }
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/catalog/{kind}/{itemId}/cover/upload": {
+      "post": {
+        "tags": [
+          "Admin",
+          "Catalog"
+        ],
+        "summary": "Presigned PUT for a catalog cover image (then PUT .../cover with the storage_key)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "categories",
+                "amenities",
+                "use-cases"
+              ]
+            },
+            "required": true,
+            "name": "kind",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "itemId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "content_type": {
+                    "type": "string",
+                    "enum": [
+                      "image/jpeg",
+                      "image/png",
+                      "image/webp"
+                    ]
+                  },
+                  "size_bytes": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "exclusiveMinimum": true
+                  }
+                },
+                "required": [
+                  "content_type",
+                  "size_bytes"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/CoverUploadAuthorization"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/catalog/{kind}/{itemId}/cover": {
+      "put": {
+        "tags": [
+          "Admin",
+          "Catalog"
+        ],
+        "summary": "Set the uploaded image as the cover (verified in R2; audited)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "categories",
+                "amenities",
+                "use-cases"
+              ]
+            },
+            "required": true,
+            "name": "kind",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "itemId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "storage_key": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 300
+                  }
+                },
+                "required": [
+                  "storage_key"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AdminCatalogItem"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Admin",
+          "Catalog"
+        ],
+        "summary": "Remove the cover image (audited)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "categories",
+                "amenities",
+                "use-cases"
+              ]
+            },
+            "required": true,
+            "name": "kind",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "itemId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AdminCatalogItem"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/catalog/{kind}/{itemId}/listings": {
+      "get": {
+        "tags": [
+          "Admin",
+          "Catalog"
+        ],
+        "summary": "Listings tagged with this category / amenity / use case",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "categories",
+                "amenities",
+                "use-cases"
+              ]
+            },
+            "required": true,
+            "name": "kind",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "itemId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            },
+            "required": false,
+            "name": "page",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            },
+            "required": false,
+            "name": "pageSize",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/LocationCard"
+                      }
+                    },
+                    "meta": {
+                      "type": "object",
+                      "properties": {
+                        "page": {
+                          "type": "integer"
+                        },
+                        "pageSize": {
+                          "type": "integer"
+                        },
+                        "total": {
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "page",
+                        "pageSize",
+                        "total"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "meta"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Admin",
+          "Catalog"
+        ],
+        "summary": "Tag listings with this item (idempotent; audited)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "categories",
+                "amenities",
+                "use-cases"
+              ]
+            },
+            "required": true,
+            "name": "kind",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "itemId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "location_ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "minItems": 1,
+                    "maxItems": 100
+                  }
+                },
+                "required": [
+                  "location_ids"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "added": {
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "added"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/catalog/{kind}/{itemId}/listings/{locationId}": {
+      "delete": {
+        "tags": [
+          "Admin",
+          "Catalog"
+        ],
+        "summary": "Untag one listing (audited)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "categories",
+                "amenities",
+                "use-cases"
+              ]
+            },
+            "required": true,
+            "name": "kind",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "itemId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "locationId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "removed": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "removed"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/collections": {
+      "get": {
+        "tags": [
+          "Admin",
+          "Collections"
+        ],
+        "summary": "All collections, published or not",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/CollectionSummary"
+                      }
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Admin",
+          "Collections"
+        ],
+        "summary": "Create a collection (slug unique; audited)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120
+                  },
+                  "slug": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 80,
+                    "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+                  },
+                  "description": {
+                    "type": "string",
+                    "maxLength": 1000,
+                    "default": ""
+                  },
+                  "is_published": {
+                    "type": "boolean",
+                    "default": false
+                  },
+                  "position": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 10000,
+                    "default": 0
+                  }
+                },
+                "required": [
+                  "title",
+                  "slug"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/CollectionDetail"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/collections/{collectionId}": {
+      "get": {
+        "tags": [
+          "Admin",
+          "Collections"
+        ],
+        "summary": "Collection with its ordered listings",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "collectionId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/CollectionDetail"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Admin",
+          "Collections"
+        ],
+        "summary": "Edit / publish / unpublish (audited)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "collectionId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120
+                  },
+                  "slug": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 80,
+                    "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$"
+                  },
+                  "description": {
+                    "type": "string",
+                    "maxLength": 1000
+                  },
+                  "is_published": {
+                    "type": "boolean"
+                  },
+                  "position": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 10000
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/CollectionDetail"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Admin",
+          "Collections"
+        ],
+        "summary": "Delete a collection (listings themselves are untouched; audited)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "collectionId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "deleted": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "deleted"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/collections/{collectionId}/cover/upload": {
+      "post": {
+        "tags": [
+          "Admin",
+          "Collections"
+        ],
+        "summary": "Presigned PUT for the collection cover",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "collectionId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "content_type": {
+                    "type": "string",
+                    "enum": [
+                      "image/jpeg",
+                      "image/png",
+                      "image/webp"
+                    ]
+                  },
+                  "size_bytes": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "exclusiveMinimum": true
+                  }
+                },
+                "required": [
+                  "content_type",
+                  "size_bytes"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/CoverUploadAuthorization"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/collections/{collectionId}/cover": {
+      "put": {
+        "tags": [
+          "Admin",
+          "Collections"
+        ],
+        "summary": "Set the uploaded cover",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "collectionId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "storage_key": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 300
+                  }
+                },
+                "required": [
+                  "storage_key"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/CollectionDetail"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Admin",
+          "Collections"
+        ],
+        "summary": "Remove the cover",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "collectionId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/CollectionDetail"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/collections/{collectionId}/listings": {
+      "post": {
+        "tags": [
+          "Admin",
+          "Collections"
+        ],
+        "summary": "Append listings (existing ones are kept in place)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "collectionId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "location_ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "minItems": 1,
+                    "maxItems": 100
+                  }
+                },
+                "required": [
+                  "location_ids"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/CollectionDetail"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/collections/{collectionId}/listings/order": {
+      "put": {
+        "tags": [
+          "Admin",
+          "Collections"
+        ],
+        "summary": "Replace the order (must list exactly the current listings)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "collectionId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "ordered_ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "minItems": 1,
+                    "maxItems": 500
+                  }
+                },
+                "required": [
+                  "ordered_ids"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/CollectionDetail"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/collections/{collectionId}/listings/{locationId}": {
+      "delete": {
+        "tags": [
+          "Admin",
+          "Collections"
+        ],
+        "summary": "Remove one listing from the collection",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "collectionId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "locationId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/CollectionDetail"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/system/r2-cors": {
+      "post": {
+        "tags": [
+          "Admin",
+          "System"
+        ],
+        "summary": "Allow browser uploads: add an R2 CORS rule for CORS_ORIGINS (super admin; audited)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "rules": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "additionalProperties": {
+                              "nullable": true
+                            }
+                          }
+                        }
+                      },
+                      "required": [
+                        "rules"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/messaging/overview": {
+      "get": {
+        "tags": [
+          "Admin",
+          "Messaging"
+        ],
+        "summary": "Channels (status only, never secrets), readiness, active devices per platform, background jobs",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "channels": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/ChannelStatus"
+                          }
+                        },
+                        "readiness": {
+                          "$ref": "#/components/schemas/ChannelReadiness"
+                        },
+                        "devices": {
+                          "type": "object",
+                          "properties": {
+                            "ios": {
+                              "type": "integer"
+                            },
+                            "android": {
+                              "type": "integer"
+                            },
+                            "web": {
+                              "type": "integer"
+                            }
+                          },
+                          "required": [
+                            "ios",
+                            "android",
+                            "web"
+                          ]
+                        },
+                        "jobs": {
+                          "$ref": "#/components/schemas/JobsStatus"
+                        }
+                      },
+                      "required": [
+                        "channels",
+                        "readiness",
+                        "devices",
+                        "jobs"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/messaging/channels/{channel}": {
+      "put": {
+        "tags": [
+          "Admin",
+          "Messaging"
+        ],
+        "summary": "Connect / update a channel. Secrets go to Vault and are never returned; blank keeps the stored one",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "smtp",
+                "apns",
+                "fcm",
+                "webpush"
+              ]
+            },
+            "required": true,
+            "name": "channel",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "channel": {
+                        "type": "string",
+                        "enum": [
+                          "smtp"
+                        ]
+                      },
+                      "host": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 255
+                      },
+                      "port": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 65535
+                      },
+                      "secure": {
+                        "type": "boolean"
+                      },
+                      "username": {
+                        "type": "string",
+                        "nullable": true,
+                        "maxLength": 255
+                      },
+                      "password": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 1000
+                      },
+                      "from_email": {
+                        "type": "string",
+                        "format": "email"
+                      },
+                      "from_name": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 120
+                      },
+                      "reply_to": {
+                        "type": "string",
+                        "nullable": true,
+                        "format": "email"
+                      },
+                      "max_per_minute": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 1000,
+                        "default": 60
+                      }
+                    },
+                    "required": [
+                      "channel",
+                      "host",
+                      "port",
+                      "secure",
+                      "from_email",
+                      "from_name"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "channel": {
+                        "type": "string",
+                        "enum": [
+                          "apns"
+                        ]
+                      },
+                      "team_id": {
+                        "type": "string",
+                        "pattern": "^[A-Z0-9]{10}$"
+                      },
+                      "key_id": {
+                        "type": "string",
+                        "pattern": "^[A-Z0-9]{10}$"
+                      },
+                      "bundle_id": {
+                        "type": "string",
+                        "minLength": 3,
+                        "maxLength": 155,
+                        "pattern": "^[A-Za-z0-9.-]+$"
+                      },
+                      "environment": {
+                        "type": "string",
+                        "enum": [
+                          "production",
+                          "sandbox"
+                        ]
+                      },
+                      "private_key": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 10000
+                      }
+                    },
+                    "required": [
+                      "channel",
+                      "team_id",
+                      "key_id",
+                      "bundle_id",
+                      "environment"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "channel": {
+                        "type": "string",
+                        "enum": [
+                          "fcm"
+                        ]
+                      },
+                      "service_account_json": {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 20000
+                      }
+                    },
+                    "required": [
+                      "channel"
+                    ],
+                    "additionalProperties": false
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "channel": {
+                        "type": "string",
+                        "enum": [
+                          "webpush"
+                        ]
+                      },
+                      "subject": {
+                        "type": "string",
+                        "pattern": "^(mailto:\\S+@\\S+|https:\\/\\/\\S+)$"
+                      },
+                      "generate_keys": {
+                        "type": "boolean",
+                        "default": false
+                      },
+                      "public_key": {
+                        "type": "string",
+                        "minLength": 10,
+                        "maxLength": 200
+                      },
+                      "private_key": {
+                        "type": "string",
+                        "minLength": 10,
+                        "maxLength": 200
+                      }
+                    },
+                    "required": [
+                      "channel",
+                      "subject"
+                    ],
+                    "additionalProperties": false
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ChannelStatus"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Admin",
+          "Messaging"
+        ],
+        "summary": "Pause / resume a connected channel",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "smtp",
+                "apns",
+                "fcm",
+                "webpush"
+              ]
+            },
+            "required": true,
+            "name": "channel",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "enabled": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "enabled"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ChannelStatus"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Admin",
+          "Messaging"
+        ],
+        "summary": "Disconnect a channel and delete its secret from Vault",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "smtp",
+                "apns",
+                "fcm",
+                "webpush"
+              ]
+            },
+            "required": true,
+            "name": "channel",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "removed": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "removed"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/messaging/channels/{channel}/test": {
+      "post": {
+        "tags": [
+          "Admin",
+          "Messaging"
+        ],
+        "summary": "Test a channel: email to yourself, or push to your own devices (credential check when you have none)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "smtp",
+                "apns",
+                "fcm",
+                "webpush"
+              ]
+            },
+            "required": true,
+            "name": "channel",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "to": {
+                    "type": "string",
+                    "format": "email"
+                  },
+                  "device_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                },
+                "default": {},
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ChannelTestResult"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/messaging/jobs": {
+      "get": {
+        "tags": [
+          "Admin",
+          "Messaging"
+        ],
+        "summary": "Background job dispatch (scheduled sends) status",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/JobsStatus"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Admin",
+          "Messaging"
+        ],
+        "summary": "Enable background jobs / set the dispatch URL (audited)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "dispatch_url": {
+                    "type": "string",
+                    "nullable": true,
+                    "format": "uri",
+                    "pattern": "^https?:\\/\\/"
+                  },
+                  "enabled": {
+                    "type": "boolean"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/JobsStatus"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/campaigns": {
+      "get": {
+        "tags": [
+          "Admin",
+          "Messaging"
+        ],
+        "summary": "Announcements and direct notifications, newest first, with delivery stats",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            },
+            "required": false,
+            "name": "page",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            },
+            "required": false,
+            "name": "pageSize",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "draft",
+                "scheduled",
+                "sending",
+                "sent",
+                "cancelled",
+                "failed"
+              ]
+            },
+            "required": false,
+            "name": "status",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "announcement",
+                "direct"
+              ]
+            },
+            "required": false,
+            "name": "kind",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Campaign"
+                      }
+                    },
+                    "meta": {
+                      "type": "object",
+                      "properties": {
+                        "page": {
+                          "type": "integer"
+                        },
+                        "pageSize": {
+                          "type": "integer"
+                        },
+                        "total": {
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "page",
+                        "pageSize",
+                        "total"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "meta"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Admin",
+          "Messaging"
+        ],
+        "summary": "Create a draft (push implies in-app)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120
+                  },
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "announcement",
+                      "direct"
+                    ],
+                    "default": "announcement"
+                  },
+                  "channels": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "in_app",
+                        "push",
+                        "email"
+                      ]
+                    },
+                    "minItems": 1,
+                    "maxItems": 3
+                  },
+                  "platforms": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "ios",
+                        "android",
+                        "web"
+                      ]
+                    },
+                    "minItems": 1,
+                    "maxItems": 3,
+                    "default": [
+                      "ios",
+                      "android",
+                      "web"
+                    ]
+                  },
+                  "audience": {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "all"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "type"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "role"
+                            ]
+                          },
+                          "role": {
+                            "type": "string",
+                            "enum": [
+                              "booker",
+                              "host",
+                              "admin"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "role"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "users"
+                            ]
+                          },
+                          "user_ids": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "format": "uuid"
+                            },
+                            "minItems": 1,
+                            "maxItems": 5000
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "user_ids"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "platform_users"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "type"
+                        ],
+                        "additionalProperties": false
+                      }
+                    ]
+                  },
+                  "title": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120
+                  },
+                  "body": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1000
+                  },
+                  "link_url": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 500,
+                    "pattern": "^(https:\\/\\/|prodbnb:\\/\\/)\\S+$"
+                  },
+                  "email_subject": {
+                    "type": "string",
+                    "nullable": true,
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "email_body": {
+                    "type": "string",
+                    "nullable": true,
+                    "minLength": 1,
+                    "maxLength": 50000
+                  }
+                },
+                "required": [
+                  "name",
+                  "channels",
+                  "audience",
+                  "title",
+                  "body"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Campaign"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/campaigns/audience-preview": {
+      "post": {
+        "tags": [
+          "Admin",
+          "Messaging"
+        ],
+        "summary": "How many people / emails / devices an audience reaches",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "audience": {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "all"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "type"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "role"
+                            ]
+                          },
+                          "role": {
+                            "type": "string",
+                            "enum": [
+                              "booker",
+                              "host",
+                              "admin"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "role"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "users"
+                            ]
+                          },
+                          "user_ids": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "format": "uuid"
+                            },
+                            "minItems": 1,
+                            "maxItems": 5000
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "user_ids"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "platform_users"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "type"
+                        ],
+                        "additionalProperties": false
+                      }
+                    ]
+                  },
+                  "platforms": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "ios",
+                        "android",
+                        "web"
+                      ]
+                    },
+                    "minItems": 1,
+                    "maxItems": 3,
+                    "default": [
+                      "ios",
+                      "android",
+                      "web"
+                    ]
+                  }
+                },
+                "required": [
+                  "audience"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AudiencePreview"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/campaigns/test": {
+      "post": {
+        "tags": [
+          "Admin",
+          "Messaging"
+        ],
+        "summary": "Send the content to yourself only (your email and your own devices)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "channels": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "in_app",
+                        "push",
+                        "email"
+                      ]
+                    },
+                    "minItems": 1,
+                    "maxItems": 3
+                  },
+                  "platforms": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "ios",
+                        "android",
+                        "web"
+                      ]
+                    },
+                    "minItems": 1,
+                    "maxItems": 3,
+                    "default": [
+                      "ios",
+                      "android",
+                      "web"
+                    ]
+                  },
+                  "title": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120
+                  },
+                  "body": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1000
+                  },
+                  "link_url": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 500,
+                    "pattern": "^(https:\\/\\/|prodbnb:\\/\\/)\\S+$"
+                  },
+                  "email_subject": {
+                    "type": "string",
+                    "nullable": true,
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "email_body": {
+                    "type": "string",
+                    "nullable": true,
+                    "minLength": 1,
+                    "maxLength": 50000
+                  }
+                },
+                "required": [
+                  "channels",
+                  "title",
+                  "body"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "push": {
+                          "type": "object",
+                          "properties": {
+                            "outcome": {
+                              "type": "string"
+                            },
+                            "sent": {
+                              "type": "integer"
+                            },
+                            "failed": {
+                              "type": "integer"
+                            }
+                          },
+                          "required": [
+                            "outcome",
+                            "sent",
+                            "failed"
+                          ]
+                        },
+                        "email": {
+                          "$ref": "#/components/schemas/ChannelTestResult"
+                        }
+                      }
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/campaigns/{campaignId}": {
+      "get": {
+        "tags": [
+          "Admin",
+          "Messaging"
+        ],
+        "summary": "One campaign with live stats",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "campaignId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Campaign"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Admin",
+          "Messaging"
+        ],
+        "summary": "Edit a draft or scheduled campaign",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "campaignId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120
+                  },
+                  "channels": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "in_app",
+                        "push",
+                        "email"
+                      ]
+                    },
+                    "minItems": 1,
+                    "maxItems": 3
+                  },
+                  "platforms": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "ios",
+                        "android",
+                        "web"
+                      ]
+                    },
+                    "minItems": 1,
+                    "maxItems": 3
+                  },
+                  "audience": {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "all"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "type"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "role"
+                            ]
+                          },
+                          "role": {
+                            "type": "string",
+                            "enum": [
+                              "booker",
+                              "host",
+                              "admin"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "role"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "users"
+                            ]
+                          },
+                          "user_ids": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "format": "uuid"
+                            },
+                            "minItems": 1,
+                            "maxItems": 5000
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "user_ids"
+                        ],
+                        "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "platform_users"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "type"
+                        ],
+                        "additionalProperties": false
+                      }
+                    ]
+                  },
+                  "title": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120
+                  },
+                  "body": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1000
+                  },
+                  "link_url": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 500,
+                    "pattern": "^(https:\\/\\/|prodbnb:\\/\\/)\\S+$"
+                  },
+                  "email_subject": {
+                    "type": "string",
+                    "nullable": true,
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "email_body": {
+                    "type": "string",
+                    "nullable": true,
+                    "minLength": 1,
+                    "maxLength": 50000
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Campaign"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Admin",
+          "Messaging"
+        ],
+        "summary": "Delete a draft",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "campaignId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "deleted": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "deleted"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/campaigns/{campaignId}/send": {
+      "post": {
+        "tags": [
+          "Admin",
+          "Messaging"
+        ],
+        "summary": "Send now (processes a first batch inline) or schedule (audited)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "campaignId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "scheduled_at": {
+                    "type": "string",
+                    "format": "date-time"
+                  }
+                },
+                "default": {},
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Campaign"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/campaigns/{campaignId}/cancel": {
+      "post": {
+        "tags": [
+          "Admin",
+          "Messaging"
+        ],
+        "summary": "Stop a draft / scheduled / sending campaign (audited)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "campaignId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Campaign"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/campaigns/{campaignId}/process": {
+      "post": {
+        "tags": [
+          "Admin",
+          "Messaging"
+        ],
+        "summary": "Advance a sending campaign by one batch (the campaign page polls this)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "campaignId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Campaign"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/campaigns/{campaignId}/recipients": {
+      "get": {
+        "tags": [
+          "Admin",
+          "Messaging"
+        ],
+        "summary": "Per-recipient delivery outcome",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "campaignId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            },
+            "required": false,
+            "name": "page",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            },
+            "required": false,
+            "name": "pageSize",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "failed",
+                "pending"
+              ],
+              "default": "all"
+            },
+            "required": false,
+            "name": "filter",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/CampaignRecipient"
+                      }
+                    },
+                    "meta": {
+                      "type": "object",
+                      "properties": {
+                        "page": {
+                          "type": "integer"
+                        },
+                        "pageSize": {
+                          "type": "integer"
+                        },
+                        "total": {
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "page",
+                        "pageSize",
+                        "total"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "meta"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/platforms": {
+      "get": {
+        "tags": [
+          "Admin",
+          "Platforms"
+        ],
+        "summary": "Platforms, feature flags, incidents, releases, versions in use and health signals",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PlatformsOverview"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/platforms/{platform}": {
+      "patch": {
+        "tags": [
+          "Admin",
+          "Platforms"
+        ],
+        "summary": "Status, versions, update prompts, maintenance mode (super admin; audited)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "ios",
+                "android",
+                "web"
+              ]
+            },
+            "required": true,
+            "name": "platform",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "display_name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 60
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "not_launched",
+                      "in_development",
+                      "beta",
+                      "live",
+                      "maintenance",
+                      "deprecated"
+                    ]
+                  },
+                  "live_version": {
+                    "type": "string",
+                    "nullable": true,
+                    "pattern": "^\\d+(\\.\\d+){0,3}$"
+                  },
+                  "latest_version": {
+                    "type": "string",
+                    "nullable": true,
+                    "pattern": "^\\d+(\\.\\d+){0,3}$"
+                  },
+                  "min_supported_version": {
+                    "type": "string",
+                    "nullable": true,
+                    "pattern": "^\\d+(\\.\\d+){0,3}$"
+                  },
+                  "store_url": {
+                    "type": "string",
+                    "nullable": true,
+                    "format": "uri",
+                    "pattern": "^https:\\/\\/"
+                  },
+                  "update_message": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 300
+                  },
+                  "force_update_message": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 300
+                  },
+                  "maintenance_mode": {
+                    "type": "boolean"
+                  },
+                  "maintenance_message": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 300
+                  },
+                  "notes": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 5000
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AppPlatform"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/feature-flags": {
+      "post": {
+        "tags": [
+          "Admin",
+          "Platforms"
+        ],
+        "summary": "Create a feature flag",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "key": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9_.-]{1,63}$"
+                  },
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120
+                  },
+                  "description": {
+                    "type": "string",
+                    "maxLength": 1000,
+                    "default": ""
+                  },
+                  "targets": {
+                    "type": "object",
+                    "properties": {
+                      "ios": {
+                        "type": "object",
+                        "properties": {
+                          "enabled": {
+                            "type": "boolean"
+                          },
+                          "min_version": {
+                            "type": "string",
+                            "nullable": true,
+                            "pattern": "^\\d+(\\.\\d+){0,3}$"
+                          }
+                        },
+                        "required": [
+                          "enabled"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "android": {
+                        "type": "object",
+                        "properties": {
+                          "enabled": {
+                            "type": "boolean"
+                          },
+                          "min_version": {
+                            "type": "string",
+                            "nullable": true,
+                            "pattern": "^\\d+(\\.\\d+){0,3}$"
+                          }
+                        },
+                        "required": [
+                          "enabled"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "web": {
+                        "type": "object",
+                        "properties": {
+                          "enabled": {
+                            "type": "boolean"
+                          },
+                          "min_version": {
+                            "type": "string",
+                            "nullable": true,
+                            "pattern": "^\\d+(\\.\\d+){0,3}$"
+                          }
+                        },
+                        "required": [
+                          "enabled"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "default": {},
+                    "additionalProperties": false
+                  }
+                },
+                "required": [
+                  "key",
+                  "name"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/FeatureFlag"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/feature-flags/{flagId}": {
+      "patch": {
+        "tags": [
+          "Admin",
+          "Platforms"
+        ],
+        "summary": "Edit a feature flag's targets",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "flagId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 120
+                  },
+                  "description": {
+                    "type": "string",
+                    "maxLength": 1000
+                  },
+                  "targets": {
+                    "type": "object",
+                    "properties": {
+                      "ios": {
+                        "type": "object",
+                        "properties": {
+                          "enabled": {
+                            "type": "boolean"
+                          },
+                          "min_version": {
+                            "type": "string",
+                            "nullable": true,
+                            "pattern": "^\\d+(\\.\\d+){0,3}$"
+                          }
+                        },
+                        "required": [
+                          "enabled"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "android": {
+                        "type": "object",
+                        "properties": {
+                          "enabled": {
+                            "type": "boolean"
+                          },
+                          "min_version": {
+                            "type": "string",
+                            "nullable": true,
+                            "pattern": "^\\d+(\\.\\d+){0,3}$"
+                          }
+                        },
+                        "required": [
+                          "enabled"
+                        ],
+                        "additionalProperties": false
+                      },
+                      "web": {
+                        "type": "object",
+                        "properties": {
+                          "enabled": {
+                            "type": "boolean"
+                          },
+                          "min_version": {
+                            "type": "string",
+                            "nullable": true,
+                            "pattern": "^\\d+(\\.\\d+){0,3}$"
+                          }
+                        },
+                        "required": [
+                          "enabled"
+                        ],
+                        "additionalProperties": false
+                      }
+                    },
+                    "additionalProperties": false
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/FeatureFlag"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Admin",
+          "Platforms"
+        ],
+        "summary": "Delete a feature flag",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "flagId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "deleted": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "deleted"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/incidents": {
+      "post": {
+        "tags": [
+          "Admin",
+          "Platforms"
+        ],
+        "summary": "Open an incident (public ones appear in /v1/app-config for the affected platforms)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 160
+                  },
+                  "summary": {
+                    "type": "string",
+                    "maxLength": 1000,
+                    "default": ""
+                  },
+                  "severity": {
+                    "type": "string",
+                    "enum": [
+                      "minor",
+                      "major",
+                      "critical"
+                    ],
+                    "default": "minor"
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "investigating",
+                      "identified",
+                      "monitoring",
+                      "resolved"
+                    ],
+                    "default": "investigating"
+                  },
+                  "platforms": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "ios",
+                        "android",
+                        "web",
+                        "backend",
+                        "admin"
+                      ]
+                    },
+                    "minItems": 1,
+                    "maxItems": 5
+                  },
+                  "is_public": {
+                    "type": "boolean",
+                    "default": false
+                  },
+                  "message": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 2000
+                  }
+                },
+                "required": [
+                  "title",
+                  "platforms"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "title": {
+                          "type": "string"
+                        },
+                        "summary": {
+                          "type": "string"
+                        },
+                        "severity": {
+                          "type": "string",
+                          "enum": [
+                            "minor",
+                            "major",
+                            "critical"
+                          ]
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "investigating",
+                            "identified",
+                            "monitoring",
+                            "resolved"
+                          ]
+                        },
+                        "platforms": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "enum": [
+                              "ios",
+                              "android",
+                              "web",
+                              "backend",
+                              "admin"
+                            ]
+                          }
+                        },
+                        "is_public": {
+                          "type": "boolean"
+                        },
+                        "started_at": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "resolved_at": {
+                          "type": "string",
+                          "nullable": true,
+                          "format": "date-time"
+                        },
+                        "created_by": {
+                          "type": "string",
+                          "nullable": true,
+                          "format": "uuid"
+                        },
+                        "created_at": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "updated_at": {
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "title",
+                        "summary",
+                        "severity",
+                        "status",
+                        "platforms",
+                        "is_public",
+                        "started_at",
+                        "resolved_at",
+                        "created_by",
+                        "created_at",
+                        "updated_at"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/incidents/{incidentId}": {
+      "patch": {
+        "tags": [
+          "Admin",
+          "Platforms"
+        ],
+        "summary": "Update an incident; `message` adds a timeline entry",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "incidentId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 160
+                  },
+                  "summary": {
+                    "type": "string",
+                    "maxLength": 1000
+                  },
+                  "severity": {
+                    "type": "string",
+                    "enum": [
+                      "minor",
+                      "major",
+                      "critical"
+                    ]
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "investigating",
+                      "identified",
+                      "monitoring",
+                      "resolved"
+                    ]
+                  },
+                  "platforms": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "ios",
+                        "android",
+                        "web",
+                        "backend",
+                        "admin"
+                      ]
+                    },
+                    "minItems": 1,
+                    "maxItems": 5
+                  },
+                  "is_public": {
+                    "type": "boolean"
+                  },
+                  "message": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 2000
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "title": {
+                          "type": "string"
+                        },
+                        "summary": {
+                          "type": "string"
+                        },
+                        "severity": {
+                          "type": "string",
+                          "enum": [
+                            "minor",
+                            "major",
+                            "critical"
+                          ]
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "investigating",
+                            "identified",
+                            "monitoring",
+                            "resolved"
+                          ]
+                        },
+                        "platforms": {
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "enum": [
+                              "ios",
+                              "android",
+                              "web",
+                              "backend",
+                              "admin"
+                            ]
+                          }
+                        },
+                        "is_public": {
+                          "type": "boolean"
+                        },
+                        "started_at": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "resolved_at": {
+                          "type": "string",
+                          "nullable": true,
+                          "format": "date-time"
+                        },
+                        "created_by": {
+                          "type": "string",
+                          "nullable": true,
+                          "format": "uuid"
+                        },
+                        "created_at": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "updated_at": {
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "title",
+                        "summary",
+                        "severity",
+                        "status",
+                        "platforms",
+                        "is_public",
+                        "started_at",
+                        "resolved_at",
+                        "created_by",
+                        "created_at",
+                        "updated_at"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/releases": {
+      "post": {
+        "tags": [
+          "Admin",
+          "Platforms"
+        ],
+        "summary": "Plan a release",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "platform": {
+                    "type": "string",
+                    "enum": [
+                      "ios",
+                      "android",
+                      "web",
+                      "backend",
+                      "admin"
+                    ]
+                  },
+                  "version": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 32
+                  },
+                  "title": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 160
+                  },
+                  "notes": {
+                    "type": "string",
+                    "maxLength": 10000,
+                    "default": ""
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "planned",
+                      "in_progress",
+                      "in_review",
+                      "released",
+                      "cancelled"
+                    ],
+                    "default": "planned"
+                  },
+                  "target_date": {
+                    "type": "string",
+                    "nullable": true,
+                    "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                  },
+                  "feature_keys": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 64
+                    },
+                    "maxItems": 50,
+                    "default": []
+                  },
+                  "promote_to_live": {
+                    "type": "boolean",
+                    "default": false
+                  }
+                },
+                "required": [
+                  "platform",
+                  "version",
+                  "title"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ReleasePlan"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/releases/{releaseId}": {
+      "patch": {
+        "tags": [
+          "Admin",
+          "Platforms"
+        ],
+        "summary": "Update a release; promote_to_live sets the platform's live/latest version when released",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "releaseId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "version": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 32
+                  },
+                  "title": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 160
+                  },
+                  "notes": {
+                    "type": "string",
+                    "maxLength": 10000
+                  },
+                  "status": {
+                    "type": "string",
+                    "enum": [
+                      "planned",
+                      "in_progress",
+                      "in_review",
+                      "released",
+                      "cancelled"
+                    ]
+                  },
+                  "target_date": {
+                    "type": "string",
+                    "nullable": true,
+                    "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                  },
+                  "feature_keys": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 64
+                    },
+                    "maxItems": 50
+                  },
+                  "promote_to_live": {
+                    "type": "boolean",
+                    "default": false
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ReleasePlan"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Admin",
+          "Platforms"
+        ],
+        "summary": "Delete a release plan",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "releaseId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "deleted": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "deleted"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "data"
                   ]
                 }
               }

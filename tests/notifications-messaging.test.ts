@@ -363,7 +363,7 @@ describe("Phase 27-8: message notifications", () => {
     it("disabling messages does not disable booking or payment", async () => {
       await request(app).patch("/v1/notification-preferences").set(authHeader(host)).send({ message: false });
       const res = await request(app).get("/v1/notification-preferences").set(authHeader(host));
-      expect(res.body.data).toEqual({ booking: true, payment: true, message: false });
+      expect(res.body.data).toEqual({ booking: true, payment: true, message: false, announcement: true });
     });
   });
 

@@ -8,6 +8,7 @@ import {
   PreferenceCategory,
 } from "./notification.schema";
 import { isPushEnabled } from "./preferences.service";
+import { DevicePlatform } from "../devices/device.schema";
 import { getNotificationProvider } from "./providers";
 
 const UNIQUE_VIOLATION = "23505";
@@ -43,6 +44,7 @@ const TYPE_CATEGORY: Record<NotificationType, PreferenceCategory> = {
   payment_failed: "payment",
   refund_processed: "payment",
   new_message: "message",
+  announcement: "announcement",
 };
 
 interface NotifyParams {
@@ -109,31 +111,99 @@ async function notify(params: NotifyParams): Promise<void> {
   await deliverPush(data as NotificationDetail);
 }
 
-async function deliverPush(notification: NotificationDetail): Promise<void> {
+/**
+ * Admin Console 2: create (or find, on a retry) one recipient's announcement row. Idempotent on
+ * `campaign:<id>:announcement`, so a dispatcher that dies after inserting but before recording
+ * success re-finds the same row instead of creating a second one.
+ */
+export async function createAnnouncementNotification(params: {
+  userId: string;
+  campaignId: string;
+  title: string;
+  body: string;
+  linkUrl: string | null;
+}): Promise<NotificationDetail> {
+  const sourceEventId = `campaign:${params.campaignId}:announcement`;
+  const { data, error } = await adminClient
+    .from("notifications")
+    .insert({
+      user_id: params.userId,
+      type: "announcement",
+      title: params.title,
+      body: params.body,
+      entity_type: "announcement",
+      entity_id: params.campaignId,
+      data: params.linkUrl ? { link_url: params.linkUrl } : {},
+      source_event_id: sourceEventId,
+    })
+    .select(NOTIFICATION_COLUMNS)
+    .single();
+  if (!error) {
+    return data as NotificationDetail;
+  }
+  if (error.code !== UNIQUE_VIOLATION) {
+    throw error;
+  }
+  const { data: existing, error: readError } = await adminClient
+    .from("notifications")
+    .select(NOTIFICATION_COLUMNS)
+    .eq("user_id", params.userId)
+    .eq("source_event_id", sourceEventId)
+    .single();
+  if (readError) {
+    throw readError;
+  }
+  return existing as NotificationDetail;
+}
+
+export interface PushFanOutResult {
+  /** `opted_out`: the recipient turned this category off. `no_devices`: nothing registered. */
+  outcome: "delivered" | "opted_out" | "no_devices";
+  sent: number;
+  failed: number;
+}
+
+/**
+ * Push fan-out to every active device of the notification's recipient, each through the provider
+ * for ITS platform (Admin Console 2: iOS -> APNs, Android -> FCM, web -> Web Push; a platform with
+ * no connected provider records an honest 'skipped'). `platforms` narrows the fan-out -- an
+ * announcement aimed at iOS only never touches the same user's Android phone.
+ *
+ * Exported for the campaign dispatcher; every transactional caller still goes through notify().
+ */
+export async function deliverPush(
+  notification: NotificationDetail,
+  options: { platforms?: readonly string[] } = {}
+): Promise<PushFanOutResult> {
   const category = TYPE_CATEGORY[notification.type as NotificationType];
   const pushEnabled = await isPushEnabled(notification.user_id, category);
   if (!pushEnabled) {
-    return; // suppresses the push attempt only -- the notification row above already exists
+    return { outcome: "opted_out", sent: 0, failed: 0 }; // the notification row above already exists
   }
 
-  const { data: devices, error } = await adminClient
+  let query = adminClient
     .from("user_devices")
-    .select("id, device_token, environment")
+    .select("id, device_token, environment, platform, web_push_keys")
     .eq("user_id", notification.user_id)
     .eq("is_active", true);
+  if (options.platforms) {
+    query = query.in("platform", [...options.platforms]);
+  }
+  const { data: devices, error } = await query;
   if (error) {
     throw error;
   }
   if (!devices || devices.length === 0) {
-    return;
+    return { outcome: "no_devices", sent: 0, failed: 0 };
   }
 
-  const provider = getNotificationProvider();
   const data = pushDataFor(notification);
   // Messaging groups by conversation so a busy thread is one notification-centre
   // entry rather than thirty banners. Null for every other type, which keeps
   // their `aps` object byte-identical to Phase 8.
   const threadId = notification.entity_type === "conversation" ? notification.entity_id : null;
+  let sent = 0;
+  let failed = 0;
 
   for (const device of devices) {
     // ONE TRY PER DEVICE, deliberately.
@@ -145,6 +215,7 @@ async function deliverPush(notification: NotificationDetail): Promise<void> {
     // device's bookkeeping failure must never suppress another device's push,
     // and messaging is what makes multi-device fan-out routine rather than rare.
     try {
+      const provider = await getNotificationProvider(device.platform as DevicePlatform);
       const result = await provider.send({
         deviceToken: device.device_token,
         environment: (device.environment as "sandbox" | "production" | null) ?? null,
@@ -152,7 +223,13 @@ async function deliverPush(notification: NotificationDetail): Promise<void> {
         body: notification.body,
         data,
         threadId,
+        webPushKeys: (device.web_push_keys as { p256dh: string; auth: string } | null) ?? null,
       });
+      if (result.status === "sent") {
+        sent += 1;
+      } else if (result.status !== "skipped") {
+        failed += 1;
+      }
 
       // Logging is best-effort: losing the audit row is strictly better than
       // losing the delivery, and provider.send() has already happened by here.
@@ -178,9 +255,11 @@ async function deliverPush(notification: NotificationDetail): Promise<void> {
         }
       }
     } catch (err) {
+      failed += 1;
       console.error(`Push delivery failed for device ${device.id}:`, err);
     }
   }
+  return { outcome: "delivered", sent, failed };
 }
 
 /**
@@ -211,6 +290,13 @@ function pushDataFor(notification: NotificationDetail): Record<string, string> {
     const messageId = notification.data?.message_id;
     if (typeof messageId === "string") {
       data.prodbnb_message_id = messageId;
+    }
+  } else if (notification.entity_type === "announcement") {
+    // Admin Console 2. The client opens `prodbnb_link_url` when present, otherwise its inbox.
+    data.prodbnb_campaign_id = notification.entity_id;
+    const link = notification.data?.link_url;
+    if (typeof link === "string") {
+      data.prodbnb_link_url = link;
     }
   } else {
     data.prodbnb_booking_id = notification.entity_id;
@@ -429,7 +515,11 @@ export interface PaginatedNotifications {
   total: number;
 }
 
-export async function listNotifications(supabase: SupabaseClient, query: ListNotificationsQuery): Promise<PaginatedNotifications> {
+export async function listNotifications(
+  supabase: SupabaseClient,
+  query: ListNotificationsQuery,
+  options: { includeAnnouncements?: boolean } = {}
+): Promise<PaginatedNotifications> {
   const from = (query.page - 1) * query.pageSize;
   const to = from + query.pageSize - 1;
 
@@ -440,6 +530,12 @@ export async function listNotifications(supabase: SupabaseClient, query: ListNot
   let request = supabase.from("notifications").select(NOTIFICATION_COLUMNS, { count: "exact" }).is("deleted_at", null);
   if (query.unread === true) {
     request = request.is("read_at", null);
+  }
+  // Admin Console 2: the iOS build in the field rejects the WHOLE list if it meets a type it does
+  // not know (NotificationDTO.toNotification throws). Announcements are therefore only listed --
+  // and only counted in the badge -- for a client that says it understands them.
+  if (!options.includeAnnouncements) {
+    request = request.neq("type", "announcement");
   }
 
   const { data, error, count } = await request.order("created_at", { ascending: false }).range(from, to);

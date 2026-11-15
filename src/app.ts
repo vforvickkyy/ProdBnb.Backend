@@ -6,6 +6,9 @@ import { anonClient } from "./lib/supabase";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler";
 import { generalLimiter } from "./middleware/rateLimit";
 import { adminRouter } from "./modules/admin/admin.routes";
+import { collectionsRouter } from "./modules/collections/collections.routes";
+import { publicOutreachRouter } from "./modules/outreach/outreach.routes";
+import { publicPlatformsRouter } from "./modules/platform/releases.routes";
 import { availabilityRouter } from "./modules/availability/availability.routes";
 import { billingRouter } from "./modules/billing/billing.routes";
 import { bookingsRouter } from "./modules/bookings/bookings.routes";
@@ -123,6 +126,9 @@ export function createApp(): Express {
   // request path doesn't match its mount prefix.
   app.use("/v1/admin", adminRouter);
   app.use("/v1", catalogRouter);
+  app.use("/v1", collectionsRouter);
+  app.use("/v1", publicOutreachRouter);
+  app.use("/v1", publicPlatformsRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

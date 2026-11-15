@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { updateLocationSchema } from "../locations/locations.schema";
+import { createLocationSchema, updateLocationSchema } from "../locations/locations.schema";
 
 const uuid = z.string().uuid();
 
@@ -99,9 +99,50 @@ export const auditActionSchema = z.enum([
   "ADMIN_SET_TEAM_ROLE",
   "ADMIN_REMOVED_TEAM_MEMBER",
   "ADMIN_UPDATED_SETTINGS",
+  // Admin Console 2 (migration 20261115140000_admin_console_2_audit_vocabulary.sql)
+  "ADMIN_CREATED_LOCATION",
+  "ADMIN_UPLOADED_MEDIA",
+  "ADMIN_REORDERED_MEDIA",
+  "ADMIN_UPDATED_PRICING",
+  "ADMIN_UPDATED_AVAILABILITY",
+  "ADMIN_UPDATED_SECTION",
+  "ADMIN_UPDATED_CATALOG_LISTINGS",
+  "ADMIN_UPDATED_CATALOG_COVER",
+  "ADMIN_CREATED_COLLECTION",
+  "ADMIN_UPDATED_COLLECTION",
+  "ADMIN_DELETED_COLLECTION",
+  "ADMIN_SENT_CAMPAIGN",
+  "ADMIN_CANCELLED_CAMPAIGN",
+  "ADMIN_CONNECTED_CHANNEL",
+  "ADMIN_DISCONNECTED_CHANNEL",
+  "ADMIN_UPDATED_JOBS_CONFIG",
+  "ADMIN_UPDATED_PLATFORM",
+  "ADMIN_UPDATED_FEATURE_FLAG",
+  "ADMIN_DELETED_FEATURE_FLAG",
+  "ADMIN_CREATED_INCIDENT",
+  "ADMIN_UPDATED_INCIDENT",
+  "ADMIN_CREATED_RELEASE",
+  "ADMIN_UPDATED_RELEASE",
+  "ADMIN_DELETED_RELEASE",
 ]);
 
-export const auditTargetTypeSchema = z.enum(["location", "user", "booking", "payment", "media", "section", "catalog_item", "settings"]);
+export const auditTargetTypeSchema = z.enum([
+  "location",
+  "user",
+  "booking",
+  "payment",
+  "media",
+  "section",
+  "catalog_item",
+  "settings",
+  "collection",
+  "campaign",
+  "channel",
+  "platform",
+  "feature_flag",
+  "incident",
+  "release",
+]);
 
 export const auditLogQuerySchema = z
   .object({
@@ -172,8 +213,52 @@ export const catalogKindParamSchema = z.object({ kind: catalogKindSchema });
 export type CatalogKindParam = z.infer<typeof catalogKindParamSchema>;
 export const catalogItemParamSchema = z.object({ kind: catalogKindSchema, itemId: uuid });
 export type CatalogItemParam = z.infer<typeof catalogItemParamSchema>;
-export const catalogNameSchema = z.object({ name: z.string().trim().min(1).max(80) }).strict();
+const catalogDescription = z.string().trim().max(500).nullable();
+
+export const catalogNameSchema = z
+  .object({ name: z.string().trim().min(1).max(80), description: catalogDescription.optional() })
+  .strict();
 export type CatalogNameInput = z.infer<typeof catalogNameSchema>;
+
+export const catalogUpdateSchema = z
+  .object({ name: z.string().trim().min(1).max(80).optional(), description: catalogDescription.optional() })
+  .strict()
+  .refine((d) => d.name !== undefined || d.description !== undefined, { message: "Provide name and/or description." });
+export type CatalogUpdateInput = z.infer<typeof catalogUpdateSchema>;
+
+// -- Cover images (catalog items + collections) ------------------------------------
+
+export const coverUploadRequestSchema = z
+  .object({
+    content_type: z.enum(["image/jpeg", "image/png", "image/webp"]),
+    size_bytes: z.number().int().positive(),
+  })
+  .strict();
+export type CoverUploadRequestInput = z.infer<typeof coverUploadRequestSchema>;
+
+export const coverCompleteSchema = z.object({ storage_key: z.string().min(1).max(300) }).strict();
+export type CoverCompleteInput = z.infer<typeof coverCompleteSchema>;
+
+// -- Listings inside a catalog item ---------------------------------------------------
+
+export const catalogListingsQuerySchema = z.object({ page, pageSize });
+export type CatalogListingsQuery = z.infer<typeof catalogListingsQuerySchema>;
+
+export const locationIdsSchema = z
+  .object({ location_ids: z.array(uuid).min(1).max(100) })
+  .strict()
+  .refine((d) => new Set(d.location_ids).size === d.location_ids.length, {
+    message: "location_ids must not contain duplicates.",
+    path: ["location_ids"],
+  });
+export type LocationIdsInput = z.infer<typeof locationIdsSchema>;
+
+export const catalogListingParamSchema = z.object({
+  kind: z.enum(["categories", "amenities", "use-cases"]),
+  itemId: uuid,
+  locationId: uuid,
+});
+export type CatalogListingParam = z.infer<typeof catalogListingParamSchema>;
 
 // -- Listing moderation ----------------------------------------------------------
 
@@ -274,3 +359,77 @@ export type IntegrationsQuery = z.infer<typeof integrationsQuerySchema>;
 
 export const attentionQuerySchema = z.object({ page, pageSize });
 export type AttentionQuery = z.infer<typeof attentionQuerySchema>;
+
+// ============================================================================
+// Admin Console 2 -- listings created on a host's behalf
+// ============================================================================
+
+/**
+ * POST /v1/admin/locations. The host's own create body (derived, so the two cannot drift) plus who
+ * owns it and whether it goes live immediately.
+ */
+export const adminCreateLocationSchema = createLocationSchema
+  .extend({
+    host_id: uuid,
+    grant_host_role: z.boolean().default(false),
+    status: z.enum(["draft", "published"]).default("draft"),
+  })
+  .strict();
+export type AdminCreateLocationInput = z.infer<typeof adminCreateLocationSchema>;
+
+export const hostSearchQuerySchema = z.object({
+  search: z.string().trim().min(1).max(120),
+  limit: z.coerce.number().int().min(1).max(50).default(20),
+  hosts_only: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((v) => v === "true"),
+});
+export type HostSearchQuery = z.infer<typeof hostSearchQuerySchema>;
+
+// -- Collections -------------------------------------------------------------------------------
+
+const slugSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(80)
+  .regex(/^[a-z0-9]+(-[a-z0-9]+)*$/, "Lowercase letters, numbers and single hyphens only, e.g. beach-villas-goa.");
+
+export const collectionIdParamSchema = z.object({ collectionId: uuid });
+export type CollectionIdParam = z.infer<typeof collectionIdParamSchema>;
+
+export const collectionListingParamSchema = z.object({ collectionId: uuid, locationId: uuid });
+export type CollectionListingParam = z.infer<typeof collectionListingParamSchema>;
+
+export const collectionCreateSchema = z
+  .object({
+    title: z.string().trim().min(1).max(120),
+    slug: slugSchema,
+    description: z.string().trim().max(1000).default(""),
+    is_published: z.boolean().default(false),
+    position: z.number().int().min(0).max(10_000).default(0),
+  })
+  .strict();
+export type CollectionCreateInput = z.infer<typeof collectionCreateSchema>;
+
+export const collectionUpdateSchema = z
+  .object({
+    title: z.string().trim().min(1).max(120).optional(),
+    slug: slugSchema.optional(),
+    description: z.string().trim().max(1000).optional(),
+    is_published: z.boolean().optional(),
+    position: z.number().int().min(0).max(10_000).optional(),
+  })
+  .strict()
+  .refine((d) => Object.keys(d).length > 0, { message: "Provide at least one field to update." });
+export type CollectionUpdateInput = z.infer<typeof collectionUpdateSchema>;
+
+export const orderedLocationIdsSchema = z
+  .object({ ordered_ids: z.array(uuid).min(1).max(500) })
+  .strict()
+  .refine((d) => new Set(d.ordered_ids).size === d.ordered_ids.length, {
+    message: "ordered_ids must not contain duplicates.",
+    path: ["ordered_ids"],
+  });
+export type OrderedLocationIdsInput = z.infer<typeof orderedLocationIdsSchema>;

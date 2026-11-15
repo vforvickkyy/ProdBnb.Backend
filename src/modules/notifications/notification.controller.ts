@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import { clientInfo } from "../../lib/clientInfo";
 import { ok } from "../../utils/respond";
 import { ListNotificationsQuery, NotificationIdParam, UpdatePreferencesInput } from "./notification.schema";
 import {
@@ -12,7 +13,9 @@ import { getPreferences, updatePreferences } from "./preferences.service";
 
 export async function getNotifications(req: Request, res: Response): Promise<void> {
   const query = req.valid!.query as ListNotificationsQuery;
-  const { data, total } = await listNotifications(req.supabase!, query);
+  const { data, total } = await listNotifications(req.supabase!, query, {
+    includeAnnouncements: clientInfo(req).capabilities.has("announcements"),
+  });
   ok(res, data, 200, { page: query.page, pageSize: query.pageSize, total });
 }
 

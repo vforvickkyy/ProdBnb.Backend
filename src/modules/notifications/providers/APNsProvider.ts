@@ -48,24 +48,35 @@ function signApnsJwt(teamId: string, keyId: string, privateKeyPem: string): stri
 
 // Apple recommends reusing a provider token for up to ~1 hour rather than
 // signing a fresh one per request -- a small in-memory cache, not a queue.
-let cachedJwt: { token: string; issuedAt: number } | null = null;
-const JWT_MAX_AGE_MS = 50 * 60 * 1000;
-
-function getJwt(): string {
-  if (cachedJwt && Date.now() - cachedJwt.issuedAt < JWT_MAX_AGE_MS) {
-    return cachedJwt.token;
-  }
-  const token = signApnsJwt(requireConfig("APNS_TEAM_ID"), requireConfig("APNS_KEY_ID"), requireConfig("APNS_PRIVATE_KEY"));
-  cachedJwt = { token, issuedAt: Date.now() };
-  return token;
+/**
+ * Admin Console 2: credentials are an object rather than four env reads, so the same provider runs
+ * on either source -- the dashboard-connected key (Supabase Vault, `messaging_channels`) or the
+ * original APNS_* environment variables.
+ */
+export interface ApnsCredentials {
+  teamId: string;
+  keyId: string;
+  bundleId: string;
+  privateKey: string;
+  /** Host used for a device that did not record its own environment. */
+  defaultEnvironment: "sandbox" | "production";
 }
+
+export function apnsCredentialsFromEnv(): ApnsCredentials {
+  return {
+    teamId: requireConfig("APNS_TEAM_ID"),
+    keyId: requireConfig("APNS_KEY_ID"),
+    bundleId: requireConfig("APNS_BUNDLE_ID"),
+    privateKey: requireConfig("APNS_PRIVATE_KEY"),
+    defaultEnvironment: env.APNS_ENVIRONMENT,
+  };
+}
+
+const JWT_MAX_AGE_MS = 50 * 60 * 1000;
 
 function requireConfig(key: "APNS_TEAM_ID" | "APNS_KEY_ID" | "APNS_BUNDLE_ID" | "APNS_PRIVATE_KEY"): string {
   const value = env[key];
   if (!value) {
-    // env.ts's cross-field .refine() already prevents this in normal
-    // operation (NOTIFICATION_PROVIDER=apns requires all four) -- this is a
-    // defensive re-check, and gives TypeScript a non-optional return type.
     throw new Error(`${key} is required when NOTIFICATION_PROVIDER=apns.`);
   }
   return value;
@@ -86,18 +97,28 @@ export class APNsProvider implements NotificationProvider {
 
   /** The process-wide default, used when a device did not record its own environment. */
   private readonly defaultHost: string;
+  private readonly credentials: ApnsCredentials;
+  private cachedJwt: { token: string; issuedAt: number } | null = null;
 
-  constructor() {
-    const host = HOSTS[env.APNS_ENVIRONMENT];
+  // Fails fast at construction time (missing env config throws in apnsCredentialsFromEnv), not on
+  // the first send.
+  constructor(credentials: ApnsCredentials = apnsCredentialsFromEnv()) {
+    const host = HOSTS[credentials.defaultEnvironment];
     if (!host) {
-      throw new Error(`No APNs host configured for APNS_ENVIRONMENT='${env.APNS_ENVIRONMENT}'.`);
+      throw new Error(`No APNs host configured for environment '${credentials.defaultEnvironment}'.`);
     }
     this.defaultHost = host;
-    // Fail fast at construction time, not on the first send.
-    requireConfig("APNS_TEAM_ID");
-    requireConfig("APNS_KEY_ID");
-    requireConfig("APNS_BUNDLE_ID");
-    requireConfig("APNS_PRIVATE_KEY");
+    this.credentials = credentials;
+  }
+
+  /** Apple's provider token, re-signed every 50 minutes (Apple rejects tokens older than an hour). */
+  jwt(): string {
+    if (this.cachedJwt && Date.now() - this.cachedJwt.issuedAt < JWT_MAX_AGE_MS) {
+      return this.cachedJwt.token;
+    }
+    const token = signApnsJwt(this.credentials.teamId, this.credentials.keyId, this.credentials.privateKey);
+    this.cachedJwt = { token, issuedAt: Date.now() };
+    return token;
   }
 
   /**
@@ -142,8 +163,8 @@ export class APNsProvider implements NotificationProvider {
         const stream = session.request({
           ":method": "POST",
           ":path": `/3/device/${encodeURIComponent(input.deviceToken)}`,
-          authorization: `bearer ${getJwt()}`,
-          "apns-topic": requireConfig("APNS_BUNDLE_ID"),
+          authorization: `bearer ${this.jwt()}`,
+          "apns-topic": this.credentials.bundleId,
           "apns-push-type": "alert",
           "content-type": "application/json",
         });
@@ -191,9 +212,9 @@ export class APNsProvider implements NotificationProvider {
  * Proves the key, team id and key id are usable together; it cannot prove Apple will accept a
  * push (that needs a real device token). Never returns or logs the key or the token.
  */
-export function checkApnsSigning(): { ok: boolean; detail: string } {
+export function checkApnsSigning(credentials?: ApnsCredentials): { ok: boolean; detail: string } {
   try {
-    getJwt();
+    new APNsProvider(credentials ?? apnsCredentialsFromEnv()).jwt();
     return { ok: true, detail: "Provider token signed successfully with the configured key." };
   } catch (error) {
     return { ok: false, detail: error instanceof Error ? error.message.slice(0, 200) : "Signing failed." };

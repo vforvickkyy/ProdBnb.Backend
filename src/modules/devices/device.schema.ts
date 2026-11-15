@@ -16,8 +16,28 @@ export const registerDeviceSchema = z
     device_token: z.string().trim().min(1).max(4096),
     platform: devicePlatformSchema,
     environment: deviceEnvironmentSchema.optional(),
+    // Admin Console 2 -- both optional, so the iOS build in the field registers exactly as before.
+    app_version: z
+      .string()
+      .trim()
+      .regex(/^\d+(\.\d+){0,3}$/, "A version like 1.4.2.")
+      .max(32)
+      .optional(),
+    /** Web Push only: the PushSubscription's keys (device_token is its endpoint). */
+    web_push_keys: z
+      .object({ p256dh: z.string().min(10).max(200), auth: z.string().min(8).max(100) })
+      .strict()
+      .optional(),
   })
-  .strict();
+  .strict()
+  .refine((d) => d.platform !== "web" || d.web_push_keys !== undefined, {
+    message: "A web push registration needs web_push_keys (p256dh + auth) from the PushSubscription.",
+    path: ["web_push_keys"],
+  })
+  .refine((d) => d.platform !== "web" || /^https:\/\//.test(d.device_token), {
+    message: "For web, device_token is the PushSubscription endpoint (an https:// URL).",
+    path: ["device_token"],
+  });
 export type RegisterDeviceInput = z.infer<typeof registerDeviceSchema>;
 
 export const deviceIdParamSchema = z.object({ id: uuid });
