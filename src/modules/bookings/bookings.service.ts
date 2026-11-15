@@ -608,7 +608,7 @@ export async function listBookings(
   // PostgREST's anti-join) keeps only unpaid ones.
   if (query.payment_state === "paid") {
     select = `${select}, settled_payments:payments!inner ( id )`;
-  } else if (query.payment_state === "unpaid") {
+  } else if (query.payment_state === "unpaid" || query.payment_state === "unpaid_hold") {
     select = `${select}, settled_payments:payments ( id )`;
   }
   let request = supabase.from("bookings").select(select, { count: "exact" });
@@ -617,8 +617,11 @@ export async function listBookings(
   }
   if (query.payment_state) {
     request = request.in("settled_payments.status", SETTLED_PAYMENT_STATUSES);
-    if (query.payment_state === "unpaid") {
+    if (query.payment_state === "unpaid" || query.payment_state === "unpaid_hold") {
       request = request.is("settled_payments", null);
+    }
+    if (query.payment_state === "unpaid_hold") {
+      request = request.in("status", ["requested", "confirmed"]);
     }
   }
   if (query.location_id) {

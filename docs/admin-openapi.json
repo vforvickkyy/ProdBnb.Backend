@@ -3219,7 +3219,8 @@
               "type": "string",
               "enum": [
                 "paid",
-                "unpaid"
+                "unpaid",
+                "unpaid_hold"
               ]
             },
             "required": false,

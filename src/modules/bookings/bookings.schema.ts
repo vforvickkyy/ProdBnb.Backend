@@ -134,8 +134,10 @@ export const listBookingsQuerySchema = z
     // and this schema is deliberately not `.strict()`, so every existing caller is unaffected.
     sort: z.enum(["created_at_desc", "start_at_desc"]).default("created_at_desc"),
     // Admin Console. `paid` = has a settled payment (success / partially_refunded / refunded);
-    // `unpaid` = has none. Optional; omitting it leaves every existing caller's results unchanged.
-    payment_state: z.enum(["paid", "unpaid"]).optional(),
+    // `unpaid` = has none; `unpaid_hold` = has none AND is still requested/confirmed, i.e. is
+    // holding a slot right now (what unpaid-hold expiry acts on, and what the dashboard counts).
+    // Optional; omitting it leaves every existing caller's results unchanged.
+    payment_state: z.enum(["paid", "unpaid", "unpaid_hold"]).optional(),
     page: z.coerce.number().int().min(1).default(1),
     pageSize: z.coerce.number().int().min(1).max(100).default(20),
   })

@@ -139,7 +139,7 @@ Permission: `messages.access` (super admin, support). Participant RLS still has 
 | `POST /v1/admin/locations/:id/sections/:sectionId/remove` | locations.moderate | empty sections only; audited |
 | `GET/POST /v1/admin/catalog/:kind`, `PATCH/DELETE …/:itemId` | read: locations.view; write: catalog.manage | delete refused (409) while any listing uses it |
 | `POST /v1/admin/bookings/:id/confirm\|reject\|complete` | bookings.manage | thin wrappers, audited |
-| `GET /v1/admin/bookings?payment_state=paid\|unpaid` | bookings.view | admin rows add `hold_expires_at` |
+| `GET /v1/admin/bookings?payment_state=paid\|unpaid\|unpaid_hold` | bookings.view | `unpaid_hold` = unpaid and still holding its slot; admin rows add `hold_expires_at` |
 | `POST /v1/admin/payments/:id/verify` | payments.verify | re-asks Cashfree; audited |
 | `GET /v1/admin/payments/attention` | payments.view | settled payment + cancelled/rejected booking, not fully refunded |
 | `GET /v1/admin/analytics?from=&to=&bucket=&tz=` | analytics.view | one SQL function, India time by default |

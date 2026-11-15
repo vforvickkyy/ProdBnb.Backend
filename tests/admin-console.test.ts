@@ -412,6 +412,15 @@ describe("Admin Console", () => {
       expect(unpaidIds).not.toContain(paid.id);
       expect(paidIds).toContain(paid.id);
       expect(paidIds).not.toContain(unpaid.id);
+
+      // unpaid_hold = unpaid AND still holding the slot; a rejected unpaid booking is not a hold.
+      const rejected = await book(booker, locationId);
+      await adminClient.from("bookings").update({ status: "rejected" }).eq("id", rejected.id);
+      const holds = await request(app).get("/v1/admin/bookings").set(auth(support)).query({ location_id: locationId, payment_state: "unpaid_hold", pageSize: 100 });
+      const holdIds = holds.body.data.map((b: { id: string }) => b.id);
+      expect(holdIds).toContain(unpaid.id);
+      expect(holdIds).not.toContain(rejected.id);
+      expect(holdIds).not.toContain(paid.id);
     });
 
     it("support can confirm and complete on a host's behalf, audited; a moderator cannot", async () => {
