@@ -7,6 +7,7 @@ import { errorHandler, notFoundHandler } from "./middleware/errorHandler";
 import { generalLimiter } from "./middleware/rateLimit";
 import { adminRouter } from "./modules/admin/admin.routes";
 import { availabilityRouter } from "./modules/availability/availability.routes";
+import { billingRouter } from "./modules/billing/billing.routes";
 import { bookingsRouter } from "./modules/bookings/bookings.routes";
 import { catalogRouter } from "./modules/catalog/catalog.routes";
 import { devicesRouter } from "./modules/devices/device.routes";
@@ -103,6 +104,7 @@ export function createApp(): Express {
 
   app.use("/v1", usersRouter);
   app.use("/v1", rolesRouter);
+  app.use("/v1", billingRouter);
   app.use("/v1", locationsRouter);
   app.use("/v1", mediaRouter);
   app.use("/v1", sectionsRouter);

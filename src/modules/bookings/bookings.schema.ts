@@ -129,6 +129,10 @@ export const listBookingsQuerySchema = z
     // date, not when the row was inserted (Phase 14).
     start_after: offsetDateTime.optional(),
     start_before: offsetDateTime.optional(),
+    // Phase 29.14-D. The list is ordered newest-first by when the booking was MADE; this exists so
+    // a caller that wants the old shoot-date ordering can still ask for it. Optional with a default,
+    // and this schema is deliberately not `.strict()`, so every existing caller is unaffected.
+    sort: z.enum(["created_at_desc", "start_at_desc"]).default("created_at_desc"),
     page: z.coerce.number().int().min(1).default(1),
     pageSize: z.coerce.number().int().min(1).max(100).default(20),
   })

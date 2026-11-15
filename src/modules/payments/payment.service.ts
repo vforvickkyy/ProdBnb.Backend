@@ -4,7 +4,12 @@ import { env } from "../../config/env";
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from "../../errors/AppError";
 import { adminClient } from "../../lib/supabase";
 import { getBooking } from "../bookings/bookings.service";
-import { notifyPaymentFailed, notifyPaymentSuccess, notifyRefundProcessed } from "../notifications/notification.service";
+import {
+  notifyBookingRequestReceived,
+  notifyPaymentFailed,
+  notifyPaymentSuccess,
+  notifyRefundProcessed,
+} from "../notifications/notification.service";
 import { CreatePaymentInput, CreateRefundInput } from "./payment.schema";
 import { getPaymentProvider } from "./providers";
 import { FetchOrderResult, NormalizedPaymentStatus, NormalizedWebhookEvent } from "./providers/PaymentProvider";
@@ -58,6 +63,26 @@ function nextPaymentStatus(current: string, incoming: NormalizedPaymentStatus): 
     return current as NormalizedPaymentStatus;
   }
   return incoming;
+}
+
+/**
+ * The host who owns the location this booking is for (Phase 29.14-D).
+ *
+ * On `adminClient` for the same reason `getBookerId` is: raising the host's booking request is a
+ * server-side consequence of a settled payment, not something scoped to whoever happened to trigger
+ * the webhook -- Cashfree's callback carries no user session at all.
+ */
+async function getHostIdForBooking(bookingId: string): Promise<string | null> {
+  const { data, error } = await adminClient
+    .from("bookings")
+    .select("locations ( host_id )")
+    .eq("id", bookingId)
+    .maybeSingle();
+  if (error || !data) {
+    return null;
+  }
+  const locations = (data as { locations?: { host_id?: string } | null }).locations;
+  return locations?.host_id ?? null;
 }
 
 async function getBookerId(bookingId: string): Promise<string | null> {
@@ -217,6 +242,27 @@ async function applyPaymentStatusUpdate(
         await notifyPaymentSuccess(bookerId, payment.booking_id, payment.id);
       } else {
         await notifyPaymentFailed(bookerId, payment.booking_id, payment.id);
+      }
+    }
+
+    // Phase 29.14-D: THIS is where a host learns about a booking.
+    //
+    // It used to fire in `createBooking()`, the moment the row was inserted and before any payment
+    // existed at all -- so a host was pushed "You have a new booking request" for a booking nobody
+    // had paid for, and payment is optional. This is the system's only server-authoritative
+    // confirmation that money actually moved: the provider's own settled result, reached from both
+    // the webhook and `POST /v1/payments/:id/verify`, never from anything the client claims.
+    //
+    // It sits inside the existing `resolved !== currentStatus` transition guard, which is what makes
+    // it fire exactly once: `nextPaymentStatus()` refuses to move an already-terminal payment, so a
+    // redelivered webhook, a retried verify, or a user reopening checkout all re-enter with
+    // `resolved === currentStatus` and skip this entirely. `notifyBookingRequestReceived` is
+    // additionally idempotent on `(user_id, source_event_id)`, so even a genuine double-transition
+    // could not produce a second notification or a second push.
+    if (resolved === "success") {
+      const hostId = await getHostIdForBooking(payment.booking_id);
+      if (hostId) {
+        await notifyBookingRequestReceived(hostId, payment.booking_id);
       }
     }
   }

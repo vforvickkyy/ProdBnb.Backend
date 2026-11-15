@@ -198,6 +198,19 @@ describe("Phase 12 hardening: transitionBooking compare-and-swap", () => {
       .send({ location_id: locationId, booking_type: "hourly", start_at: `${MON}T09:00:00Z`, end_at: `${MON}T10:00:00Z` });
     expect(res.status).toBe(201);
     bookingId = res.body.data.id as string;
+
+    // Phase 29.14-D: a host cannot act on a booking nobody has paid for, so the compare-and-swap
+    // guard under test here is only reachable once the booking is paid. Seeded directly -- the
+    // concurrency of the TRANSITION is what this test is about, not the payment path.
+    const { error: payError } = await adminClient.from("payments").insert({
+      booking_id: bookingId,
+      provider: "cashfree",
+      provider_order_id: `pb_hardening_${bookingId.replace(/-/g, "")}`,
+      status: "success",
+      amount_minor_units: res.body.data.pricing.total_amount_minor_units as number,
+      currency: "INR",
+    });
+    if (payError) throw payError;
   });
 
   afterAll(async () => {

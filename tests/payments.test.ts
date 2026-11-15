@@ -967,6 +967,19 @@ describe("payments", () => {
       expect(detail.status).toBe(200);
       expect(detail.body.data.status).toBe("requested");
 
+      // Phase 29.14-D: a host can no longer confirm an unpaid booking, so settle it first. The
+      // point of this regression test -- that the payments module leaves the booking lifecycle
+      // alone -- is unchanged.
+      const { error: payErr } = await adminClient.from("payments").insert({
+        booking_id: booking.id,
+        provider: "cashfree",
+        provider_order_id: `pb_regr_${booking.id.replace(/-/g, "")}`,
+        status: "success",
+        amount_minor_units: 20_000,
+        currency: "INR",
+      });
+      expect(payErr).toBeNull();
+
       const confirm = await request(app).post(`/v1/bookings/${booking.id}/confirm`).set(authHeader(host));
       expect(confirm.status).toBe(200);
       expect(confirm.body.data.status).toBe("confirmed");

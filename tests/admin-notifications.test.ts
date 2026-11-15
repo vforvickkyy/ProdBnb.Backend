@@ -1,5 +1,7 @@
+import { createHmac, randomUUID } from "crypto";
 import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { env } from "../src/config/env";
 import { createApp } from "../src/app";
 import { adminClient, createTestUser, deleteTestUser, TestUser } from "./setup";
 
@@ -60,6 +62,47 @@ describe("admin: notification delivery diagnostics", () => {
       .set(authHeader(booker))
       .send({ location_id: locationId, start_at: "2026-10-05T09:00:00Z", end_at: "2026-10-05T10:00:00Z" });
     bookingId = booking.body.data.id as string;
+
+    // Phase 29.14-D: the host's `booking_request_received` notification -- the one whose delivery
+    // attempt these diagnostics inspect -- no longer fires when the booking row is inserted. It
+    // fires when the payment settles, so the fixture now pays, through the real signed webhook.
+    const paymentId = randomUUID();
+    const providerOrderId = `pb_${paymentId.replace(/-/g, "")}`;
+    const amountMinorUnits = booking.body.data.pricing.total_amount_minor_units as number;
+    const { error: payError } = await adminClient.from("payments").insert({
+      id: paymentId,
+      booking_id: bookingId,
+      provider: "cashfree",
+      provider_order_id: providerOrderId,
+      status: "pending",
+      amount_minor_units: amountMinorUnits,
+      currency: "INR",
+    });
+    if (payError) throw payError;
+
+    const payload = {
+      type: "PAYMENT_SUCCESS_WEBHOOK",
+      event_time: new Date().toISOString(),
+      data: {
+        order: { order_id: providerOrderId, order_amount: amountMinorUnits / 100, order_currency: "INR" },
+        payment: {
+          cf_payment_id: `cf_${providerOrderId}`,
+          payment_status: "SUCCESS",
+          payment_amount: amountMinorUnits / 100,
+          payment_currency: "INR",
+        },
+      },
+    };
+    const rawBody = JSON.stringify(payload);
+    const timestamp = String(Math.floor(Date.now() / 1000));
+    const signature = createHmac("sha256", env.CASHFREE_SECRET_KEY).update(timestamp + rawBody).digest("base64");
+    const hook = await request(app)
+      .post("/v1/payments/webhooks/cashfree")
+      .set("Content-Type", "application/json")
+      .set("x-webhook-timestamp", timestamp)
+      .set("x-webhook-signature", signature)
+      .send(rawBody);
+    expect(hook.status).toBe(200);
   });
 
   afterAll(async () => {

@@ -34,6 +34,22 @@ async function createLocation(owner: TestUser, opts: LocationOpts = {}): Promise
   return res.body.data.id as string;
 }
 
+// Phase 29.14-D: a host may no longer act on a booking nobody has paid for, so every test that
+// exercises a host transition now settles the payment first. This seeds the row directly via
+// adminClient (the same shortcut tests/payments-webhooks.test.ts uses) rather than driving real
+// Cashfree checkout -- the transition rule is what is under test here, not the provider.
+async function markBookingPaid(bookingId: string, amountMinorUnits = 20_000): Promise<void> {
+  const { error } = await adminClient.from("payments").insert({
+    booking_id: bookingId,
+    provider: "cashfree",
+    provider_order_id: `pb_test_${bookingId.replace(/-/g, "")}`,
+    status: "success",
+    amount_minor_units: amountMinorUnits,
+    currency: "INR",
+  });
+  if (error) throw error;
+}
+
 async function publish(locationId: string): Promise<void> {
   const { error } = await adminClient.from("locations").update({ status: "published" }).eq("id", locationId);
   if (error) throw error;
@@ -436,6 +452,8 @@ describe("bookings", () => {
     });
 
     it("lets the owning host confirm it", async () => {
+      // Phase 29.14-D: a host can no longer act on an unpaid booking, so settle it first.
+      await markBookingPaid(bookingId);
       const res = await request(app).post(`/v1/bookings/${bookingId}/confirm`).set(authHeader(host));
       expect(res.status).toBe(200);
       expect(res.body.data.status).toBe("confirmed");
@@ -472,6 +490,8 @@ describe("bookings", () => {
         .send({ location_id: locationId, start_at: `${MON}T12:00:00Z`, end_at: `${MON}T13:00:00Z` });
       const id = create.body.data.id;
 
+      // Phase 29.14-D: a host can no longer act on an unpaid booking, so settle it first.
+      await markBookingPaid(id);
       const bookerReject = await request(app).post(`/v1/bookings/${id}/reject`).set(authHeader(booker));
       expect(bookerReject.status).toBe(403);
 
@@ -487,6 +507,8 @@ describe("bookings", () => {
         .send({ location_id: locationId, start_at: `${MON}T14:00:00Z`, end_at: `${MON}T15:00:00Z` });
       const id = create.body.data.id;
 
+      // Phase 29.14-D: a host can no longer act on an unpaid booking, so settle it first.
+      await markBookingPaid(id);
       const tooSoon = await request(app).post(`/v1/bookings/${id}/complete`).set(authHeader(host));
       expect(tooSoon.status).toBe(400); // still requested, not confirmed
 

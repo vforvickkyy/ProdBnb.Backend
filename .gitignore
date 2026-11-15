@@ -25,3 +25,16 @@ npm-debug.log*
 # Supabase Studio-saved SQL snippets (local scratch queries, not project source)
 supabase/snippets/
 .vercel
+
+# Apple signing / APNs key material — NEVER commit.
+# An APNs Auth Key (.p8) is downloadable from Apple exactly ONCE, never
+# expires, and authenticates push for every app under the team. Keep it
+# outside this repository entirely.
+*.p8
+*.pem
+*.key
+*.p12
+*.cer
+*.certSigningRequest
+*.mobileprovision
+AuthKey_*

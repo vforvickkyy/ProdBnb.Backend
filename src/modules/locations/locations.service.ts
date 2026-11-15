@@ -249,12 +249,17 @@ async function listLocations(
   supabase: SupabaseClient,
   page: number,
   pageSize: number,
-  filters: LocationListFilters = {}
+  filters: LocationListFilters = {},
+  // Phase 29.18-H: the columns this listing returns. Defaults to LOCATION_COLUMNS,
+  // so GET /v1/admin/locations -- the other caller -- is byte-for-byte unchanged.
+  // Only listMyLocations() passes anything else. Paging, ordering and filtering
+  // stay in this one function so the two listings cannot drift apart.
+  select: string = LOCATION_COLUMNS
 ): Promise<PaginatedLocations> {
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
 
-  let query = supabase.from("locations").select(LOCATION_COLUMNS, { count: "exact" });
+  let query = supabase.from("locations").select(select, { count: "exact" });
 
   if (filters.status) {
     query = query.eq("status", filters.status);
@@ -272,16 +277,161 @@ async function listLocations(
     throw error;
   }
 
-  return { data: (data as LocationSummary[]) ?? [], total: count ?? 0 };
+  return { data: (data as unknown as LocationSummary[]) ?? [], total: count ?? 0 };
 }
 
-export function listMyLocations(
+// ============================================================================
+// Phase 29.18-H / 29.18-J — GET /v1/me/locations carries what a listing row needs
+// ============================================================================
+//
+// WHY THIS EXISTS
+//
+// Host "My Listings" renders a cover photo and a starting price per row, but
+// this listing returned LOCATION_COLUMNS only -- no media, no pricing. Every
+// row therefore showed a placeholder image and no price (29.18-G, defect D-1),
+// and because the iOS completeness check needs both, a *complete* backend
+// `draft` was also mis-badged on the list while the detail badged it correctly
+// (D-2). 29.18-H added media and pricing, which fixed D-1.
+//
+// Phase 29.18-J adds CATEGORIES, which closes D-2. 29.18-I measured the
+// residual: iOS's `isBackendBasicsValid` also requires at least one category,
+// so with media and pricing present but categories absent the list still could
+// not tell a complete draft from an incomplete one, and stayed conservatively
+// on "Draft" while the detail said "Ready". With all three embedded, a row now
+// carries everything that rule reads.
+//
+// The backend deliberately does NOT compute completeness. That rule is the
+// client's (it is stricter than the backend's own REQUIRED_FOR_SUBMISSION,
+// which does not require a category at all), and duplicating it here would
+// create a second copy to drift. This only supplies the source data.
+//
+// There is no batch-media / batch-pricing / batch-categories-by-location-ids
+// route, so a client fetching any of them per row would be a literal N+1 --
+// the same reasoning, and the same solution, as Phase 29.14-B's nested embed on
+// BOOKING_DETAIL_SELECT. One request still answers one page.
+//
+// NO RLS CHANGE WAS NEEDED OR MADE. `location_media_select_via_location`,
+// `location_pricing_select_via_location` and the `location_categories` SELECT
+// policy all gate their rows on exactly the condition `locations` is gated on
+// (published, or own, or admin). Since this listing is already filtered to
+// `host_id = <caller>`, the embeds can only ever return children of rows the
+// caller could already read. No new grant, no new policy, no new endpoint, no
+// migration.
+const HOST_LOCATION_LIST_SELECT = `
+  ${LOCATION_COLUMNS},
+  location_media ( id, media_type, storage_key, position, section_id, created_at, updated_at ),
+  location_pricing ( booking_type, amount_minor_units, currency, is_active ),
+  location_categories ( categories ( id, name ) )
+`;
+
+/** One embedded `location_media` row, exactly as the select above returns it. */
+interface RawListMediaRow extends RawLocationMediaRow {
+  section_id: string | null;
+}
+
+interface RawHostLocationRow extends LocationSummary {
+  location_media: RawListMediaRow[] | null;
+  location_pricing: RawLocationPricingRow[] | null;
+  // Same two-level join shape `LOCATION_DETAIL_SELECT` produces, so the same
+  // flattening applies. A row whose join target is missing yields `null` here.
+  location_categories: { categories: CatalogRef | null }[] | null;
+}
+
+/**
+ * One active pricing row as a My Listings row reports it.
+ *
+ * `type` (not `booking_type`) is deliberate: it is the name `booking_options`
+ * already uses on `GET /v1/locations/:id`, so the list and the detail carry the
+ * same shape and a client needs one decoder, not two. `is_active` is included
+ * for symmetry with the pricing management endpoint and is **always `true`
+ * here** -- inactive rows are filtered out below, because an inactive tier
+ * cannot be booked and must never become a row's starting price.
+ */
+export interface HostBookingOption extends BookingOption {
+  is_active: boolean;
+}
+
+/**
+ * A My Listings row: the summary, plus the general gallery, active pricing and
+ * the listing's categories.
+ *
+ * `categories` is `CatalogRef[]` — the **same** `{id, name}` shape
+ * `GET /v1/locations/:id` has always returned, produced by the same embed and
+ * flattened the same way. No new category representation was introduced.
+ */
+export interface HostLocationSummary extends LocationSummary {
+  media: PublicMediaItem[];
+  booking_options: HostBookingOption[];
+  categories: CatalogRef[];
+}
+
+/**
+ * Reduces one embedded row to the shape the API returns.
+ *
+ * The raw rows never leave this module. `toPublicMediaItem` is the same mapper
+ * `flattenDetail` uses, so `storage_key` -- an internal R2 detail -- is dropped
+ * here exactly as it is everywhere else, and `media` on a list row is the same
+ * shape as `media` on the detail.
+ */
+function toHostLocationSummary(row: RawHostLocationRow): HostLocationSummary {
+  const { location_media, location_pricing, location_categories, ...summary } = row;
+
+  // THE GENERAL GALLERY ONLY. A section photo must never reach this array: the
+  // cover is the lowest-positioned photo, so a section photo landing here could
+  // silently become the listing's cover -- the precise bug `getLocation`
+  // filters `location_media.section_id IS NULL` to prevent.
+  //
+  // Filtered here in TypeScript rather than as a PostgREST embedded filter,
+  // which is what Phase 29.14-B does with the identical embed (see
+  // `primaryMediaUrlFor`): the embed is selected raw and reduced in code. That
+  // keeps `listLocations` a single generic paging function shared with the
+  // admin listing, and keeps the rule that decides a cover photo in plain,
+  // directly testable code rather than in a query string.
+  const general = (location_media ?? []).filter((m) => m.section_id === null);
+
+  return {
+    ...(summary as LocationSummary),
+    media: general.map(toPublicMediaItem).sort((a, b) => a.position - b.position),
+    // Active pricing only -- filtered the same way, and for the same reason,
+    // that `flattenDetail` filters `booking_options`.
+    booking_options: (location_pricing ?? [])
+      .filter((p) => p.is_active)
+      .map((p) => ({
+        type: p.booking_type,
+        amount_minor_units: p.amount_minor_units,
+        currency: p.currency,
+        is_active: p.is_active,
+      })),
+    // Flattened exactly as `flattenDetail` flattens the identical embed. The
+    // null guard is not decoration: the join row is what the embed returns, and
+    // a join row whose target is missing would otherwise put a literal `null`
+    // into an array typed `CatalogRef[]` — a client counting categories to
+    // decide completeness would then count a category that does not exist.
+    categories: (location_categories ?? [])
+      .map((r) => r.categories)
+      .filter((c): c is CatalogRef => c !== null),
+  };
+}
+
+export interface PaginatedHostLocations {
+  data: HostLocationSummary[];
+  total: number;
+}
+
+export async function listMyLocations(
   supabase: SupabaseClient,
   hostId: string,
   page: number,
   pageSize: number
-): Promise<PaginatedLocations> {
-  return listLocations(supabase, page, pageSize, { hostId });
+): Promise<PaginatedHostLocations> {
+  const { data, total } = await listLocations(
+    supabase,
+    page,
+    pageSize,
+    { hostId },
+    HOST_LOCATION_LIST_SELECT
+  );
+  return { data: (data as unknown as RawHostLocationRow[]).map(toHostLocationSummary), total };
 }
 
 export function listAllLocationsForAdmin(

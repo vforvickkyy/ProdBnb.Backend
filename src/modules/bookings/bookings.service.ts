@@ -1,5 +1,6 @@
 import { SupabaseClient } from "@supabase/supabase-js";
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from "../../errors/AppError";
+import { publicUrlFor } from "../../lib/r2";
 import { adminClient } from "../../lib/supabase";
 import { getVisibleLocationOrNull } from "../locations/locations.service";
 import {
@@ -13,6 +14,35 @@ import { BookingActionInput, CreateBookingInput, ListBookingsQuery } from "./boo
 import { calculateBookingPrice, getActivePricing } from "./pricing";
 
 const EXCLUSION_VIOLATION = "23P01";
+
+/**
+ * The payment statuses that mean "this booking has been paid for" (Phase 29.14-D).
+ *
+ * Not a new rule: this is the exact predicate of the `payments_one_settled_per_booking` partial
+ * unique index, so at most one payment per booking can ever match. `refunded`/`partially_refunded`
+ * are included deliberately -- money *was* taken, and a refunded booking must not silently vanish
+ * from the host's list as though it had never been paid for.
+ */
+const SETTLED_PAYMENT_STATUSES = ["success", "partially_refunded", "refunded"] as const;
+
+/**
+ * Whether a settled payment exists for this booking.
+ *
+ * Runs on `adminClient` on purpose: this is a business-rule check about money, and it must give the
+ * same answer regardless of which caller is asking or what RLS would let them read of `payments`.
+ */
+async function hasSettledPayment(bookingId: string): Promise<boolean> {
+  const { data, error } = await adminClient
+    .from("payments")
+    .select("id")
+    .eq("booking_id", bookingId)
+    .in("status", SETTLED_PAYMENT_STATUSES)
+    .limit(1);
+  if (error) {
+    throw error;
+  }
+  return (data ?? []).length > 0;
+}
 
 const BOOKING_COLUMNS = `
   id, location_id, booker_id, booking_type, start_at, end_at, status,
@@ -33,9 +63,32 @@ const BOOKING_COLUMNS = `
 // N+1 problem this join exists to avoid. `booker:profiles!booker_id` is
 // disambiguated explicitly because `bookings` has two FKs to `profiles`
 // (booker_id and cancelled_by).
+// Phase 29.14-B: `region` and the location's general-gallery media join the same
+// shared select, for the Booker booking list. Both are for recognition -- a
+// booking row shows a photograph and "Chail, Himachal Pradesh" rather than
+// "Chail" alone -- and both had to come from the booking payload itself: there
+// is no batch-locations-by-ids endpoint (the search query schema is `.strict()`
+// with no `ids` param), so a client fetching either per row would be a literal
+// N+1. This is the same reasoning, and the same solution, as
+// get_conversations_for_viewer()'s `location_primary_media_key` for the Inbox
+// list.
+//
+// `location_media` is embedded raw (key/position/section_id) and reduced to a
+// single cover URL in toBookingDetail() -- see primaryMediaUrlFor(). The raw
+// rows never leave this module: the storage key is an internal R2 detail, and
+// the response carries only `primary_media_url`, exactly as the messaging and
+// search modules do.
+//
+// No RLS change was needed or made. `location_media_select_via_location` gates
+// media on precisely the same condition `locations_select_published_or_own_or_admin`
+// gates the parent row on (published, or own, or admin), so this embed can never
+// surface media for a location the caller could not already see through the
+// `locations` embed that has always been here.
 const BOOKING_DETAIL_SELECT = `
   ${BOOKING_COLUMNS},
-  locations ( id, title, city, timezone, host_id, host:profiles ( first_name, last_name ) ),
+  locations ( id, title, city, region, timezone, host_id,
+              host:profiles ( first_name, last_name ),
+              location_media ( storage_key, position, section_id ) ),
   booker:profiles!booker_id ( first_name, last_name ),
   payments ( id, status, amount_minor_units, created_at )
 `;
@@ -45,13 +98,101 @@ interface NameRef {
   last_name: string | null;
 }
 
-interface LocationRef {
+/** One embedded `location_media` row, exactly as the select above returns it. */
+interface MediaRef {
+  storage_key: string;
+  position: number;
+  section_id: string | null;
+}
+
+/**
+ * The location as the embed returns it, including the raw media rows.
+ *
+ * Deliberately distinct from `BookingLocation` below, which is what the API
+ * actually returns: `location` used to be passed straight through from the row,
+ * and with media embedded that pass-through would have published every storage
+ * key in the gallery.
+ */
+interface RawLocationRef {
   id: string;
   title: string;
   city: string;
+  region: string | null;
   timezone: string;
   host_id: string;
   host: NameRef | null;
+  location_media: MediaRef[] | null;
+}
+
+/** The location shape a booking response carries. */
+export interface BookingLocation {
+  id: string;
+  title: string;
+  city: string;
+  region: string | null;
+  timezone: string;
+  host_id: string;
+  host: NameRef | null;
+  /** The general-gallery cover, or null when the location has no general photo. */
+  primary_media_url: string | null;
+}
+
+/**
+ * The location's cover photo: **general gallery only, lowest position**.
+ *
+ * The `section_id === null` filter is load-bearing and is the same rule Phase
+ * 29.6 added to `search_locations()` and `get_conversations_for_viewer()`.
+ * Without it a production-area photo sitting at position 0 -- entirely normal,
+ * because positions restart per gallery -- would be served as the location's
+ * primary image. A row whose `section_id` is anything other than exactly `null`
+ * is excluded, so a missing column fails closed (no cover) rather than
+ * promoting a section photo.
+ *
+ * Ties on `position` are broken by `storage_key` so the answer is deterministic;
+ * the SQL `order by position asc limit 1` leaves ties to the planner, and a
+ * cover that changes between identical requests would be worse than either
+ * choice. The input array is copied rather than sorted in place.
+ *
+ * Returns `null` -- never a fabricated or placeholder URL -- when there is no
+ * general-gallery photo. The key is turned into a URL by the existing
+ * `publicUrlFor()`, the same one search and messaging use; no second URL
+ * mechanism exists.
+ */
+function primaryMediaUrlFor(media: MediaRef[] | null | undefined): string | null {
+  const general = (media ?? []).filter((m) => m.section_id === null);
+  // `reduce` rather than `sort()[0]`: with `noUncheckedIndexedAccess` an indexed
+  // read is `T | undefined`, and reducing states the "pick one" intent directly
+  // without a non-null assertion.
+  const cover = general.reduce<MediaRef | null>((best, m) => {
+    if (best === null) return m;
+    if (m.position !== best.position) return m.position < best.position ? m : best;
+    return m.storage_key.localeCompare(best.storage_key) < 0 ? m : best;
+  }, null);
+  return cover === null ? null : publicUrlFor(cover.storage_key);
+}
+
+/**
+ * The booker identity a host is allowed to see (Phase 29.18-F).
+ *
+ * Comes from `get_booking_participants()`, a SECURITY DEFINER function gated on
+ * `locations.host_id = auth.uid()`. It exists because `profiles` RLS is own-row-or-admin, so the
+ * `booker:profiles!booker_id (...)` embed in `BOOKING_DETAIL_SELECT` resolves to **null** for a host
+ * caller -- PostgREST applies RLS to an embedded resource independently of the parent row. The
+ * booking's `booker_id` was never lost; only the name was.
+ *
+ * Exactly four columns, fixed by the function's signature. Never phone, address, status or any
+ * other profile column, and `email` is not reachable at all (it lives in `auth.users`).
+ */
+export interface BookerProfile {
+  id: string;
+  first_name: string | null;
+  last_name: string | null;
+  avatar_url: string | null;
+}
+
+/** One row of `get_booking_participants()`, which keys its answer by booking. */
+interface BookingParticipantRow extends BookerProfile {
+  booking_id: string;
 }
 
 interface PaymentSummary {
@@ -80,14 +221,14 @@ interface RawBookingRow {
   cancellation_reason: string | null;
   created_at: string;
   updated_at: string;
-  locations: LocationRef;
+  locations: RawLocationRef;
   booker: NameRef | null;
   payments: PaymentSummary[];
 }
 
 export interface BookingDetail {
   id: string;
-  location: LocationRef;
+  location: BookingLocation;
   booker_id: string;
   booker: NameRef | null;
   booking_type: string;
@@ -108,12 +249,34 @@ export interface BookingDetail {
   cancelled_at: string | null;
   cancelled_by: string | null;
   cancellation_reason: string | null;
+  /**
+   * Phase 29.18-F. Present only when the caller is the **host** of this booking's location.
+   *
+   * Additive and optional: `booker` above is untouched and still answers for a booker reading
+   * their own booking and for an admin, both of whom satisfy `profiles` RLS directly. Removing it
+   * would be a regression for both.
+   */
+  booker_profile?: BookerProfile | null;
 }
 
 function toBookingDetail(row: RawBookingRow): BookingDetail {
   return {
     id: row.id,
-    location: row.locations,
+    // Phase 29.14-B: an explicit projection, not the pass-through this used to
+    // be. The embed now carries raw `location_media`, and passing the row
+    // straight through would publish every storage key in the gallery. Every
+    // pre-existing field is reproduced verbatim; `region` and
+    // `primary_media_url` are the only additions.
+    location: {
+      id: row.locations.id,
+      title: row.locations.title,
+      city: row.locations.city,
+      region: row.locations.region,
+      timezone: row.locations.timezone,
+      host_id: row.locations.host_id,
+      host: row.locations.host,
+      primary_media_url: primaryMediaUrlFor(row.locations.location_media),
+    },
     booker_id: row.booker_id,
     booker: row.booker,
     booking_type: row.booking_type,
@@ -284,9 +447,18 @@ export async function createBooking(
 
   const booking = toBookingDetail(data as unknown as RawBookingRow);
 
-  // Downstream effect only -- never allowed to fail booking creation itself
-  // (notify*() guarantees it never throws, see notification.service.ts).
-  await notifyBookingRequestReceived(location.host_id, booking.id);
+  // Phase 29.14-D: the host is deliberately NOT notified here.
+  //
+  // This call used to be `notifyBookingRequestReceived(location.host_id, ...)`, fired
+  // unconditionally the moment the row was inserted -- before any payment existed, and indeed
+  // before one was even required, since payment is optional and skippable. A host was therefore
+  // pushed "You have a new booking request" for a booking nobody had paid for.
+  //
+  // The host request is now raised from the payment's own settlement point instead
+  // (`applyPaymentStatusUpdate` in payment.service.ts), which is the only server-authoritative
+  // confirmation the system has. Nothing about the booking's *status* changed: it is still
+  // `requested`/`confirmed` here, it still reserves the slot through the exclusion constraint, and
+  // `initiatePayment` still accepts it. Only host VISIBILITY and the host NOTIFICATION moved.
   if (booking.status === "confirmed") {
     // instant_booking_enabled skipped host approval -- the booker should
     // still be told their booking is confirmed.
@@ -296,12 +468,85 @@ export async function createBooking(
   return booking;
 }
 
+/**
+ * The booker identity for a set of bookings, keyed by booking id (Phase 29.18-F).
+ *
+ * **One call for a whole page, never one per row.** The function takes an array precisely so a
+ * Host Bookings page costs one extra round trip rather than N -- the same reason
+ * `get_conversations_for_viewer()` renders an entire Inbox in a single call.
+ *
+ * Runs on the **caller's** client, not `adminClient`, and that is the point: `auth.uid()` inside
+ * the function is the requesting user, so the `l.host_id = auth.uid()` gate is what decides the
+ * answer. Handing this to `adminClient` would move a cross-user identity gate out of the database
+ * and into a TypeScript `if`.
+ *
+ * An empty input short-circuits: PostgREST would happily accept `{}` but there is nothing to ask.
+ */
+async function fetchBookerProfiles(
+  supabase: SupabaseClient,
+  bookingIds: string[]
+): Promise<Map<string, BookerProfile>> {
+  const byBooking = new Map<string, BookerProfile>();
+  if (bookingIds.length === 0) {
+    return byBooking;
+  }
+  const { data, error } = await supabase.rpc("get_booking_participants", { _booking_ids: bookingIds });
+  if (error) {
+    throw error;
+  }
+  for (const row of (data ?? []) as BookingParticipantRow[]) {
+    // `id` is null when the booking's booker has no profile row -- impossible today (there is an
+    // FK) but the LEFT JOIN makes it expressible, and a row of nulls must not become a fake person.
+    if (row.id === null) {
+      continue;
+    }
+    byBooking.set(row.booking_id, {
+      id: row.id,
+      first_name: row.first_name,
+      last_name: row.last_name,
+      avatar_url: row.avatar_url,
+    });
+  }
+  return byBooking;
+}
+
+/**
+ * Attaches the host-visible booker identity to bookings that have one.
+ *
+ * A booking with no entry is returned **unchanged** -- `booker_profile` is simply absent rather
+ * than explicitly null, so a caller who is not the host sees exactly the response shape they saw
+ * before Phase 29.18-F.
+ */
+function withBookerProfiles(bookings: BookingDetail[], byBooking: Map<string, BookerProfile>): BookingDetail[] {
+  return bookings.map((booking) => {
+    const profile = byBooking.get(booking.id);
+    return profile ? { ...booking, booker_profile: profile } : booking;
+  });
+}
+
 export interface PaginatedBookings {
   data: BookingDetail[];
   total: number;
 }
 
-export async function listBookings(supabase: SupabaseClient, query: ListBookingsQuery): Promise<PaginatedBookings> {
+/**
+ * Options for `listBookings` (Phase 29.14-D).
+ *
+ * `includeUnpaidForHost` exists so **admin oversight is never gated**. `GET /v1/admin/bookings` is a
+ * thin wrapper over this same function, and `host_id` is in practice an admin filter -- an admin
+ * investigating a host's bookings must still see the unpaid ones, which are precisely the ones worth
+ * investigating. The payment gate is a rule about what a HOST is asked to act on, not a rule about
+ * what exists.
+ */
+export interface ListBookingsOptions {
+  includeUnpaidForHost?: boolean;
+}
+
+export async function listBookings(
+  supabase: SupabaseClient,
+  query: ListBookingsQuery,
+  options: ListBookingsOptions = {}
+): Promise<PaginatedBookings> {
   const from = (query.page - 1) * query.pageSize;
   const to = from + query.pageSize - 1;
 
@@ -313,8 +558,33 @@ export async function listBookings(supabase: SupabaseClient, query: ListBookings
   // NOT NULL, so every booking has exactly one location, and this caller
   // (host_id is admin-only in practice) already has full RLS visibility
   // into locations -- an inner join here can never drop a row it shouldn't.
-  const select = query.host_id ? BOOKING_DETAIL_SELECT.replace("locations (", "locations!inner (") : BOOKING_DETAIL_SELECT;
+  // Phase 29.14-D: a host must never be shown a booking nobody has paid for.
+  //
+  // `payments!inner` + the settled-status filter below is what makes that row-restricting rather
+  // than merely filtering the nested array -- the same PostgREST rule, and the same technique,
+  // already relied on for `locations!inner` above. A booking with no payment row at all, or with
+  // only `created`/`pending`/`failed`/`cancelled` attempts, simply does not join and is absent from
+  // the host's results.
+  //
+  // "Settled" is `success | partially_refunded | refunded`, which is not a definition invented here:
+  // it is the exact predicate of the `payments_one_settled_per_booking` unique index
+  // (20260903183804_phase12_hardening.sql), so at most one row can ever match per booking and the
+  // join cannot duplicate a booking.
+  //
+  // Booker-scoped queries are untouched: a booker must keep seeing their own unpaid booking, which
+  // is precisely how they get back to it to finish paying.
+  const gateOnPayment = Boolean(query.host_id) && !options.includeUnpaidForHost;
+  let select = BOOKING_DETAIL_SELECT;
+  if (query.host_id) {
+    select = select.replace("locations (", "locations!inner (");
+  }
+  if (gateOnPayment) {
+    select = select.replace("payments (", "payments!inner (");
+  }
   let request = supabase.from("bookings").select(select, { count: "exact" });
+  if (gateOnPayment) {
+    request = request.in("payments.status", SETTLED_PAYMENT_STATUSES);
+  }
   if (query.location_id) {
     request = request.eq("location_id", query.location_id);
   }
@@ -334,13 +604,31 @@ export async function listBookings(supabase: SupabaseClient, query: ListBookings
     request = request.lte("start_at", query.start_before);
   }
 
-  const { data, error, count } = await request.order("start_at", { ascending: false }).range(from, to);
+  // Phase 29.14-D: newest booking first, by when it was MADE.
+  //
+  // This was `start_at` -- the shoot date -- which meant a booking made today for a shoot next year
+  // outranked one made a minute ago for next week, and "newest first" was simply not what the list
+  // showed. Ordering here rather than in the client is what keeps pagination globally correct: a
+  // page-2 row can never be newer than a page-1 row, which no amount of per-page sorting in Swift
+  // could guarantee.
+  //
+  // `sort=start_at_desc` preserves the old ordering for any caller that wants the shoot-date view;
+  // the parameter is optional and defaults to `created_at_desc`.
+  const orderColumn = query.sort === "start_at_desc" ? "start_at" : "created_at";
+  const { data, error, count } = await request.order(orderColumn, { ascending: false }).range(from, to);
   if (error) {
     throw error;
   }
 
+  const bookings = (data ?? []).map((row) => toBookingDetail(row as unknown as RawBookingRow));
+
+  // Phase 29.18-F: one RPC for the whole page, merged by booking id. The function answers only for
+  // bookings on the caller's own listings, so for a booker or an admin this returns an empty map
+  // and every booking is passed through untouched.
+  const bookerProfiles = await fetchBookerProfiles(supabase, bookings.map((b) => b.id));
+
   return {
-    data: (data ?? []).map((row) => toBookingDetail(row as unknown as RawBookingRow)),
+    data: withBookerProfiles(bookings, bookerProfiles),
     total: count ?? 0,
   };
 }
@@ -350,7 +638,11 @@ export async function getBooking(supabase: SupabaseClient, bookingId: string): P
   if (error || !data) {
     throw new NotFoundError("Booking not found.");
   }
-  return toBookingDetail(data as unknown as RawBookingRow);
+  const booking = toBookingDetail(data as unknown as RawBookingRow);
+  // Phase 29.18-F: the same RPC, with a one-element array. Absent for anyone who is not this
+  // booking's host.
+  const bookerProfiles = await fetchBookerProfiles(supabase, [booking.id]);
+  return withBookerProfiles([booking], bookerProfiles)[0] ?? booking;
 }
 
 interface BookingAccess {
@@ -430,6 +722,15 @@ export async function confirmBooking(
   if (row.status !== "requested") {
     throw new ValidationError(`Cannot confirm a booking with status '${row.status}'.`);
   }
+  if (!isAdmin && !(await hasSettledPayment(bookingId))) {
+    // Phase 29.14-D defence in depth: the host list already excludes unpaid bookings, but the gate
+    // must not be a property of one query's shape. A host who reached this id another way still
+    // cannot act on a booking nobody has paid for.
+    //
+    // Admins are exempt for the same reason they are exempt from the list gate: this restricts what
+    // a HOST is asked to act on, and an admin resolving a stuck booking must not be locked out of it.
+    throw new ValidationError("This booking has not been paid for yet.");
+  }
   const booking = await transitionBooking(bookingId, row.status, { status: "confirmed" });
   await notifyBookingConfirmed(booking.booker_id, booking.id);
   return booking;
@@ -448,6 +749,15 @@ export async function rejectBooking(
   }
   if (row.status !== "requested") {
     throw new ValidationError(`Cannot reject a booking with status '${row.status}'.`);
+  }
+  if (!isAdmin && !(await hasSettledPayment(bookingId))) {
+    // Phase 29.14-D defence in depth: the host list already excludes unpaid bookings, but the gate
+    // must not be a property of one query's shape. A host who reached this id another way still
+    // cannot act on a booking nobody has paid for.
+    //
+    // Admins are exempt for the same reason they are exempt from the list gate: this restricts what
+    // a HOST is asked to act on, and an admin resolving a stuck booking must not be locked out of it.
+    throw new ValidationError("This booking has not been paid for yet.");
   }
   const booking = await transitionBooking(bookingId, row.status, {
     status: "rejected",

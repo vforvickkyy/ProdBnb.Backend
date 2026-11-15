@@ -98,7 +98,9 @@ export async function postRestoreLocation(req: Request, res: Response): Promise<
 
 export async function getAdminBookings(req: Request, res: Response): Promise<void> {
   const query = req.valid!.query as ListBookingsQuery;
-  const { data, total } = await listBookings(req.supabase!, query);
+  // Phase 29.14-D: admin oversight is deliberately NOT payment-gated -- an unpaid booking is
+  // exactly the kind an admin needs to be able to find.
+  const { data, total } = await listBookings(req.supabase!, query, { includeUnpaidForHost: true });
   ok(res, data, 200, { page: query.page, pageSize: query.pageSize, total });
 }
 

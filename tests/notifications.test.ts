@@ -52,6 +52,7 @@ vi.mock("../src/modules/payments/providers/CashfreeProvider", () => ({
   },
 }));
 
+import { env } from "../src/config/env";
 import { createApp } from "../src/app";
 import { notifyBookingConfirmed } from "../src/modules/notifications/notification.service";
 import { adminClient, createTestUser, deleteTestUser, TestUser } from "./setup";
@@ -108,7 +109,44 @@ async function createBookableLocation(owner: TestUser, opts: { instant?: boolean
   return locationId;
 }
 
-async function createBooking(booker: TestUser, locationId: string): Promise<{ id: string }> {
+/**
+ * Settles a booking's payment through the real `initiatePayment` → `verify` path (Phase 29.14-D).
+ *
+ * The host's `booking_request_received` notification no longer fires when the booking row is
+ * inserted -- it fires when the provider confirms the money moved. Tests that need that notification
+ * to exist must therefore reach it the way production does, not by writing a status column.
+ *
+ * Uses this file's own `mockState.orderStatus` idiom (the same one the payment-notification tests
+ * below already use) rather than the signed webhook, because the CashfreeProvider mock at the top of
+ * this file deliberately refuses `verifyAndParseWebhook`.
+ */
+async function settlePayment(booker: TestUser, bookingId: string): Promise<void> {
+  const create = await request(app)
+    .post(`/v1/bookings/${bookingId}/payment`)
+    .set(authHeader(booker))
+    .send({ customer_phone: "9876543210" });
+  expect(create.status).toBe(201);
+  const providerOrderId = create.body.data.checkout.order_id as string;
+  mockState.orderStatus.set(providerOrderId, "success");
+  const verified = await request(app)
+    .post(`/v1/payments/${create.body.data.payment_id}/verify`)
+    .set(authHeader(booker));
+  expect(verified.status).toBe(200);
+}
+
+/**
+ * Creates a booking and, by default, pays for it.
+ *
+ * Phase 29.14-D moved the host's booking request from creation to payment settlement, so a booking
+ * nobody has paid for produces no host notification at all. Settling here by default keeps every
+ * existing call site in this file meaning what it meant before: "a booking the host has been told
+ * about". Pass `{ settle: false }` to observe the unpaid state deliberately.
+ */
+async function createBooking(
+  booker: TestUser,
+  locationId: string,
+  opts: { settle?: boolean } = {}
+): Promise<{ id: string }> {
   const hour = nextHour++;
   const res = await request(app)
     .post("/v1/bookings")
@@ -119,7 +157,11 @@ async function createBooking(booker: TestUser, locationId: string): Promise<{ id
       end_at: `${MON}T${String(hour + 1).padStart(2, "0")}:00:00Z`,
     });
   expect(res.status).toBe(201);
-  return { id: res.body.data.id as string };
+  const id = res.body.data.id as string;
+  if (opts.settle !== false) {
+    await settlePayment(booker, id);
+  }
+  return { id };
 }
 
 async function notificationsFor(user: TestUser, type?: string) {
@@ -149,11 +191,18 @@ describe("notifications", () => {
   });
 
   describe("booking lifecycle integration", () => {
-    it("createBooking notifies the host with booking_request_received", async () => {
+    it("Phase 29.14-D: creating a booking does NOT notify the host; settling payment does", async () => {
       const locationId = await createBookableLocation(host);
-      const booking = await createBooking(booker, locationId);
+      const booking = await createBooking(booker, locationId, { settle: false });
 
-      const hostNotifs = await notificationsFor(host, "booking_request_received");
+      // Before: this fired from createBooking() the instant the row was inserted, so a host was
+      // pushed "new booking request" for a booking nobody had paid for -- and payment is optional.
+      let hostNotifs = await notificationsFor(host, "booking_request_received");
+      expect(hostNotifs.some((n: { entity_id: string }) => n.entity_id === booking.id)).toBe(false);
+
+      await settlePayment(booker, booking.id);
+
+      hostNotifs = await notificationsFor(host, "booking_request_received");
       expect(hostNotifs.some((n: { entity_id: string }) => n.entity_id === booking.id)).toBe(true);
     });
 
@@ -166,7 +215,7 @@ describe("notifications", () => {
       expect(bookerNotifs.some((n: { entity_id: string }) => n.entity_id === booking.id)).toBe(true);
     });
 
-    it("an instant-booking location fires BOTH booking_request_received (host) and booking_confirmed (booker) at creation", async () => {
+    it("an instant-booking location fires booking_confirmed (booker) at creation, and booking_request_received (host) once paid", async () => {
       const locationId = await createBookableLocation(host, { instant: true });
       const booking = await createBooking(booker, locationId);
 
@@ -203,7 +252,9 @@ describe("notifications", () => {
   describe("payment/refund integration", () => {
     it("a payment reaching success notifies the booker with payment_success", async () => {
       const locationId = await createBookableLocation(host);
-      const booking = await createBooking(booker, locationId);
+      // Phase 29.14-D: this suite drives payment itself, so it must start unpaid --
+      // `createBooking` now settles by default.
+      const booking = await createBooking(booker, locationId, { settle: false });
       const create = await request(app)
         .post(`/v1/bookings/${booking.id}/payment`)
         .set(authHeader(booker))
@@ -218,7 +269,9 @@ describe("notifications", () => {
 
     it("a payment reaching failed notifies the booker with payment_failed", async () => {
       const locationId = await createBookableLocation(host);
-      const booking = await createBooking(booker, locationId);
+      // Phase 29.14-D: this suite drives payment itself, so it must start unpaid --
+      // `createBooking` now settles by default.
+      const booking = await createBooking(booker, locationId, { settle: false });
       const create = await request(app)
         .post(`/v1/bookings/${booking.id}/payment`)
         .set(authHeader(booker))
@@ -234,7 +287,9 @@ describe("notifications", () => {
     it("a full refund notifies the booker with refund_processed", async () => {
       mockState.refundStatus = "success";
       const locationId = await createBookableLocation(host);
-      const booking = await createBooking(booker, locationId);
+      // Phase 29.14-D: this suite drives payment itself, so it must start unpaid --
+      // `createBooking` now settles by default.
+      const booking = await createBooking(booker, locationId, { settle: false });
       const create = await request(app)
         .post(`/v1/bookings/${booking.id}/payment`)
         .set(authHeader(booker))
@@ -362,11 +417,18 @@ describe("notifications", () => {
       const booking = await createBooking(booker, locationId);
 
       const bookerNotifs = await request(app).get("/v1/notifications").set(authHeader(booker)).query({ pageSize: 100 });
-      const own = bookerNotifs.body.data.find((n: { entity_id: string }) => n.entity_id === booking.id);
-      expect(own).toBeUndefined(); // booker gets no notification for their own booking creation
+      // The booker never receives the HOST's booking request. Narrowed from "no notification at all
+      // for this booking" in Phase 29.14-D: the booker legitimately does now have a `payment_success`
+      // notification carrying the same `entity_id`, because paying is what raises the host's request.
+      const own = bookerNotifs.body.data.find(
+        (n: { entity_id: string; type: string }) => n.entity_id === booking.id && n.type === "booking_request_received"
+      );
+      expect(own).toBeUndefined();
 
       const hostNotifs = await request(app).get("/v1/notifications").set(authHeader(host)).query({ pageSize: 100 });
-      const hostOwn = hostNotifs.body.data.find((n: { entity_id: string }) => n.entity_id === booking.id);
+      const hostOwn = hostNotifs.body.data.find(
+        (n: { entity_id: string; type: string }) => n.entity_id === booking.id && n.type === "booking_request_received"
+      );
       expect(hostOwn).toBeDefined();
 
       const crossRead = await request(app).get(`/v1/notifications/${hostOwn.id}`).set(authHeader(booker));
