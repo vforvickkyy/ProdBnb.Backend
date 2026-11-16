@@ -38,10 +38,15 @@ const LOCATION_DETAIL_SELECT = `
 // PATCH endpoint; anything else from a non-admin caller is 403. Admins may
 // set any of the 8 statuses. Kept deliberately small — a full workflow
 // engine is explicitly a later-phase concern.
+//
+// Website host tools: a listing the team sent back (`rejected`) can be fixed and resubmitted, and an
+// archived one relisted -- both go back through review (`submitted`), never straight to published.
 const HOST_ALLOWED_TRANSITIONS: Record<string, string[]> = {
   draft: ["submitted"],
   submitted: ["draft"],
   published: ["archived"],
+  rejected: ["submitted"],
+  archived: ["submitted"],
 };
 
 const REQUIRED_FOR_SUBMISSION = ["title", "description", "city", "country", "latitude", "longitude"] as const;

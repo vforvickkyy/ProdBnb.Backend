@@ -209,6 +209,24 @@ describe("locations", () => {
       expect(publish.body.data.status).toBe("published");
     });
 
+    it("lets a host resubmit a listing the team sent back, but never publish it themselves", async () => {
+      const created = await request(app)
+        .post("/v1/locations")
+        .set("Authorization", `Bearer ${host.accessToken}`)
+        .send({ title: "Sent back", description: "Needs better photos.", city: "Pune", country: "India", latitude: 18.52, longitude: 73.85 });
+      expect(created.status).toBe(201);
+      const id = created.body.data.id as string;
+      const reject = await request(app).patch(`/v1/locations/${id}`).set("Authorization", `Bearer ${admin.accessToken}`).send({ status: "rejected" });
+      expect(reject.status).toBe(200);
+
+      const publish = await request(app).patch(`/v1/locations/${id}`).set("Authorization", `Bearer ${host.accessToken}`).send({ status: "published" });
+      expect(publish.status).toBe(403);
+      const resubmit = await request(app).patch(`/v1/locations/${id}`).set("Authorization", `Bearer ${host.accessToken}`).send({ status: "submitted" });
+      expect(resubmit.status).toBe(200);
+      expect(resubmit.body.data.status).toBe("submitted");
+      await adminClient.from("locations").delete().eq("id", id);
+    });
+
     it("is now publicly visible, with a host summary, and gives 403 (not 404) to a non-owner PATCH", async () => {
       const listRes = await request(app).get("/v1/locations");
       const ids = listRes.body.data.map((l: { id: string }) => l.id);

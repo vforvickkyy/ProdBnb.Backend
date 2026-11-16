@@ -360,7 +360,7 @@ this endpoint.
 **Ownership vs. existence**: if the location isn't visible to the caller at all, `404`. If it's
 visible (e.g. published) but not owned and the caller isn't admin, `403`.
 
-**Status transitions**: a host may only request `draft → submitted` or `published → archived` —
+**Status transitions**: a host may only request `draft → submitted`, `submitted → draft`, `published → archived`, and (website host tools) `rejected → submitted` or `archived → submitted` —
 anything else is `403`. `→ submitted` additionally requires `title`, `description`, `city`,
 `country`, `latitude`, and `longitude` to already be set (on the row or in the same request), or
 `400`. An admin may set any of the 8 statuses freely.
