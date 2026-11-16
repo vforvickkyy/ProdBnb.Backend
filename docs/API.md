@@ -784,6 +784,40 @@ Response (`201`): the booking detail object (below), including `booking_type`. C
   guarantee firing, not a bug — a well-behaved client should let the booker pick a different time
   and retry.
 
+### `POST /v1/bookings/quote`
+
+Requires authentication (any signed-in account; the `booker` role is only needed to actually
+book). Takes exactly the same body as `POST /v1/bookings` and answers what that booking would
+reserve and cost, **without creating anything**: same visibility rule (published listings only,
+else `404`), same interval derivation per booking type, same availability check, same price
+calculation and platform fee/tax. Used by the website before checkout.
+
+A time that can't be booked is a normal answer, not an error:
+
+```json
+{
+  "data": {
+    "location_id": "…", "booking_type": "hourly",
+    "available": true, "reason": null,
+    "start_at": "2027-03-01T10:00:00+05:30", "end_at": "2027-03-01T13:00:00+05:30",
+    "timezone": "Asia/Kolkata",
+    "units": { "count": 3, "unit": "hour" }, "rate_minor_units": 150000,
+    "pricing": { "base_amount_minor_units": 450000, "platform_fee_minor_units": 22500, "tax_minor_units": 85050,
+                 "discount_minor_units": 0, "total_amount_minor_units": 557550, "currency": "INR" },
+    "instant_booking": false, "hold_minutes": 30, "own_listing": false
+  }
+}
+```
+
+- `available: false` with a booker-facing `reason` when the type isn't offered (`pricing: null`),
+  the place isn't open then, the time has passed, or it overlaps another booking or a block
+  (`pricing` is still filled in when the interval could be priced).
+- `units` is what the listing price is multiplied by: hours (hourly), one half-day block, or days.
+- `hold_minutes` is how long an unpaid booking holds the slot (`null` = no limit).
+- `own_listing` is `true` when the caller hosts this listing.
+- `400` for a malformed body (same rules as `POST /v1/bookings`, e.g. an hourly booking under 60
+  minutes); `401` when signed out.
+
 ### `GET /v1/bookings`
 
 Requires authentication. RLS-scoped automatically: a booker sees their own bookings, a host sees

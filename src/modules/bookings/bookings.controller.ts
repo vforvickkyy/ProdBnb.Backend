@@ -7,6 +7,7 @@ import {
   completeBooking,
   confirmBooking,
   createBooking,
+  quoteBooking,
   getBooking,
   listBookings,
   rejectBooking,
@@ -23,6 +24,11 @@ export async function postBooking(req: Request, res: Response): Promise<void> {
   const input = req.valid!.body as CreateBookingInput;
   const booking = await createBooking(req.supabase!, req.user!.id, input);
   created(res, booking);
+}
+
+export async function postBookingQuote(req: Request, res: Response): Promise<void> {
+  const input = req.valid!.body as CreateBookingInput;
+  ok(res, await quoteBooking(req.supabase!, req.user!.id, input));
 }
 
 export async function getBookings(req: Request, res: Response): Promise<void> {

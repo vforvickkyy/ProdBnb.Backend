@@ -6,6 +6,7 @@ import {
   getBookingDetail,
   getBookings,
   postBooking,
+  postBookingQuote,
   postCancelBooking,
   postCompleteBooking,
   postConfirmBooking,
@@ -18,6 +19,10 @@ export const bookingsRouter = Router();
 // "Create a new resource for yourself" — same requireRole precedent as
 // POST /v1/locations + requireRole('host').
 bookingsRouter.post("/bookings", requireAuth, requireRole("booker"), validate({ body: createBookingSchema }), postBooking);
+
+// Website checkout: what that booking would cost and whether the time is free, without creating
+// it. Any signed-in account may ask (the booker role is added when they actually book).
+bookingsRouter.post("/bookings/quote", requireAuth, validate({ body: createBookingSchema }), postBookingQuote);
 
 // RLS-scoped: booker sees own, host sees bookings on owned locations, admin
 // sees all — no app-layer filtering needed beyond the optional query params.

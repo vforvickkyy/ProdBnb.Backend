@@ -416,6 +416,111 @@ async function resolveInterval(
   }
 }
 
+/** A price and availability preview for a booking that has not been made (website checkout). */
+export interface BookingQuote {
+  location_id: string;
+  booking_type: BookingType;
+  /** False when the time can't be booked; `reason` says why in words a booker understands. */
+  available: boolean;
+  reason: string | null;
+  /** The exact interval the booking would reserve (derived for half-day, day and multi-day). */
+  start_at: string | null;
+  end_at: string | null;
+  timezone: string;
+  /** What the listing price is multiplied by: hours, days, or one block. */
+  units: { count: number; unit: "hour" | "half_day" | "day" } | null;
+  rate_minor_units: number | null;
+  pricing: {
+    base_amount_minor_units: number;
+    platform_fee_minor_units: number;
+    tax_minor_units: number;
+    discount_minor_units: number;
+    total_amount_minor_units: number;
+    currency: string;
+  } | null;
+  /** Confirmed straight away on payment, or a request the host accepts. */
+  instant_booking: boolean;
+  /** How long an unpaid booking holds the slot (null = no limit). */
+  hold_minutes: number | null;
+  /** The caller hosts this listing (the website won't offer to book it). */
+  own_listing: boolean;
+}
+
+/**
+ * Website checkout: exactly what `createBooking` would charge and reserve, without creating
+ * anything. Same visibility rule, interval derivation, availability check and price calculation;
+ * a time that can't be booked is a normal answer (`available: false` with a reason), not an error.
+ */
+export async function quoteBooking(supabase: SupabaseClient, callerId: string, input: CreateBookingInput): Promise<BookingQuote> {
+  const location = await getVisibleLocationOrNull(supabase, input.location_id);
+  if (!location || location.status !== "published") {
+    throw new NotFoundError("Location not found.");
+  }
+  const settings = await getPlatformSettings();
+  const base: BookingQuote = {
+    location_id: input.location_id,
+    booking_type: input.booking_type as BookingType,
+    available: false,
+    reason: null,
+    start_at: null,
+    end_at: null,
+    timezone: location.timezone,
+    units: null,
+    rate_minor_units: null,
+    pricing: null,
+    instant_booking: location.instant_booking_enabled,
+    hold_minutes: settings.unpaid_hold_minutes,
+    own_listing: location.host_id === callerId,
+  };
+  const unavailable = (reason: string, extra: Partial<BookingQuote> = {}): BookingQuote => ({ ...base, ...extra, available: false, reason });
+
+  let interval: ResolvedWindow;
+  let rate: Awaited<ReturnType<typeof getActivePricing>>;
+  try {
+    rate = await getActivePricing(supabase, input.location_id, input.booking_type as BookingType);
+    interval = await resolveInterval(supabase, input.location_id, input);
+  } catch (error) {
+    if (error instanceof ValidationError) return unavailable(error.message.includes("does not offer") ? "This place doesn't offer that kind of booking." : "The place isn't open then. Pick another date.");
+    throw error;
+  }
+  if (new Date(interval.start_at).getTime() <= Date.now()) {
+    return unavailable("That time has already passed.", interval);
+  }
+
+  await expireUnpaidHolds(input.location_id);
+  const { data: available, error: availabilityError } = await supabase.rpc("is_interval_available", {
+    _location_id: input.location_id,
+    _start_at: interval.start_at,
+    _end_at: interval.end_at,
+  });
+  if (availabilityError) throw availabilityError;
+
+  const pricing = await calculateBookingPrice(supabase, input.location_id, input.booking_type as BookingType, interval.start_at, interval.end_at, location.timezone);
+  const charges = platformCharges(pricing.base_amount_minor_units, settings);
+  const hours = (new Date(interval.end_at).getTime() - new Date(interval.start_at).getTime()) / 3_600_000;
+  const units: BookingQuote["units"] =
+    input.booking_type === "hourly"
+      ? { count: Math.round(hours * 100) / 100, unit: "hour" }
+      : input.booking_type === "half_day"
+        ? { count: 1, unit: "half_day" }
+        : { count: rate.amount_minor_units > 0 ? Math.round(pricing.base_amount_minor_units / rate.amount_minor_units) : 1, unit: "day" };
+  const priced: Partial<BookingQuote> = {
+    ...interval,
+    units,
+    rate_minor_units: rate.amount_minor_units,
+    pricing: {
+      base_amount_minor_units: pricing.base_amount_minor_units,
+      platform_fee_minor_units: charges.platform_fee_minor_units,
+      tax_minor_units: charges.tax_minor_units,
+      discount_minor_units: 0,
+      total_amount_minor_units: charges.total_amount_minor_units,
+      currency: pricing.currency,
+    },
+  };
+  if (!available) return unavailable("Someone has already booked part of that time, or the host closed it. Pick another time.", priced);
+  return { ...base, ...priced, available: true, reason: null };
+}
+
 export async function createBooking(
   supabase: SupabaseClient,
   bookerId: string,
