@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { writeAuditLog } from "../admin/audit.service";
 import { callerHasAdminPermission } from "../admin/permissions";
 import { created, ok } from "../../utils/respond";
+import { withContacts } from "./contacts";
 import {
   cancelBooking,
   completeBooking,
@@ -40,7 +41,7 @@ export async function getBookings(req: Request, res: Response): Promise<void> {
 export async function getBookingDetail(req: Request, res: Response): Promise<void> {
   const { id } = req.valid!.params as BookingIdParam;
   const booking = await getBooking(req.supabase!, id);
-  ok(res, booking);
+  ok(res, await withContacts(booking, req.user!.id));
 }
 
 export async function postConfirmBooking(req: Request, res: Response): Promise<void> {

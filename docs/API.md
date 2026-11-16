@@ -855,6 +855,24 @@ caller.
 at booking time — it never changes even if the location's price does later. Amounts are integer
 minor units (e.g. paise for `INR`), never floating point.
 
+### Contacts on a booking
+
+`GET /v1/bookings/:id` adds contact details for the right person at the right time:
+
+- **The host**, once the booking is paid: `booker_contact: { phone, email }` (phone from the booker's
+  profile; the website saves the number entered at checkout when the profile has none).
+- **The booker**, once the booking is paid and `confirmed` (or `completed`):
+  `contact: { address: { address_line1, address_line2, city, region, postal_code, country, latitude, longitude },
+  host: { first_name, last_name, phone, email }, onsite: { name, phone } | null, arrival_notes }`.
+
+Neither field is present otherwise. `onsite` and `arrival_notes` come from the listing's private
+details, which only its owner (or an admin with `locations.moderate`) reads and writes:
+
+- `GET /v1/locations/:id/private-details`
+- `PUT /v1/locations/:id/private-details` with `{ "onsite_contact_name": "…" | null, "onsite_contact_phone": "…" | null, "arrival_notes": "…" | null }`
+
+They are never part of the public listing.
+
 ### Lifecycle actions
 
 | Method | Path | Who | Valid from |
