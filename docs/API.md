@@ -1616,6 +1616,28 @@ domain, a configured browser origin, or the API itself); anything else is `400`.
 `GET /v1/site-config` includes `payments: { provider: "cashfree", mode: "sandbox" | "production" }`
 for loading the right checkout.
 
+## Host payouts
+
+Hosts are paid by the team by bank transfer, recorded in the backend. A host's **earning** for a
+booking is the listing price (`base_amount_minor_units`; the platform fee and tax are paid by the
+booker on top), reduced in proportion to any refund. It is **payable** once the shoot has happened
+(or the booker cancelled and money was kept), the payment is settled and no refund request is
+waiting. Bookings the host declined or cancelled earn nothing. A booking is paid out at most once.
+
+- `GET /v1/me/earnings` → `{ summary: { currency, upcoming_minor_units, ready_minor_units,
+  on_hold_minor_units, paid_minor_units }, rows: [{ booking_id, location, booking_status,
+  booking_type, start_at, end_at, currency, listing_price_minor_units, paid_minor_units,
+  refunded_minor_units, net_minor_units, state, payout }] }`. `state`: `upcoming` | `ready` |
+  `on_hold` | `paid` | `not_payable`.
+- `GET /v1/me/payouts` → payouts the team recorded: `[{ id, amount_minor_units, currency,
+  reference, paid_at, note, account_last4, ifsc, booking_count, ... }]`.
+- `GET /v1/me/payout-account` → `{ account_holder_name, account_last4, ifsc, bank_name, pan_last4,
+  updated_at }` or `null`. Never the full account number or PAN.
+- `PUT /v1/me/payout-account` (host role) `{ account_holder_name, account_number, ifsc,
+  bank_name?, pan }`: account number 9–18 digits (spaces allowed), IFSC 11 characters, PAN 10.
+  The account number and PAN are stored in Supabase Vault.
+- `DELETE /v1/me/payout-account`.
+
 ## What's intentionally not here yet
 
 Reviews, favorites, and availability-aware search are later phases — see

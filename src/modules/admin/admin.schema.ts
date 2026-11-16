@@ -141,6 +141,9 @@ export const auditActionSchema = z.enum([
   "ADMIN_DECLINED_REFUND_REQUEST",
   "ADMIN_COMPLETED_ACCOUNT_DELETION",
   "ADMIN_DECLINED_ACCOUNT_DELETION",
+  // Host payouts (migration 20261117100000_host_payouts.sql)
+  "ADMIN_VIEWED_PAYOUT_DETAILS",
+  "ADMIN_RECORDED_PAYOUT",
 ]);
 
 export const auditTargetTypeSchema = z.enum([
@@ -165,6 +168,8 @@ export const auditTargetTypeSchema = z.enum([
   "seo",
   "refund_request",
   "deletion_request",
+  "payout_account",
+  "payout",
 ]);
 
 export const auditLogQuerySchema = z

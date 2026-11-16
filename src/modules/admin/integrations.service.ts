@@ -1,5 +1,6 @@
 import { env } from "../../config/env";
 import { checkBucketAccess, getBucketCorsRules, originsMissingUpload } from "../../lib/r2";
+import { browserUploadOrigins } from "../site/integrations.service";
 import { adminClient, anonClient } from "../../lib/supabase";
 import { checkApnsSigning } from "../notifications/providers/APNsProvider";
 import { getPaymentProvider } from "../payments/providers";
@@ -173,12 +174,13 @@ export async function getIntegrationsReport(liveChecks: boolean): Promise<Integr
         status = "error";
         detail = "CORS_ORIGINS is empty, so there is no browser origin to allow.";
       } else {
-        const missing = originsMissingUpload(result.value ?? [], env.CORS_ORIGINS);
+        const origins = await browserUploadOrigins();
+        const missing = originsMissingUpload(result.value ?? [], origins);
         status = missing.length === 0 ? "ok" : "error";
         detail =
           missing.length === 0
-            ? "Browser uploads are allowed from every CORS origin."
-            : `Photo uploads from the Admin Console will fail: the bucket does not allow PUT from ${missing.join(", ")}. Use "Allow browser uploads".`;
+            ? "Browser uploads are allowed from the admin console and the website."
+            : `Photo uploads from ${missing.join(", ")} will fail: the bucket does not allow them yet. Use "Allow browser uploads".`;
       }
     }
     integrations.push({

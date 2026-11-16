@@ -45,8 +45,10 @@ import {
 import { adminOutreachRouter } from "../outreach/outreach.routes";
 import { adminPlatformsRouter } from "../platform/releases.routes";
 import { adminSiteRouter } from "../site/site.routes";
+import { browserUploadOrigins } from "../site/integrations.service";
 import { adminContentRouter } from "../content/content.routes";
 import { adminAccountRouter } from "../account/account.routes";
+import { adminPayoutsRouter } from "../payouts/payouts.routes";
 import { requirePermission as can } from "./permissions";
 
 /**
@@ -157,18 +159,21 @@ adminConsole2Router.use(adminPlatformsRouter);
 adminConsole2Router.use(adminSiteRouter);
 adminConsole2Router.use(adminContentRouter);
 adminConsole2Router.use(adminAccountRouter);
+adminConsole2Router.use(adminPayoutsRouter);
 
 // -- R2 browser uploads -----------------------------------------------------------------------------
 // One click on the Integrations page adds a CORS rule letting the backend's CORS_ORIGINS PUT to the
 // bucket. Existing rules are kept. Requires an R2 API token with bucket-admin scope; with a plain
 // object read/write token Cloudflare refuses, and the error says so.
 adminConsole2Router.post("/system/r2-cors", can("settings.manage"), async (req: Request, res: Response) => {
-  if (env.CORS_ORIGINS.length === 0) {
+  // The admin console's origins and the website's primary domain (hosts upload listing photos there).
+  const origins = await browserUploadOrigins();
+  if (origins.length === 0) {
     throw new ValidationError("CORS_ORIGINS is empty on the backend -- set it to the Admin Console's URL first.");
   }
   let rules;
   try {
-    rules = await allowBrowserUploads(env.CORS_ORIGINS);
+    rules = await allowBrowserUploads(origins);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Cloudflare refused the change.";
     throw new ValidationError(
@@ -179,7 +184,7 @@ adminConsole2Router.post("/system/r2-cors", can("settings.manage"), async (req: 
   if (data) {
     await writeAuditLog(req.user!.id, "ADMIN_UPDATED_SETTINGS", "settings", (data as { id: string }).id, null, {
       change: "r2_cors_allow_browser_uploads",
-      origins: env.CORS_ORIGINS,
+      origins,
     });
   }
   ok(res, { rules });

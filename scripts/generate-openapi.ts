@@ -54,6 +54,8 @@ import {
   idParamSchema as accountIdParamSchema,
   refundRequestStatusSchema,
 } from "../src/modules/account/account.schema";
+import { earningStateSchema, hostIdParamSchema, listPayoutsQuerySchema, recordPayoutSchema } from "../src/modules/payouts/payouts.schema";
+import { revealSchema } from "../src/modules/payouts/payouts.routes";
 import {
   addTeamMemberSchema,
   adminConversationsQuerySchema,
@@ -2287,6 +2289,126 @@ registry.registerPath({
   security,
   request: { params: accountIdParamSchema, body: jsonBody(declineSchema) },
   responses: { "200": okResponse(adminDeletionRequestSchema.omit({ user: true, email: true, blockers: true })), ...errorResponses },
+});
+
+// -- Host payouts ---------------------------------------------------------------------------------
+
+const payoutAccountSchema = z
+  .object({
+    account_holder_name: z.string(),
+    account_last4: z.string(),
+    ifsc: z.string(),
+    bank_name: z.string().nullable(),
+    pan_last4: z.string(),
+    updated_at: z.string(),
+  })
+  .openapi("PayoutAccount");
+
+const hostRefSchema = z.object({ id: z.string().uuid(), first_name: z.string().nullable(), last_name: z.string().nullable() });
+
+const earningRowSchema = z
+  .object({
+    booking_id: z.string().uuid(),
+    location: z.object({ id: z.string().uuid(), title: z.string(), city: z.string().nullable() }),
+    booking_status: z.string(),
+    booking_type: z.string(),
+    start_at: z.string(),
+    end_at: z.string(),
+    currency: z.string(),
+    listing_price_minor_units: z.number().int(),
+    paid_minor_units: z.number().int(),
+    refunded_minor_units: z.number().int(),
+    net_minor_units: z.number().int(),
+    state: earningStateSchema,
+    payout: z.object({ id: z.string().uuid(), paid_at: z.string(), reference: z.string() }).nullable(),
+  })
+  .openapi("EarningRow");
+
+const earningsSummarySchema = z
+  .object({
+    currency: z.string(),
+    upcoming_minor_units: z.number().int(),
+    ready_minor_units: z.number().int(),
+    on_hold_minor_units: z.number().int(),
+    paid_minor_units: z.number().int(),
+  })
+  .openapi("EarningsSummary");
+
+const payoutSchema = z
+  .object({
+    id: z.string().uuid(),
+    host_id: z.string().uuid(),
+    amount_minor_units: z.number().int(),
+    currency: z.string(),
+    reference: z.string(),
+    paid_at: z.string(),
+    note: z.string().nullable(),
+    account_last4: z.string().nullable(),
+    ifsc: z.string().nullable(),
+    created_at: z.string(),
+    booking_count: z.number().int(),
+  })
+  .openapi("Payout");
+
+const hostDueSchema = z
+  .object({
+    host: hostRefSchema,
+    ready_minor_units: z.number().int(),
+    ready_bookings: z.number().int(),
+    on_hold_minor_units: z.number().int(),
+    currency: z.string(),
+    account: payoutAccountSchema.nullable(),
+  })
+  .openapi("HostDue");
+
+registry.registerPath({
+  method: "get",
+  path: "/payouts/due",
+  tags: ["Admin", "Payments"],
+  summary: "Hosts owed money now (ready) and on hold, largest first (payments.view)",
+  security,
+  responses: { "200": okResponse(z.array(hostDueSchema)), ...errorResponses },
+});
+registry.registerPath({
+  method: "get",
+  path: "/payouts",
+  tags: ["Admin", "Payments"],
+  summary: "Payouts recorded, newest first (payments.view)",
+  security,
+  request: { query: listPayoutsQuerySchema },
+  responses: { "200": paginatedResponse(payoutSchema), ...errorResponses },
+});
+registry.registerPath({
+  method: "get",
+  path: "/hosts/{id}/earnings",
+  tags: ["Admin", "Payments"],
+  summary: "A host's earnings per booking, summary and masked payout details (payments.view)",
+  security,
+  request: { params: hostIdParamSchema },
+  responses: {
+    "200": okResponse(
+      z.object({ host: hostRefSchema, account: payoutAccountSchema.nullable(), summary: earningsSummarySchema, rows: z.array(earningRowSchema) })
+    ),
+    ...errorResponses,
+  },
+});
+registry.registerPath({
+  method: "post",
+  path: "/hosts/{id}/payout-account/reveal",
+  tags: ["Admin", "Payments"],
+  summary: "Full bank account number and PAN, to make a transfer (payments.refund). Audited",
+  security,
+  request: { params: hostIdParamSchema, body: jsonBody(revealSchema) },
+  responses: { "200": okResponse(payoutAccountSchema.extend({ account_number: z.string(), pan: z.string() })), ...errorResponses },
+});
+registry.registerPath({
+  method: "post",
+  path: "/hosts/{id}/payouts",
+  tags: ["Admin", "Payments"],
+  summary: "Record a payout sent to a host for ready bookings (payments.refund). Each booking is paid once",
+  security,
+  request: { params: hostIdParamSchema, body: jsonBody(recordPayoutSchema) },
+  responses: { "201": createdResponse(payoutSchema), "409": { description: "Booking already paid out" }, ...errorResponses },
 });
 
 const generator = new OpenApiGeneratorV3(registry.definitions);

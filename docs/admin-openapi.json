@@ -1382,7 +1382,9 @@
               "ADMIN_APPROVED_REFUND_REQUEST",
               "ADMIN_DECLINED_REFUND_REQUEST",
               "ADMIN_COMPLETED_ACCOUNT_DELETION",
-              "ADMIN_DECLINED_ACCOUNT_DELETION"
+              "ADMIN_DECLINED_ACCOUNT_DELETION",
+              "ADMIN_VIEWED_PAYOUT_DETAILS",
+              "ADMIN_RECORDED_PAYOUT"
             ]
           },
           "target_type": {
@@ -1408,7 +1410,9 @@
               "site_page",
               "seo",
               "refund_request",
-              "deletion_request"
+              "deletion_request",
+              "payout_account",
+              "payout"
             ]
           },
           "target_id": {
@@ -4275,6 +4279,275 @@
           "email",
           "blockers"
         ]
+      },
+      "PayoutAccount": {
+        "type": "object",
+        "nullable": true,
+        "properties": {
+          "account_holder_name": {
+            "type": "string"
+          },
+          "account_last4": {
+            "type": "string"
+          },
+          "ifsc": {
+            "type": "string"
+          },
+          "bank_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "pan_last4": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "account_holder_name",
+          "account_last4",
+          "ifsc",
+          "bank_name",
+          "pan_last4",
+          "updated_at"
+        ]
+      },
+      "HostDue": {
+        "type": "object",
+        "properties": {
+          "host": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "first_name": {
+                "type": "string",
+                "nullable": true
+              },
+              "last_name": {
+                "type": "string",
+                "nullable": true
+              }
+            },
+            "required": [
+              "id",
+              "first_name",
+              "last_name"
+            ]
+          },
+          "ready_minor_units": {
+            "type": "integer"
+          },
+          "ready_bookings": {
+            "type": "integer"
+          },
+          "on_hold_minor_units": {
+            "type": "integer"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "account": {
+            "$ref": "#/components/schemas/PayoutAccount"
+          }
+        },
+        "required": [
+          "host",
+          "ready_minor_units",
+          "ready_bookings",
+          "on_hold_minor_units",
+          "currency",
+          "account"
+        ]
+      },
+      "Payout": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "host_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "amount_minor_units": {
+            "type": "integer"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "reference": {
+            "type": "string"
+          },
+          "paid_at": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string",
+            "nullable": true
+          },
+          "account_last4": {
+            "type": "string",
+            "nullable": true
+          },
+          "ifsc": {
+            "type": "string",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "booking_count": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "host_id",
+          "amount_minor_units",
+          "currency",
+          "reference",
+          "paid_at",
+          "note",
+          "account_last4",
+          "ifsc",
+          "created_at",
+          "booking_count"
+        ]
+      },
+      "EarningsSummary": {
+        "type": "object",
+        "properties": {
+          "currency": {
+            "type": "string"
+          },
+          "upcoming_minor_units": {
+            "type": "integer"
+          },
+          "ready_minor_units": {
+            "type": "integer"
+          },
+          "on_hold_minor_units": {
+            "type": "integer"
+          },
+          "paid_minor_units": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "currency",
+          "upcoming_minor_units",
+          "ready_minor_units",
+          "on_hold_minor_units",
+          "paid_minor_units"
+        ]
+      },
+      "EarningRow": {
+        "type": "object",
+        "properties": {
+          "booking_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "location": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "title": {
+                "type": "string"
+              },
+              "city": {
+                "type": "string",
+                "nullable": true
+              }
+            },
+            "required": [
+              "id",
+              "title",
+              "city"
+            ]
+          },
+          "booking_status": {
+            "type": "string"
+          },
+          "booking_type": {
+            "type": "string"
+          },
+          "start_at": {
+            "type": "string"
+          },
+          "end_at": {
+            "type": "string"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "listing_price_minor_units": {
+            "type": "integer"
+          },
+          "paid_minor_units": {
+            "type": "integer"
+          },
+          "refunded_minor_units": {
+            "type": "integer"
+          },
+          "net_minor_units": {
+            "type": "integer"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "upcoming",
+              "ready",
+              "on_hold",
+              "paid",
+              "not_payable"
+            ]
+          },
+          "payout": {
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "paid_at": {
+                "type": "string"
+              },
+              "reference": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "paid_at",
+              "reference"
+            ]
+          }
+        },
+        "required": [
+          "booking_id",
+          "location",
+          "booking_status",
+          "booking_type",
+          "start_at",
+          "end_at",
+          "currency",
+          "listing_price_minor_units",
+          "paid_minor_units",
+          "refunded_minor_units",
+          "net_minor_units",
+          "state",
+          "payout"
+        ]
       }
     },
     "parameters": {}
@@ -6425,7 +6698,9 @@
                 "site_page",
                 "seo",
                 "refund_request",
-                "deletion_request"
+                "deletion_request",
+                "payout_account",
+                "payout"
               ]
             },
             "required": false,
@@ -6515,7 +6790,9 @@
                 "ADMIN_APPROVED_REFUND_REQUEST",
                 "ADMIN_DECLINED_REFUND_REQUEST",
                 "ADMIN_COMPLETED_ACCOUNT_DELETION",
-                "ADMIN_DECLINED_ACCOUNT_DELETION"
+                "ADMIN_DECLINED_ACCOUNT_DELETION",
+                "ADMIN_VIEWED_PAYOUT_DETAILS",
+                "ADMIN_RECORDED_PAYOUT"
               ]
             },
             "required": false,
@@ -15433,6 +15710,450 @@
           },
           "404": {
             "description": "Not found"
+          }
+        }
+      }
+    },
+    "/payouts/due": {
+      "get": {
+        "tags": [
+          "Admin",
+          "Payments"
+        ],
+        "summary": "Hosts owed money now (ready) and on hold, largest first (payments.view)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/HostDue"
+                      }
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/payouts": {
+      "get": {
+        "tags": [
+          "Admin",
+          "Payments"
+        ],
+        "summary": "Payouts recorded, newest first (payments.view)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": false,
+            "name": "host_id",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            },
+            "required": false,
+            "name": "page",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            },
+            "required": false,
+            "name": "pageSize",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Payout"
+                      }
+                    },
+                    "meta": {
+                      "type": "object",
+                      "properties": {
+                        "page": {
+                          "type": "integer"
+                        },
+                        "pageSize": {
+                          "type": "integer"
+                        },
+                        "total": {
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "page",
+                        "pageSize",
+                        "total"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "meta"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/hosts/{id}/earnings": {
+      "get": {
+        "tags": [
+          "Admin",
+          "Payments"
+        ],
+        "summary": "A host's earnings per booking, summary and masked payout details (payments.view)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "host": {
+                          "type": "object",
+                          "properties": {
+                            "id": {
+                              "type": "string",
+                              "format": "uuid"
+                            },
+                            "first_name": {
+                              "type": "string",
+                              "nullable": true
+                            },
+                            "last_name": {
+                              "type": "string",
+                              "nullable": true
+                            }
+                          },
+                          "required": [
+                            "id",
+                            "first_name",
+                            "last_name"
+                          ]
+                        },
+                        "account": {
+                          "$ref": "#/components/schemas/PayoutAccount"
+                        },
+                        "summary": {
+                          "$ref": "#/components/schemas/EarningsSummary"
+                        },
+                        "rows": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/EarningRow"
+                          }
+                        }
+                      },
+                      "required": [
+                        "host",
+                        "account",
+                        "summary",
+                        "rows"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/hosts/{id}/payout-account/reveal": {
+      "post": {
+        "tags": [
+          "Admin",
+          "Payments"
+        ],
+        "summary": "Full bank account number and PAN, to make a transfer (payments.refund). Audited",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "reason": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 500
+                  }
+                },
+                "default": {},
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "allOf": [
+                        {
+                          "$ref": "#/components/schemas/PayoutAccount"
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "account_number": {
+                              "type": "string"
+                            },
+                            "pan": {
+                              "type": "string"
+                            }
+                          },
+                          "required": [
+                            "account_number",
+                            "pan"
+                          ]
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/hosts/{id}/payouts": {
+      "post": {
+        "tags": [
+          "Admin",
+          "Payments"
+        ],
+        "summary": "Record a payout sent to a host for ready bookings (payments.refund). Each booking is paid once",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "booking_ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "minItems": 1,
+                    "maxItems": 500
+                  },
+                  "reference": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 100
+                  },
+                  "paid_at": {
+                    "type": "string",
+                    "format": "date-time"
+                  },
+                  "note": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1000
+                  }
+                },
+                "required": [
+                  "booking_ids",
+                  "reference"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Payout"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "409": {
+            "description": "Booking already paid out"
           }
         }
       }

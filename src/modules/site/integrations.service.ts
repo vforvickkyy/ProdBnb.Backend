@@ -256,6 +256,15 @@ export async function setSupportEmail(actorId: string, email: string | null, rea
   return after;
 }
 
+/**
+ * Browser origins that upload photos straight to storage: the admin console and staging sites
+ * (CORS_ORIGINS) plus the website's primary domain, where hosts manage their listings.
+ */
+export async function browserUploadOrigins(): Promise<string[]> {
+  const site = (await getPublicSiteConfig().catch(() => null))?.site.url ?? null;
+  return [...new Set([...env.CORS_ORIGINS, ...(site ? [new URL(site).origin] : [])])];
+}
+
 export interface PublicSiteConfig {
   site: { primary_domain: string | null; url: string | null; support_email: string | null };
   maps: { provider: "google"; browser_key: string; map_id: string | null } | null;
