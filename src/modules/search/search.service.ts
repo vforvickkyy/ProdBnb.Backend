@@ -114,6 +114,8 @@ export async function searchLocations(query: SearchLocationsQuery): Promise<Sear
     _sort: sort,
     _page: query.page,
     _page_size: query.pageSize,
+    _price_min: query.price_min ?? null,
+    _price_max: query.price_max ?? null,
   });
 
   if (error) {

@@ -131,6 +131,11 @@ export const auditActionSchema = z.enum([
   "ADMIN_UPDATED_DOMAIN",
   "ADMIN_REMOVED_DOMAIN",
   "ADMIN_SET_PRIMARY_DOMAIN",
+  // Website pages and SEO (migration 20261116110000_search_budget_pages_seo.sql)
+  "ADMIN_CREATED_PAGE",
+  "ADMIN_UPDATED_PAGE",
+  "ADMIN_DELETED_PAGE",
+  "ADMIN_UPDATED_SEO",
 ]);
 
 export const auditTargetTypeSchema = z.enum([
@@ -151,6 +156,8 @@ export const auditTargetTypeSchema = z.enum([
   "release",
   "site_integration",
   "site",
+  "site_page",
+  "seo",
 ]);
 
 export const auditLogQuerySchema = z

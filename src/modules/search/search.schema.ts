@@ -21,6 +21,12 @@ export const searchLocationsQuerySchema = z
     use_case_ids: commaSeparatedUuids(20).optional(),
     capacity_min: z.coerce.number().int().positive().optional(),
     capacity_max: z.coerce.number().int().positive().optional(),
+    /**
+     * Budget, in minor units (paise for INR). Matches listings whose lowest active INR price -- the
+     * card's "starting from" -- is inside the range. Listings without an INR price never match.
+     */
+    price_min: z.coerce.number().int().min(0).max(1_000_000_000).optional(),
+    price_max: z.coerce.number().int().min(0).max(1_000_000_000).optional(),
     lat: z.coerce.number().min(-90).max(90).optional(),
     lng: z.coerce.number().min(-180).max(180).optional(),
     radius_km: z.coerce.number().positive().max(500).optional(),
@@ -36,6 +42,10 @@ export const searchLocationsQuerySchema = z
   .refine((data) => data.capacity_min === undefined || data.capacity_max === undefined || data.capacity_min <= data.capacity_max, {
     message: "capacity_min must be less than or equal to capacity_max.",
     path: ["capacity_min"],
+  })
+  .refine((data) => data.price_min === undefined || data.price_max === undefined || data.price_min <= data.price_max, {
+    message: "price_min must be less than or equal to price_max.",
+    path: ["price_min"],
   })
   .refine((data) => (data.lat === undefined) === (data.lng === undefined), {
     message: "lat and lng must be provided together.",

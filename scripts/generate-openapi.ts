@@ -35,6 +35,16 @@ import {
   updateDomainSchema,
 } from "../src/modules/site/site.schema";
 import {
+  createPageSchema,
+  listSeoQuerySchema,
+  pageIdParamSchema,
+  pagePlacementSchema,
+  saveSeoSchema,
+  seoEntityTypeSchema,
+  siteContactSchema,
+  updatePageSchema,
+} from "../src/modules/content/content.schema";
+import {
   addTeamMemberSchema,
   adminConversationsQuerySchema,
   adminListPaymentsQuerySchema,
@@ -2023,6 +2033,137 @@ registry.registerPath({
   security,
   request: { body: jsonBody(primaryDomainSchema) },
   responses: { "200": okResponse(siteDomainsOverviewSchema), ...errorResponses },
+});
+
+// -- Website pages and SEO -------------------------------------------------------------------------
+
+const sitePageSchema = z
+  .object({
+    id: z.string().uuid(),
+    slug: z.string(),
+    title: z.string(),
+    body: z.string().openapi({ description: "Markdown. May contain {{brand}} and {{support_email}}." }),
+    placement: pagePlacementSchema,
+    position: z.number().int(),
+    is_published: z.boolean(),
+    needs_review: z.boolean(),
+    placeholders: z.array(z.string()).openapi({ description: 'Bracketed placeholders still in the text, e.g. "[Company legal name]".' }),
+    updated_by: z.string().uuid().nullable(),
+    created_at: z.string(),
+    updated_at: z.string(),
+  })
+  .openapi("SitePage");
+
+const seoOverrideSchema = z
+  .object({
+    id: z.string().uuid(),
+    entity_type: seoEntityTypeSchema,
+    entity_key: z.string(),
+    meta_title: z.string().nullable(),
+    meta_description: z.string().nullable(),
+    og_image_url: z.string().nullable(),
+    noindex: z.boolean(),
+    updated_by: z.string().uuid().nullable(),
+    updated_at: z.string(),
+  })
+  .openapi("SeoOverride");
+
+const seoKeyParamsDoc = z.object({
+  type: seoEntityTypeSchema,
+  key: z.string().openapi({ description: "Page slug (or home, host, shoots) for type=page; the entity's id otherwise." }),
+});
+
+const siteSettingsSchema = z
+  .object({ id: z.string().uuid(), primary_domain: z.string().nullable(), support_email: z.string().nullable(), updated_at: z.string() })
+  .openapi("SiteSettings");
+
+registry.registerPath({
+  method: "get",
+  path: "/site/contact",
+  tags: ["Admin", "Website"],
+  summary: "The website's contact email (shown in the footer and on pages)",
+  security,
+  responses: { "200": okResponse(siteSettingsSchema), ...errorResponses },
+});
+registry.registerPath({
+  method: "put",
+  path: "/site/contact",
+  tags: ["Admin", "Website"],
+  summary: "Set or clear the website's contact email (content.manage)",
+  security,
+  request: { body: jsonBody(siteContactSchema) },
+  responses: { "200": okResponse(siteSettingsSchema), ...errorResponses },
+});
+registry.registerPath({
+  method: "get",
+  path: "/site/pages",
+  tags: ["Admin", "Website"],
+  summary: "Every website page, drafts included",
+  security,
+  responses: { "200": okResponse(z.array(sitePageSchema)), ...errorResponses },
+});
+registry.registerPath({
+  method: "post",
+  path: "/site/pages",
+  tags: ["Admin", "Website"],
+  summary: "Create a website page (content.manage)",
+  security,
+  request: { body: jsonBody(createPageSchema) },
+  responses: { "201": createdResponse(sitePageSchema), "409": { description: "Address already used" }, ...errorResponses },
+});
+registry.registerPath({
+  method: "get",
+  path: "/site/pages/{id}",
+  tags: ["Admin", "Website"],
+  summary: "One website page",
+  security,
+  request: { params: pageIdParamSchema },
+  responses: { "200": okResponse(sitePageSchema), ...errorResponses },
+});
+registry.registerPath({
+  method: "patch",
+  path: "/site/pages/{id}",
+  tags: ["Admin", "Website"],
+  summary: "Edit, publish or unpublish a website page (content.manage)",
+  security,
+  request: { params: pageIdParamSchema, body: jsonBody(updatePageSchema) },
+  responses: { "200": okResponse(sitePageSchema), "409": { description: "Address already used" }, ...errorResponses },
+});
+registry.registerPath({
+  method: "delete",
+  path: "/site/pages/{id}",
+  tags: ["Admin", "Website"],
+  summary: "Delete a website page and its SEO override (content.manage)",
+  security,
+  request: { params: pageIdParamSchema },
+  responses: { "200": okResponse(z.object({ removed: z.boolean() })), ...errorResponses },
+});
+registry.registerPath({
+  method: "get",
+  path: "/site/seo",
+  tags: ["Admin", "Website"],
+  summary: "SEO overrides, optionally of one type",
+  security,
+  request: { query: listSeoQuerySchema },
+  responses: { "200": okResponse(z.array(seoOverrideSchema)), ...errorResponses },
+});
+registry.registerPath({
+  method: "get",
+  path: "/site/seo/{type}/{key}",
+  tags: ["Admin", "Website"],
+  summary: "One SEO override, or null when the website writes it automatically",
+  security,
+  request: { params: seoKeyParamsDoc },
+  responses: { "200": okResponse(seoOverrideSchema.nullable()), ...errorResponses },
+});
+registry.registerPath({
+  method: "put",
+  path: "/site/seo/{type}/{key}",
+  tags: ["Admin", "Website"],
+  summary: "Save an SEO override (content.manage). Omitted fields are kept; null clears; an empty override is deleted",
+  security,
+  request: { params: seoKeyParamsDoc, body: jsonBody(saveSeoSchema) },
+  responses: { "200": okResponse(seoOverrideSchema.nullable()), ...errorResponses },
 });
 
 const generator = new OpenApiGeneratorV3(registry.definitions);

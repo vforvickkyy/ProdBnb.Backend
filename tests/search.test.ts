@@ -595,3 +595,83 @@ describe("starting price (Phase 29 D1)", () => {
     }
   });
 });
+
+// ============================================================================
+// Budget (website search): price_min / price_max filter on the same lowest
+// active INR price the card shows as starting_price.
+// ============================================================================
+
+describe("budget filter", () => {
+  let host: TestUser;
+  let admin: TestUser;
+  const tag = `budget-${Date.now()}`;
+  let cheap: string;
+  let mid: string;
+  let pricey: string;
+  let unpriced: string;
+  let usdOnly: string;
+
+  async function seedBudget(label: string, rows: PricingSeed[]): Promise<string> {
+    const id = await seedLocation(host, admin, { title: `${tag} ${label}`, description: `Budget fixture ${label}`, city: "Pune", country: "India" });
+    if (rows.length > 0) await seedPricing(id, rows);
+    return id;
+  }
+
+  async function budget(query: Record<string, string | number>): Promise<string[]> {
+    const res = await request(app).get("/v1/locations").query({ search: tag, pageSize: 50, ...query });
+    expect(res.status).toBe(200);
+    return ids(res);
+  }
+
+  beforeAll(async () => {
+    host = await createTestUser();
+    admin = await createTestUser();
+    await grantHostRole(host);
+    cheap = await seedBudget("cheap", [{ booking_type: "hourly", amount_minor_units: 40000 }]);
+    // Starting price is the cheapest tier: 150000 here, even though the day rate is far higher.
+    mid = await seedBudget("mid", [
+      { booking_type: "hourly", amount_minor_units: 150000 },
+      { booking_type: "day", amount_minor_units: 900000 },
+    ]);
+    pricey = await seedBudget("pricey", [
+      { booking_type: "day", amount_minor_units: 1200000 },
+      { booking_type: "hourly", amount_minor_units: 10000, is_active: false },
+    ]);
+    unpriced = await seedBudget("unpriced", []);
+    usdOnly = await seedBudget("usd", [{ booking_type: "day", amount_minor_units: 5000, currency: "USD" }]);
+  });
+
+  afterAll(async () => {
+    await deleteTestUser(host.id);
+    await deleteTestUser(admin.id);
+  });
+
+  it("returns everything when no budget is given", async () => {
+    expect(await budget({})).toEqual(expect.arrayContaining([cheap, mid, pricey, unpriced, usdOnly]));
+  });
+
+  it("matches on the lowest active INR price, inclusive at both ends", async () => {
+    const found = await budget({ price_min: 50000, price_max: 150000 });
+    expect(found).toContain(mid);
+    expect(found).not.toContain(cheap);
+    expect(found).not.toContain(pricey);
+  });
+
+  it("supports open-ended ranges and ignores inactive tiers", async () => {
+    expect(await budget({ price_max: 50000 })).toEqual([cheap]);
+    const above = await budget({ price_min: 1000000 });
+    expect(above).toEqual([pricey]);
+  });
+
+  it("never matches listings without an INR price", async () => {
+    const found = await budget({ price_min: 0 });
+    expect(found).not.toContain(unpriced);
+    expect(found).not.toContain(usdOnly);
+    expect(found).toEqual(expect.arrayContaining([cheap, mid, pricey]));
+  });
+
+  it("rejects a range that runs backwards, or negative amounts", async () => {
+    expect((await request(app).get("/v1/locations").query({ price_min: 5000, price_max: 100 })).status).toBe(400);
+    expect((await request(app).get("/v1/locations").query({ price_min: -1 })).status).toBe(400);
+  });
+});

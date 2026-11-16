@@ -210,11 +210,15 @@ export async function isVercelConnected(): Promise<boolean> {
 export interface SiteSettings {
   id: string;
   primary_domain: string | null;
+  /** Contact address shown on the website (footer, pages). */
+  support_email: string | null;
   updated_at: string;
 }
 
+const SITE_SETTINGS_COLUMNS = "id, primary_domain, support_email, updated_at";
+
 export async function getSiteSettings(): Promise<SiteSettings> {
-  const { data, error } = await adminClient.from("site_settings").select("id, primary_domain, updated_at").eq("singleton", true).single();
+  const { data, error } = await adminClient.from("site_settings").select(SITE_SETTINGS_COLUMNS).eq("singleton", true).single();
   if (error) throw error;
   return data as SiteSettings;
 }
@@ -224,15 +228,35 @@ export async function setPrimaryDomainRow(actorId: string, domain: string | null
     .from("site_settings")
     .update({ primary_domain: domain, updated_by: actorId })
     .eq("singleton", true)
-    .select("id, primary_domain, updated_at")
+    .select(SITE_SETTINGS_COLUMNS)
     .single();
   if (error) throw error;
   clearSiteConfigCache();
   return data as SiteSettings;
 }
 
+/** The website's contact email. Audited as a settings change on the site. */
+export async function setSupportEmail(actorId: string, email: string | null, reason?: string | null): Promise<SiteSettings> {
+  const before = await getSiteSettings();
+  const { data, error } = await adminClient
+    .from("site_settings")
+    .update({ support_email: email, updated_by: actorId })
+    .eq("singleton", true)
+    .select(SITE_SETTINGS_COLUMNS)
+    .single();
+  if (error) throw error;
+  clearSiteConfigCache();
+  const after = data as SiteSettings;
+  if (before.support_email !== after.support_email) {
+    await writeAuditLog(actorId, "ADMIN_UPDATED_SETTINGS", "site", after.id, reason ?? null, {
+      changes: { support_email: { from: before.support_email, to: after.support_email } },
+    });
+  }
+  return after;
+}
+
 export interface PublicSiteConfig {
-  site: { primary_domain: string | null; url: string | null };
+  site: { primary_domain: string | null; url: string | null; support_email: string | null };
   maps: { provider: "google"; browser_key: string; map_id: string | null } | null;
   features: { availability_requires_login: boolean };
 }
@@ -253,7 +277,11 @@ export async function getPublicSiteConfig(): Promise<PublicSiteConfig> {
   const [settings, maps, platform] = await Promise.all([getSiteSettings(), loadRow("google_maps"), getPlatformSettings()]);
   const browserKey = maps?.enabled && typeof maps.config.browser_key === "string" ? maps.config.browser_key : null;
   const value: PublicSiteConfig = {
-    site: { primary_domain: settings.primary_domain, url: settings.primary_domain ? `https://${settings.primary_domain}` : null },
+    site: {
+      primary_domain: settings.primary_domain,
+      url: settings.primary_domain ? `https://${settings.primary_domain}` : null,
+      support_email: settings.support_email,
+    },
     maps: browserKey ? { provider: "google", browser_key: browserKey, map_id: (maps!.config.map_id as string | null) ?? null } : null,
     features: { availability_requires_login: platform.availability_requires_login },
   };

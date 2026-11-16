@@ -10,6 +10,7 @@ import { collectionsRouter } from "./modules/collections/collections.routes";
 import { publicOutreachRouter } from "./modules/outreach/outreach.routes";
 import { publicPlatformsRouter } from "./modules/platform/releases.routes";
 import { publicSiteRouter } from "./modules/site/site.routes";
+import { publicContentRouter } from "./modules/content/content.routes";
 import { getPublicSiteConfig } from "./modules/site/integrations.service";
 import { availabilityRouter } from "./modules/availability/availability.routes";
 import { billingRouter } from "./modules/billing/billing.routes";
@@ -144,6 +145,7 @@ export function createApp(): Express {
   app.use("/v1", publicOutreachRouter);
   app.use("/v1", publicPlatformsRouter);
   app.use("/v1", publicSiteRouter);
+  app.use("/v1", publicContentRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

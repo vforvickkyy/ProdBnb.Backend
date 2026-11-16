@@ -258,7 +258,7 @@ describe("Website (Console 3)", () => {
       expect(res.body.data.domains[0]).toMatchObject({ name: "example.com", is_primary: true, status: "active" });
 
       const config = await request(app).get("/v1/site-config").expect(200);
-      expect(config.body.data.site).toEqual({ primary_domain: "example.com", url: "https://example.com" });
+      expect(config.body.data.site).toMatchObject({ primary_domain: "example.com", url: "https://example.com" });
 
       // The website on its primary domain can call the API from the browser with no redeploy...
       const allowed = await request(app).get("/v1/site-config").set("Origin", "https://example.com");

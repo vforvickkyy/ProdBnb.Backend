@@ -44,6 +44,8 @@ export const ADMIN_PERMISSIONS = [
   // Website (Console 3): domains, Google Maps and other site integrations.
   "site.view",
   "site.manage",
+  // Website pages (policies, about...) and SEO titles/descriptions.
+  "content.manage",
 ] as const;
 export type AdminPermission = (typeof ADMIN_PERMISSIONS)[number];
 
@@ -54,7 +56,8 @@ export type AdminPermission = (typeof ADMIN_PERMISSIONS)[number];
  * correspondence are split by job:
  *
  *  - moderator  -- listings and people: approve/reject/suspend, create listings for hosts,
- *                  photos/sections/pricing/timings, catalog + collections, user roles
+ *                  photos/sections/pricing/timings, catalog + collections, user roles, website
+ *                  pages and SEO
  *  - support    -- bookings and disputes: booking actions, re-checking payments, private messages,
  *                  announcements and direct notifications, incidents
  *  - finance    -- money: payments, refunds, analytics
@@ -74,7 +77,15 @@ const BASE: readonly AdminPermission[] = [
 
 export const ROLE_PERMISSIONS: Record<TeamRole, readonly AdminPermission[]> = {
   super_admin: ADMIN_PERMISSIONS,
-  moderator: [...BASE, "users.manage", "locations.moderate", "locations.create", "catalog.manage", "campaigns.view"],
+  moderator: [
+    ...BASE,
+    "users.manage",
+    "locations.moderate",
+    "locations.create",
+    "catalog.manage",
+    "campaigns.view",
+    "content.manage",
+  ],
   support: [
     ...BASE,
     "bookings.manage",

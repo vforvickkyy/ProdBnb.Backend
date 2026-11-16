@@ -207,6 +207,7 @@ this feed). Text search, geographic search, and filters (Phase 4) all live on th
 | `category_ids`, `use_case_ids` | Comma-separated UUIDs (from `GET /v1/categories`/`/v1/use-cases`) — matches **any** of the given ids. |
 | `amenity_ids` | Comma-separated UUIDs (from `GET /v1/amenities`) — matches **all** of the given ids (a location must have every one). |
 | `capacity_min`, `capacity_max` | Positive integers; `capacity_min` must be ≤ `capacity_max`. |
+| `price_min`, `price_max` | Budget in minor units (paise), non-negative integers; `price_min` must be ≤ `price_max`. Matches the listing's lowest active INR price (the card's `starting_price`). |
 | `lat`, `lng` | Must be provided together. Annotates each result with `distance_km` and enables `sort=nearest`. |
 | `radius_km` | Optional add-on to `lat`/`lng` (≤500) — restricts results to within that radius; without it, `lat`/`lng` alone just annotates/sorts by distance with no cutoff. |
 | `north`, `south`, `east`, `west` | Map-viewport bounding box — all four required together or none. `north` must be `>` `south`, `east` must be `>` `west` (bounding boxes crossing the antimeridian aren't supported). |
@@ -1538,6 +1539,30 @@ Realtime event. A client updates its own unread badge locally when an event arri
 by the next `GET /v1/conversations`; because unread is *derived* from durable rows rather than
 accumulated from events, a missed, duplicated or out-of-order event cannot corrupt it, and the
 mandatory reconciliation fetch above restores the true count on its own.
+
+## Website pages and SEO
+
+Public, no login. Responses are cached for 60 seconds.
+
+### `GET /v1/site-pages`
+
+Published pages for the website's footer, without their text: `[{ slug, title, placement, position, updated_at }]`.
+`placement` is `company` or `legal` (pages placed `hidden` are reachable by address but not listed).
+
+### `GET /v1/site-pages/:slug`
+
+One published page: `{ slug, title, body, placement, position, updated_at }`. `body` is Markdown and may contain
+`{{brand}}` and `{{support_email}}`, which the client fills in. `404` for unknown or unpublished pages.
+
+### `GET /v1/seo/:type/:key`
+
+Admin-set SEO for one page or entity, or `null` when there is none. `type` is `page` (key = page slug, or `home`,
+`host`, `shoots`), `location`, `collection`, `use_case` or `category` (key = id). Returns
+`{ meta_title, meta_description, og_image_url, noindex }`; any field may be null, meaning "write it automatically".
+
+### `GET /v1/seo/noindex`
+
+Every `{ entity_type, entity_key }` an admin marked noindex, for sitemaps.
 
 ## What's intentionally not here yet
 
