@@ -298,7 +298,7 @@ visible only to the owning host or an admin — otherwise `404` (existence isn't
     "host": { "id": "b1f2...", "first_name": "Alex", "last_name": "Producer", "avatar_url": null },
     "booking_options": [
       { "type": "hourly", "amount_minor_units": 10000, "currency": "INR" },
-      { "type": "half_day", "amount_minor_units": 30000, "currency": "INR" },
+      { "type": "half_day", "amount_minor_units": 30000, "currency": "INR", "half_day_duration_hours": 4 },
       { "type": "day", "amount_minor_units": 40000, "currency": "INR" },
       { "type": "multi_day", "amount_minor_units": 15000, "currency": "INR" }
     ]
@@ -312,7 +312,8 @@ visible only to the owning host or an admin — otherwise `404` (existence isn't
 `booking_options` (Phase 6A) lists only the location's *active* `location_pricing` rows — see
 [`docs/DATABASE.md`](DATABASE.md#booking-types--pricing-phase-6a) and the pricing endpoints
 below; it can be empty if the host hasn't configured any pricing yet, in which case the location
-is visible but not yet bookable.
+is visible but not yet bookable. A `half_day` option also carries `half_day_duration_hours` (how long
+the block is), so a client can offer start times that fit; `GET /v1/me/locations` rows do the same.
 
 ### `POST /v1/locations`
 

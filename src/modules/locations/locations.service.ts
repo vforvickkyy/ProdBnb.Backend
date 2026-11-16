@@ -31,7 +31,7 @@ const LOCATION_DETAIL_SELECT = `
   location_amenities ( amenities ( id, name ) ),
   location_use_cases ( use_cases ( id, name ) ),
   location_media ( id, media_type, storage_key, position, metadata, created_at, updated_at ),
-  location_pricing ( booking_type, amount_minor_units, currency, is_active )
+  location_pricing ( booking_type, amount_minor_units, currency, is_active, half_day_duration_hours )
 `;
 
 // A host may only request these transitions through the general-purpose
@@ -134,6 +134,8 @@ export interface BookingOption {
   type: string;
   amount_minor_units: number;
   currency: string;
+  /** Half-day options only. */
+  half_day_duration_hours?: number | null;
 }
 
 interface RawLocationPricingRow {
@@ -141,6 +143,7 @@ interface RawLocationPricingRow {
   amount_minor_units: number;
   currency: string;
   is_active: boolean;
+  half_day_duration_hours?: number | null;
 }
 
 export interface LocationDetail extends LocationSummary {
@@ -176,7 +179,13 @@ function flattenDetail(row: RawLocationDetailRow, host: HostPublicSummary | null
     // configs lives at GET /v1/locations/:id/pricing, not here).
     booking_options: location_pricing
       .filter((p) => p.is_active)
-      .map((p) => ({ type: p.booking_type, amount_minor_units: p.amount_minor_units, currency: p.currency })),
+      // A half-day option also says how long it is (the website offers start times that fit).
+      .map((p) => ({
+        type: p.booking_type,
+        amount_minor_units: p.amount_minor_units,
+        currency: p.currency,
+        ...(p.booking_type === "half_day" ? { half_day_duration_hours: p.half_day_duration_hours ?? null } : {}),
+      })),
   };
 }
 
@@ -325,7 +334,7 @@ async function listLocations(
 const HOST_LOCATION_LIST_SELECT = `
   ${LOCATION_COLUMNS},
   location_media ( id, media_type, storage_key, position, section_id, created_at, updated_at ),
-  location_pricing ( booking_type, amount_minor_units, currency, is_active ),
+  location_pricing ( booking_type, amount_minor_units, currency, is_active, half_day_duration_hours ),
   location_categories ( categories ( id, name ) )
 `;
 
@@ -405,6 +414,7 @@ function toHostLocationSummary(row: RawHostLocationRow): HostLocationSummary {
         type: p.booking_type,
         amount_minor_units: p.amount_minor_units,
         currency: p.currency,
+        ...(p.booking_type === "half_day" ? { half_day_duration_hours: p.half_day_duration_hours ?? null } : {}),
         is_active: p.is_active,
       })),
     // Flattened exactly as `flattenDetail` flattens the identical embed. The
