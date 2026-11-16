@@ -1,3 +1,4 @@
+import { env } from "../../config/env";
 import { ValidationError } from "../../errors/AppError";
 import { adminClient } from "../../lib/supabase";
 import { writeAuditLog } from "../admin/audit.service";
@@ -259,6 +260,8 @@ export interface PublicSiteConfig {
   site: { primary_domain: string | null; url: string | null; support_email: string | null };
   maps: { provider: "google"; browser_key: string; map_id: string | null } | null;
   features: { availability_requires_login: boolean };
+  /** Which checkout the website loads. No keys: the order's session id is all a browser needs. */
+  payments: { provider: "cashfree"; mode: "sandbox" | "production" };
 }
 
 const PUBLIC_TTL_MS = 60_000;
@@ -284,6 +287,7 @@ export async function getPublicSiteConfig(): Promise<PublicSiteConfig> {
     },
     maps: browserKey ? { provider: "google", browser_key: browserKey, map_id: (maps!.config.map_id as string | null) ?? null } : null,
     features: { availability_requires_login: platform.availability_requires_login },
+    payments: { provider: "cashfree", mode: env.CASHFREE_ENV === "test" ? "sandbox" : "production" },
   };
   publicCache = { value, at: Date.now() };
   return value;

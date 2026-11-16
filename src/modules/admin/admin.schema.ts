@@ -136,6 +136,11 @@ export const auditActionSchema = z.enum([
   "ADMIN_UPDATED_PAGE",
   "ADMIN_DELETED_PAGE",
   "ADMIN_UPDATED_SEO",
+  // Booker account (migration 20261116120000_booker_account.sql)
+  "ADMIN_APPROVED_REFUND_REQUEST",
+  "ADMIN_DECLINED_REFUND_REQUEST",
+  "ADMIN_COMPLETED_ACCOUNT_DELETION",
+  "ADMIN_DECLINED_ACCOUNT_DELETION",
 ]);
 
 export const auditTargetTypeSchema = z.enum([
@@ -158,6 +163,8 @@ export const auditTargetTypeSchema = z.enum([
   "site",
   "site_page",
   "seo",
+  "refund_request",
+  "deletion_request",
 ]);
 
 export const auditLogQuerySchema = z

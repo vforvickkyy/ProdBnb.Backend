@@ -19,8 +19,45 @@ const UNIQUE_VIOLATION = "23505";
 
 const PAYMENT_COLUMNS = `
   id, booking_id, provider, provider_order_id, provider_reference_id,
-  status, amount_minor_units, currency, failure_reason, created_at, updated_at
+  status, amount_minor_units, currency, method, failure_reason, created_at, updated_at
 `;
+
+/**
+ * The coarse method family a payment settled with ("upi", "credit_card", "net_banking"...), read
+ * from whichever provider data the settlement came with: the reduced attempt projection (verify /
+ * resume) or the webhook body. Never instrument detail. Null when the provider didn't say.
+ */
+export function settledMethodFrom(raw: unknown): string | null {
+  const r = raw as {
+    attempts?: { settledAttempt?: { method?: unknown } | null } | null;
+    data?: { payment?: { payment_group?: unknown } | null } | null;
+  } | null;
+  const candidate = r?.attempts?.settledAttempt?.method ?? r?.data?.payment?.payment_group ?? null;
+  if (typeof candidate !== "string") return null;
+  const method = candidate.trim().toLowerCase();
+  return /^[a-z_]{1,40}$/.test(method) ? method : null;
+}
+
+/**
+ * Where a browser checkout may send the payer back to: this site's own pages (the website's
+ * primary domain, the configured browser origins) or the API's neutral return page. Anything else
+ * would let an order be used to bounce a payer to an arbitrary site.
+ */
+async function assertAllowedReturnUrl(returnUrl: string): Promise<void> {
+  let origin: string;
+  try {
+    origin = new URL(returnUrl).origin;
+  } catch {
+    throw new ValidationError("return_url must be a valid URL.");
+  }
+  const { getPublicSiteConfig } = await import("../site/integrations.service");
+  const site = (await getPublicSiteConfig()).site.url;
+  const allowed = new Set<string>([new URL(env.API_BASE_URL).origin, ...env.CORS_ORIGINS]);
+  if (site) allowed.add(new URL(site).origin);
+  if (!allowed.has(origin)) {
+    throw new ValidationError("return_url must point back to this site.");
+  }
+}
 
 const REFUND_COLUMNS = `
   id, payment_id, provider_refund_id, provider_reference_id,
@@ -36,6 +73,8 @@ export interface PaymentDetail {
   status: string;
   amount_minor_units: number;
   currency: string;
+  /** Coarse method family once settled ("upi", "credit_card"...); never instrument detail. */
+  method: string | null;
   failure_reason: string | null;
   created_at: string;
   updated_at: string;
@@ -219,6 +258,10 @@ async function applyPaymentStatusUpdate(
   }
 
   const patch: Record<string, unknown> = { status: resolved, provider_raw: raw };
+  if (resolved === "success") {
+    const method = settledMethodFrom(raw);
+    if (method) patch.method = method;
+  }
   if (providerReferenceId) {
     patch.provider_reference_id = providerReferenceId;
   }
@@ -394,6 +437,9 @@ export async function createPayment(
   }
   if (booking.status !== "requested" && booking.status !== "confirmed") {
     throw new ValidationError(`Cannot create a payment for a booking with status '${booking.status}'.`);
+  }
+  if (input.return_url) {
+    await assertAllowedReturnUrl(input.return_url);
   }
 
   // Phase 26-H: an existing in-flight attempt is RESUMED, not rejected.

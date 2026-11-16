@@ -59,6 +59,13 @@ export async function presignUpload(key: string, contentType: string, contentLen
   return { url, expiresAt: new Date(Date.now() + expiresIn * 1000) };
 }
 
+/** Server-side upload of a small object the backend already holds (profile photos). */
+export async function putObject(key: string, body: Buffer, contentType: string): Promise<void> {
+  await client.send(
+    new PutObjectCommand({ Bucket: env.R2_BUCKET_NAME, Key: key, Body: body, ContentType: contentType, CacheControl: "public, max-age=31536000, immutable" })
+  );
+}
+
 export interface R2ObjectInfo {
   contentType: string | undefined;
   contentLength: number | undefined;

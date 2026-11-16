@@ -40,6 +40,7 @@ const TYPE_CATEGORY: Record<NotificationType, PreferenceCategory> = {
   booking_confirmed: "booking",
   booking_declined: "booking",
   booking_cancelled: "booking",
+  booking_updated: "payment",
   payment_success: "payment",
   payment_failed: "payment",
   refund_processed: "payment",
@@ -409,6 +410,34 @@ export function notifyRefundProcessed(bookerId: string, bookingId: string, payme
     entityId: bookingId,
     data: { payment_id: paymentId },
     sourceEventId: `payment:${paymentId}:refund_processed`,
+  });
+}
+
+/**
+ * Booker account: news about a refund request (opened, approved, declined). One notification per
+ * request and outcome (`refund_request:<id>:<event>`), so a retried decision never notifies twice.
+ * Generic copy, like every helper above: the amount and the team's note are read in the app.
+ */
+export function notifyRefundRequestUpdate(
+  bookerId: string,
+  bookingId: string,
+  requestId: string,
+  event: "opened" | "approved" | "declined"
+): Promise<void> {
+  const copy = {
+    opened: { title: "Refund request received", body: "We'll review your refund request and let you know." },
+    approved: { title: "Refund approved", body: "Your refund is on its way to your original payment method." },
+    declined: { title: "Refund request reviewed", body: "Your refund request was not approved. See the booking for details." },
+  }[event];
+  return safeNotify({
+    userId: bookerId,
+    type: "booking_updated",
+    title: copy.title,
+    body: copy.body,
+    entityType: "booking",
+    entityId: bookingId,
+    data: { refund_request_id: requestId },
+    sourceEventId: `refund_request:${requestId}:${event}`,
   });
 }
 

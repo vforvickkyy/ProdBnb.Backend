@@ -1378,7 +1378,11 @@
               "ADMIN_CREATED_PAGE",
               "ADMIN_UPDATED_PAGE",
               "ADMIN_DELETED_PAGE",
-              "ADMIN_UPDATED_SEO"
+              "ADMIN_UPDATED_SEO",
+              "ADMIN_APPROVED_REFUND_REQUEST",
+              "ADMIN_DECLINED_REFUND_REQUEST",
+              "ADMIN_COMPLETED_ACCOUNT_DELETION",
+              "ADMIN_DECLINED_ACCOUNT_DELETION"
             ]
           },
           "target_type": {
@@ -1402,7 +1406,9 @@
               "site_integration",
               "site",
               "site_page",
-              "seo"
+              "seo",
+              "refund_request",
+              "deletion_request"
             ]
           },
           "target_id": {
@@ -3963,6 +3969,312 @@
           "updated_by",
           "updated_at"
         ]
+      },
+      "RefundRequest": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "booking_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "payment_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "booker",
+              "cancellation",
+              "rejection"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "approved",
+              "declined",
+              "withdrawn"
+            ]
+          },
+          "approved_amount_minor_units": {
+            "type": "integer",
+            "nullable": true
+          },
+          "refund_id": {
+            "type": "string",
+            "nullable": true,
+            "format": "uuid"
+          },
+          "decided_at": {
+            "type": "string",
+            "nullable": true
+          },
+          "decision_note": {
+            "type": "string",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "booking_id",
+          "payment_id",
+          "source",
+          "reason",
+          "status",
+          "approved_amount_minor_units",
+          "refund_id",
+          "decided_at",
+          "decision_note",
+          "created_at",
+          "updated_at"
+        ]
+      },
+      "AdminRefundRequest": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/RefundRequest"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "booking": {
+                "type": "object",
+                "nullable": true,
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "status": {
+                    "type": "string"
+                  },
+                  "start_at": {
+                    "type": "string"
+                  },
+                  "end_at": {
+                    "type": "string"
+                  },
+                  "cancellation_reason": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "location": {
+                    "type": "object",
+                    "nullable": true,
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "title": {
+                        "type": "string"
+                      },
+                      "city": {
+                        "type": "string",
+                        "nullable": true
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "title",
+                      "city"
+                    ]
+                  },
+                  "booker": {
+                    "type": "object",
+                    "nullable": true,
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "format": "uuid"
+                      },
+                      "first_name": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "last_name": {
+                        "type": "string",
+                        "nullable": true
+                      }
+                    },
+                    "required": [
+                      "id",
+                      "first_name",
+                      "last_name"
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "status",
+                  "start_at",
+                  "end_at",
+                  "cancellation_reason",
+                  "location",
+                  "booker"
+                ]
+              },
+              "payment": {
+                "type": "object",
+                "nullable": true,
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "amount_minor_units": {
+                    "type": "integer"
+                  },
+                  "currency": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string"
+                  },
+                  "method": {
+                    "type": "string",
+                    "nullable": true
+                  }
+                },
+                "required": [
+                  "id",
+                  "amount_minor_units",
+                  "currency",
+                  "status",
+                  "method"
+                ]
+              },
+              "refunded_minor_units": {
+                "type": "integer"
+              },
+              "remaining_minor_units": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "booking",
+              "payment",
+              "refunded_minor_units",
+              "remaining_minor_units"
+            ]
+          }
+        ]
+      },
+      "AdminDeletionRequest": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "user_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "reason": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "completed",
+              "declined",
+              "withdrawn"
+            ]
+          },
+          "decided_at": {
+            "type": "string",
+            "nullable": true
+          },
+          "decision_note": {
+            "type": "string",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string"
+          },
+          "user": {
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "first_name": {
+                "type": "string",
+                "nullable": true
+              },
+              "last_name": {
+                "type": "string",
+                "nullable": true
+              },
+              "status": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "first_name",
+              "last_name",
+              "status"
+            ]
+          },
+          "email": {
+            "type": "string",
+            "nullable": true
+          },
+          "blockers": {
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "upcoming_bookings": {
+                "type": "integer"
+              },
+              "upcoming_hosted_bookings": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "upcoming_bookings",
+              "upcoming_hosted_bookings"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "user_id",
+          "reason",
+          "status",
+          "decided_at",
+          "decision_note",
+          "created_at",
+          "updated_at",
+          "user",
+          "email",
+          "blockers"
+        ]
       }
     },
     "parameters": {}
@@ -6111,7 +6423,9 @@
                 "site_integration",
                 "site",
                 "site_page",
-                "seo"
+                "seo",
+                "refund_request",
+                "deletion_request"
               ]
             },
             "required": false,
@@ -6197,7 +6511,11 @@
                 "ADMIN_CREATED_PAGE",
                 "ADMIN_UPDATED_PAGE",
                 "ADMIN_DELETED_PAGE",
-                "ADMIN_UPDATED_SEO"
+                "ADMIN_UPDATED_SEO",
+                "ADMIN_APPROVED_REFUND_REQUEST",
+                "ADMIN_DECLINED_REFUND_REQUEST",
+                "ADMIN_COMPLETED_ACCOUNT_DELETION",
+                "ADMIN_DECLINED_ACCOUNT_DELETION"
               ]
             },
             "required": false,
@@ -14466,6 +14784,634 @@
                         {
                           "nullable": true
                         }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/refund-requests": {
+      "get": {
+        "tags": [
+          "Admin",
+          "Payments"
+        ],
+        "summary": "Refund requests from bookers (payments.view). Pending ones oldest first",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "pending",
+                "approved",
+                "declined",
+                "withdrawn"
+              ]
+            },
+            "required": false,
+            "name": "status",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            },
+            "required": false,
+            "name": "page",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            },
+            "required": false,
+            "name": "pageSize",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/AdminRefundRequest"
+                      }
+                    },
+                    "meta": {
+                      "type": "object",
+                      "properties": {
+                        "page": {
+                          "type": "integer"
+                        },
+                        "pageSize": {
+                          "type": "integer"
+                        },
+                        "total": {
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "page",
+                        "pageSize",
+                        "total"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "meta"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/refund-requests/{id}/approve": {
+      "post": {
+        "tags": [
+          "Admin",
+          "Payments"
+        ],
+        "summary": "Approve a refund request (payments.refund): refunds through the provider, full or partial",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "amount_minor_units": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "exclusiveMinimum": true
+                  },
+                  "note": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1000
+                  }
+                },
+                "default": {},
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/RefundRequest"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "409": {
+            "description": "Already decided, or being decided"
+          }
+        }
+      }
+    },
+    "/refund-requests/{id}/decline": {
+      "post": {
+        "tags": [
+          "Admin",
+          "Payments"
+        ],
+        "summary": "Decline a refund request with a note the booker sees (payments.refund)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "note": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1000
+                  }
+                },
+                "required": [
+                  "note"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/RefundRequest"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "409": {
+            "description": "Already decided, or being decided"
+          }
+        }
+      }
+    },
+    "/deletion-requests": {
+      "get": {
+        "tags": [
+          "Admin",
+          "Users"
+        ],
+        "summary": "Account deletion requests (users.view), with what still blocks each one",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "pending",
+                "completed",
+                "declined",
+                "withdrawn"
+              ]
+            },
+            "required": false,
+            "name": "status",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            },
+            "required": false,
+            "name": "page",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            },
+            "required": false,
+            "name": "pageSize",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/AdminDeletionRequest"
+                      }
+                    },
+                    "meta": {
+                      "type": "object",
+                      "properties": {
+                        "page": {
+                          "type": "integer"
+                        },
+                        "pageSize": {
+                          "type": "integer"
+                        },
+                        "total": {
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "page",
+                        "pageSize",
+                        "total"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "meta"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/deletion-requests/{id}/complete": {
+      "post": {
+        "tags": [
+          "Admin",
+          "Users"
+        ],
+        "summary": "Complete a deletion (users.manage): anonymise the profile, archive listings, lock sign-in. Records are kept",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "note": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1000
+                  }
+                },
+                "default": {},
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "user_id": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "reason": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "pending",
+                            "completed",
+                            "declined",
+                            "withdrawn"
+                          ]
+                        },
+                        "decided_at": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "decision_note": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "created_at": {
+                          "type": "string"
+                        },
+                        "updated_at": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "user_id",
+                        "reason",
+                        "status",
+                        "decided_at",
+                        "decision_note",
+                        "created_at",
+                        "updated_at"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "409": {
+            "description": "Upcoming bookings, or already decided"
+          }
+        }
+      }
+    },
+    "/deletion-requests/{id}/decline": {
+      "post": {
+        "tags": [
+          "Admin",
+          "Users"
+        ],
+        "summary": "Decline a deletion request with a note (users.manage)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "note": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1000
+                  }
+                },
+                "required": [
+                  "note"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "user_id": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "reason": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "status": {
+                          "type": "string",
+                          "enum": [
+                            "pending",
+                            "completed",
+                            "declined",
+                            "withdrawn"
+                          ]
+                        },
+                        "decided_at": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "decision_note": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "created_at": {
+                          "type": "string"
+                        },
+                        "updated_at": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "user_id",
+                        "reason",
+                        "status",
+                        "decided_at",
+                        "decision_note",
+                        "created_at",
+                        "updated_at"
                       ]
                     }
                   },

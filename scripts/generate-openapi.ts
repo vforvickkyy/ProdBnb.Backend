@@ -45,6 +45,16 @@ import {
   updatePageSchema,
 } from "../src/modules/content/content.schema";
 import {
+  adminDeletionRequestsQuerySchema,
+  adminRefundRequestsQuerySchema,
+  approveRefundRequestSchema,
+  completeDeletionSchema,
+  declineSchema,
+  deletionRequestStatusSchema,
+  idParamSchema as accountIdParamSchema,
+  refundRequestStatusSchema,
+} from "../src/modules/account/account.schema";
+import {
   addTeamMemberSchema,
   adminConversationsQuerySchema,
   adminListPaymentsQuerySchema,
@@ -2164,6 +2174,119 @@ registry.registerPath({
   security,
   request: { params: seoKeyParamsDoc, body: jsonBody(saveSeoSchema) },
   responses: { "200": okResponse(seoOverrideSchema.nullable()), ...errorResponses },
+});
+
+// -- Booker account: refund requests and account deletion ------------------------------------------
+
+const refundRequestSchema = z
+  .object({
+    id: z.string().uuid(),
+    booking_id: z.string().uuid(),
+    payment_id: z.string().uuid(),
+    source: z.enum(["booker", "cancellation", "rejection"]),
+    reason: z.string().nullable(),
+    status: refundRequestStatusSchema,
+    approved_amount_minor_units: z.number().int().nullable(),
+    refund_id: z.string().uuid().nullable(),
+    decided_at: z.string().nullable(),
+    decision_note: z.string().nullable(),
+    created_at: z.string(),
+    updated_at: z.string(),
+  })
+  .openapi("RefundRequest");
+
+const adminRefundRequestSchema = refundRequestSchema
+  .extend({
+    booking: z
+      .object({
+        id: z.string().uuid(),
+        status: z.string(),
+        start_at: z.string(),
+        end_at: z.string(),
+        cancellation_reason: z.string().nullable(),
+        location: z.object({ id: z.string().uuid(), title: z.string(), city: z.string().nullable() }).nullable(),
+        booker: z.object({ id: z.string().uuid(), first_name: z.string().nullable(), last_name: z.string().nullable() }).nullable(),
+      })
+      .nullable(),
+    payment: z
+      .object({ id: z.string().uuid(), amount_minor_units: z.number().int(), currency: z.string(), status: z.string(), method: z.string().nullable() })
+      .nullable(),
+    refunded_minor_units: z.number().int(),
+    remaining_minor_units: z.number().int(),
+  })
+  .openapi("AdminRefundRequest");
+
+const deletionBlockersSchema = z.object({ upcoming_bookings: z.number().int(), upcoming_hosted_bookings: z.number().int() });
+
+const adminDeletionRequestSchema = z
+  .object({
+    id: z.string().uuid(),
+    user_id: z.string().uuid(),
+    reason: z.string().nullable(),
+    status: deletionRequestStatusSchema,
+    decided_at: z.string().nullable(),
+    decision_note: z.string().nullable(),
+    created_at: z.string(),
+    updated_at: z.string(),
+    user: z.object({ id: z.string().uuid(), first_name: z.string().nullable(), last_name: z.string().nullable(), status: z.string() }).nullable(),
+    email: z.string().nullable(),
+    blockers: deletionBlockersSchema.nullable(),
+  })
+  .openapi("AdminDeletionRequest");
+
+registry.registerPath({
+  method: "get",
+  path: "/refund-requests",
+  tags: ["Admin", "Payments"],
+  summary: "Refund requests from bookers (payments.view). Pending ones oldest first",
+  security,
+  request: { query: adminRefundRequestsQuerySchema },
+  responses: { "200": paginatedResponse(adminRefundRequestSchema), ...errorResponses },
+});
+registry.registerPath({
+  method: "post",
+  path: "/refund-requests/{id}/approve",
+  tags: ["Admin", "Payments"],
+  summary: "Approve a refund request (payments.refund): refunds through the provider, full or partial",
+  security,
+  request: { params: accountIdParamSchema, body: jsonBody(approveRefundRequestSchema) },
+  responses: { "200": okResponse(refundRequestSchema), "409": { description: "Already decided, or being decided" }, ...errorResponses },
+});
+registry.registerPath({
+  method: "post",
+  path: "/refund-requests/{id}/decline",
+  tags: ["Admin", "Payments"],
+  summary: "Decline a refund request with a note the booker sees (payments.refund)",
+  security,
+  request: { params: accountIdParamSchema, body: jsonBody(declineSchema) },
+  responses: { "200": okResponse(refundRequestSchema), "409": { description: "Already decided, or being decided" }, ...errorResponses },
+});
+registry.registerPath({
+  method: "get",
+  path: "/deletion-requests",
+  tags: ["Admin", "Users"],
+  summary: "Account deletion requests (users.view), with what still blocks each one",
+  security,
+  request: { query: adminDeletionRequestsQuerySchema },
+  responses: { "200": paginatedResponse(adminDeletionRequestSchema), ...errorResponses },
+});
+registry.registerPath({
+  method: "post",
+  path: "/deletion-requests/{id}/complete",
+  tags: ["Admin", "Users"],
+  summary: "Complete a deletion (users.manage): anonymise the profile, archive listings, lock sign-in. Records are kept",
+  security,
+  request: { params: accountIdParamSchema, body: jsonBody(completeDeletionSchema) },
+  responses: { "200": okResponse(adminDeletionRequestSchema.omit({ user: true, email: true, blockers: true })), "409": { description: "Upcoming bookings, or already decided" }, ...errorResponses },
+});
+registry.registerPath({
+  method: "post",
+  path: "/deletion-requests/{id}/decline",
+  tags: ["Admin", "Users"],
+  summary: "Decline a deletion request with a note (users.manage)",
+  security,
+  request: { params: accountIdParamSchema, body: jsonBody(declineSchema) },
+  responses: { "200": okResponse(adminDeletionRequestSchema.omit({ user: true, email: true, blockers: true })), ...errorResponses },
 });
 
 const generator = new OpenApiGeneratorV3(registry.definitions);

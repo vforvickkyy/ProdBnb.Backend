@@ -7,6 +7,9 @@ export const notificationTypeSchema = z.enum([
   "booking_confirmed",
   "booking_declined",
   "booking_cancelled",
+  // Booker account: refund-request news (opened, approved, declined). A key the iOS app already
+  // understands, so older app versions route it to the booking like any other booking update.
+  "booking_updated",
   "payment_success",
   "payment_failed",
   "refund_processed",

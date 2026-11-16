@@ -35,6 +35,18 @@ export function errorHandler(err: unknown, req: Request, res: Response, _next: N
     return;
   }
 
+  // Body-parser rejections are the client's mistake, not a server fault: an oversized upload is a
+  // 413 and malformed JSON a 400, never a logged 500.
+  const parserType = (err as { type?: unknown } | null)?.type;
+  if (parserType === "entity.too.large") {
+    res.status(413).json({ error: { code: "PAYLOAD_TOO_LARGE", message: "That upload is too large." } } satisfies ErrorResponseBody);
+    return;
+  }
+  if (parserType === "entity.parse.failed") {
+    res.status(400).json({ error: { code: "VALIDATION_ERROR", message: "The request body is not valid JSON." } } satisfies ErrorResponseBody);
+    return;
+  }
+
   console.error(`Unhandled error on ${req.method} ${req.path}:`, err);
 
   const body: ErrorResponseBody = {

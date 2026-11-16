@@ -13,6 +13,7 @@ import { BookingType } from "../pricing/pricing.schema";
 import { BookingActionInput, CreateBookingInput, ListBookingsQuery } from "./bookings.schema";
 import { getPlatformSettings, platformCharges } from "../platform/settings.service";
 import { expireUnpaidHolds } from "./holds";
+import { openRefundRequestAfterCancellation } from "../account/refundRequests.service";
 import { calculateBookingPrice, getActivePricing } from "./pricing";
 
 const EXCLUSION_VIOLATION = "23P01";
@@ -266,6 +267,38 @@ export interface BookingDetail {
    * would be a regression for both.
    */
   booker_profile?: BookerProfile | null;
+}
+
+/**
+ * A booker keeps seeing their booking after its listing is archived, suspended or unpublished --
+ * but `locations` RLS hides such a listing from them, so the embed comes back null. Fill those in
+ * with the same compact summary from the service role (the title and town of a place they booked
+ * are theirs to see; host and photos stay hidden). Without this, one archived listing made the
+ * booker's whole bookings list fail.
+ */
+async function withHiddenLocations(rows: RawBookingRow[]): Promise<RawBookingRow[]> {
+  const missing = [...new Set(rows.filter((r) => !r.locations).map((r) => r.location_id))];
+  if (missing.length === 0) return rows;
+  const { data, error } = await adminClient.from("locations").select("id, title, city, region, timezone, host_id").in("id", missing);
+  if (error) throw error;
+  const byId = new Map((data ?? []).map((l) => [l.id as string, l]));
+  return rows.map((r) => {
+    if (r.locations) return r;
+    const l = byId.get(r.location_id);
+    return {
+      ...r,
+      locations: {
+        id: r.location_id,
+        title: (l?.title as string | undefined) ?? "Listing no longer available",
+        city: (l?.city as string | undefined) ?? "",
+        region: (l?.region as string | null | undefined) ?? null,
+        timezone: (l?.timezone as string | undefined) ?? "UTC",
+        host_id: (l?.host_id as string | undefined) ?? "",
+        host: null,
+        location_media: null,
+      },
+    };
+  });
 }
 
 function toBookingDetail(row: RawBookingRow): BookingDetail {
@@ -659,7 +692,7 @@ export async function listBookings(
     throw error;
   }
 
-  const bookings = (data ?? []).map((row) => toBookingDetail(row as unknown as RawBookingRow));
+  const bookings = (await withHiddenLocations((data ?? []) as unknown as RawBookingRow[])).map(toBookingDetail);
 
   // Phase 29.18-F: one RPC for the whole page, merged by booking id. The function answers only for
   // bookings on the caller's own listings, so for a booker or an admin this returns an empty map
@@ -677,7 +710,8 @@ export async function getBooking(supabase: SupabaseClient, bookingId: string): P
   if (error || !data) {
     throw new NotFoundError("Booking not found.");
   }
-  const booking = toBookingDetail(data as unknown as RawBookingRow);
+  const [row] = await withHiddenLocations([data as unknown as RawBookingRow]);
+  const booking = toBookingDetail(row!);
   // Phase 29.18-F: the same RPC, with a one-element array. Absent for anyone who is not this
   // booking's host.
   const bookerProfiles = await fetchBookerProfiles(supabase, [booking.id]);
@@ -745,7 +779,8 @@ async function transitionBooking(
   if (!data) {
     throw new ConflictError("This booking's status just changed -- please refresh and try again.");
   }
-  return toBookingDetail(data as unknown as RawBookingRow);
+  const [row] = await withHiddenLocations([data as unknown as RawBookingRow]);
+  return toBookingDetail(row!);
 }
 
 export async function confirmBooking(
@@ -803,6 +838,14 @@ export async function rejectBooking(
     cancellation_reason: input.reason ?? null,
   });
   await notifyBookingDeclined(booking.booker_id, booking.id);
+  // Booker account: money was taken for a booking that won't happen -- queue it for the team.
+  await openRefundRequestAfterCancellation({
+    bookingId: booking.id,
+    bookerId: booking.booker_id,
+    source: "rejection",
+    reason: input.reason ?? null,
+    cancelledBy: callerId,
+  });
   return booking;
 }
 
@@ -853,6 +896,16 @@ export async function cancelBooking(
   } else {
     await notifyBookingCancelled(booking.booker_id, booking.id);
   }
+
+  // Booker account: a paid booking that was cancelled (by anyone) opens a refund request for the
+  // team to decide. Nothing happens for an unpaid booking.
+  await openRefundRequestAfterCancellation({
+    bookingId: booking.id,
+    bookerId: booking.booker_id,
+    source: "cancellation",
+    reason: input.reason ?? null,
+    cancelledBy: callerId,
+  });
 
   return booking;
 }

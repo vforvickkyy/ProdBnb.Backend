@@ -1564,6 +1564,58 @@ Admin-set SEO for one page or entity, or `null` when there is none. `type` is `p
 
 Every `{ entity_type, entity_key }` an admin marked noindex, for sitemaps.
 
+## Booker account
+
+Signed in; every route acts on the caller's own data only.
+
+### `GET /v1/me/payments`
+
+The caller's payment history across their bookings (as a booker), newest first, paginated:
+`[{ id, booking_id, status, amount_minor_units, currency, method, refunded_minor_units, created_at,
+updated_at, booking: { id, status, booking_type, start_at, end_at, location: { id, title, city } } }]`.
+`method` is the coarse family the payment settled with (`upi`, `credit_card`, `debit_card`,
+`net_banking`, `wallet`...), never instrument detail; `null` until settled. Attempts that never
+reached the provider are left out.
+
+### Refund requests
+
+Refunds are always decided by the admin team. A request opens **automatically** when a booking with a
+settled payment is cancelled (by anyone) or declined; the booker can also open one:
+
+- `POST /v1/bookings/:id/refund-requests` `{ "reason": "..." }` (required) — own paid booking that is
+  `confirmed`, `completed`, `cancelled` or `rejected`. `409` while one is already open for the payment;
+  `400` when nothing is left to refund or the booking is still `requested` (cancel it instead).
+- `GET /v1/me/refund-requests[?booking_id=]` — `[{ id, booking_id, payment_id, source, reason, status,
+  approved_amount_minor_units, refund_id, decided_at, decision_note, created_at, updated_at }]`.
+  `source`: `booker` | `cancellation` | `rejection`. `status`: `pending` | `approved` | `declined` |
+  `withdrawn`. `decision_note` is the team's message to the booker.
+- `POST /v1/refund-requests/:id/withdraw` — while still `pending`.
+
+Opening, approving and declining each send a `booking_updated` notification for the booking.
+
+### Account deletion
+
+- `GET /v1/me/deletion-request` → `{ request, blockers: { upcoming_bookings, upcoming_hosted_bookings } }`.
+- `POST /v1/me/deletion-request` `{ "reason"?: "..." }` — `409` while there are upcoming bookings (made
+  by the caller, or at the caller's listings) or a request is already pending.
+- `DELETE /v1/me/deletion-request` — withdraw a pending request.
+
+The admin team completes a request: the profile is anonymised, contact, billing and devices removed,
+listings archived and sign-in locked. Bookings and payments are kept for tax and dispute records.
+
+### `POST /v1/me/avatar`
+
+The image itself as the request body, `Content-Type: image/jpeg | image/png | image/webp`, at most
+2 MB (`413` above that). The bytes must match the type. Stores it and sets `avatar_url`; returns
+`{ "avatar_url": "https://..." }`.
+
+### Web checkout
+
+`POST /v1/bookings/:id/payment` accepts a `return_url` only on this site (the website's primary
+domain, a configured browser origin, or the API itself); anything else is `400`.
+`GET /v1/site-config` includes `payments: { provider: "cashfree", mode: "sandbox" | "production" }`
+for loading the right checkout.
+
 ## What's intentionally not here yet
 
 Reviews, favorites, and availability-aware search are later phases — see
