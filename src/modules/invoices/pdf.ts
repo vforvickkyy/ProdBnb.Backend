@@ -108,12 +108,24 @@ class Writer {
     const out: string[] = [];
     for (const para of pdfSafe(text).split("\n")) {
       let line = "";
-      for (const word of para.split(/\s+/)) {
-        const next = line ? `${line} ${word}` : word;
-        if (font.widthOfTextAtSize(next, size) <= width) line = next;
-        else {
-          if (line) out.push(line);
-          line = word;
+      for (const raw of para.split(/\s+/)) {
+        // A single "word" wider than the column (a long payment reference) is split by characters.
+        const pieces: string[] = [];
+        let rest = raw;
+        while (rest && font.widthOfTextAtSize(rest, size) > width) {
+          let n = rest.length - 1;
+          while (n > 1 && font.widthOfTextAtSize(rest.slice(0, n), size) > width) n--;
+          pieces.push(rest.slice(0, n));
+          rest = rest.slice(n);
+        }
+        pieces.push(rest);
+        for (const word of pieces) {
+          const next = line ? `${line} ${word}` : word;
+          if (font.widthOfTextAtSize(next, size) <= width) line = next;
+          else {
+            if (line) out.push(line);
+            line = word;
+          }
         }
       }
       out.push(line);

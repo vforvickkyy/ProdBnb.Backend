@@ -151,6 +151,14 @@ function when(start: string, end: string, tz: string): string {
 
 const SETTLED = ["success", "partially_refunded", "refunded"];
 
+/** "Pine forest cottage, Chail", without repeating a city the title already names. */
+export function placeLabel(title: string | null | undefined, city: string | null | undefined): string {
+  const t = (title ?? "").trim();
+  const c = (city ?? "").trim();
+  if (!c || t.toLowerCase().includes(c.toLowerCase())) return t || c;
+  return t ? `${t}, ${c}` : c;
+}
+
 async function emailOf(userId: string): Promise<string | null> {
   const { data } = await adminClient.auth.admin.getUserById(userId);
   return data?.user?.email ?? null;
@@ -336,7 +344,7 @@ export function invoicePdfInput(inv: Invoice, settings: Pick<InvoiceSettings, "n
     billedTo: { name: inv.billed_to.name, lines: partyLines(inv.billed_to, "buyer") },
     details: [
       ["Booking", inv.details.booking_ref],
-      ["Location", [inv.details.listing, inv.details.city].filter(Boolean).join(", ")],
+      ["Location", placeLabel(inv.details.listing, inv.details.city)],
       ["When", inv.details.when],
       ["Type", inv.details.booking_type],
       ...(inv.details.paid_at ? ([["Paid", `${fmtDate(inv.details.paid_at)}${inv.details.payment_method ? ` · ${inv.details.payment_method}` : ""}`]] as [string, string][]) : []),
@@ -630,7 +638,7 @@ export async function receiptPdf(paymentId: string): Promise<{ pdf: Uint8Array; 
     billedTo: { name: billed.name, lines: partyLines(billed, "buyer") },
     details: [
       ["Booking", b.id.slice(0, 8).toUpperCase()],
-      ["Location", [b.location?.title, b.location?.city].filter(Boolean).join(", ")],
+      ["Location", placeLabel(b.location?.title, b.location?.city)],
       ["When", when(b.start_at, b.end_at, b.location?.timezone ?? "Asia/Kolkata")],
       ["Method", paid.payment.method ? (METHOD_LABEL[paid.payment.method] ?? paid.payment.method) : "Online"],
       ...(paid.payment.provider_order_id ? ([["Payment ref", paid.payment.provider_order_id]] as [string, string][]) : []),
