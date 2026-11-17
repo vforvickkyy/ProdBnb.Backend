@@ -15,6 +15,7 @@ import { accountRouter } from "./modules/account/account.routes";
 import { hostPayoutsRouter } from "./modules/payouts/payouts.routes";
 import { contactsRouter } from "./modules/bookings/contacts.routes";
 import { hostCouponsRouter, publicOffersRouter } from "./modules/coupons/coupons.routes";
+import { myInvoicesRouter } from "./modules/invoices/invoices.routes";
 import { getPublicSiteConfig } from "./modules/site/integrations.service";
 import { availabilityRouter } from "./modules/availability/availability.routes";
 import { billingRouter } from "./modules/billing/billing.routes";
@@ -155,6 +156,7 @@ export function createApp(): Express {
   app.use("/v1", contactsRouter);
   app.use("/v1", publicOffersRouter);
   app.use("/v1", hostCouponsRouter);
+  app.use("/v1", myInvoicesRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

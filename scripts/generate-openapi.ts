@@ -58,6 +58,15 @@ import { earningStateSchema, hostIdParamSchema, listPayoutsQuerySchema, recordPa
 import { revealSchema } from "../src/modules/payouts/payouts.routes";
 import { adminCreateCouponSchema, couponIdParamSchema, listCouponsQuerySchema, updateCouponSchema } from "../src/modules/coupons/coupons.schema";
 import {
+  invoiceIdParamSchema,
+  invoicePreviewSchema,
+  invoiceSettingsSchema,
+  listInvoicesQuerySchema,
+  listReceiptsQuerySchema,
+  paymentIdParamSchema as receiptPaymentIdParamSchema,
+  sendSchema as invoiceSendSchema,
+} from "../src/modules/invoices/invoices.schema";
+import {
   addTeamMemberSchema,
   adminConversationsQuerySchema,
   adminListPaymentsQuerySchema,
@@ -2502,6 +2511,244 @@ registry.registerPath({
   security,
   request: { params: couponIdParamSchema },
   responses: { "200": okResponse(z.object({ deleted: z.boolean() })), "409": { description: "Already used: turn it off instead" }, ...errorResponses },
+});
+
+// -- Invoices and receipts ---------------------------------------------------------------------------
+
+const invoiceSettingsOutSchema = z
+  .object({
+    id: z.string().uuid(),
+    legal_name: z.string().nullable(),
+    trade_name: z.string().nullable(),
+    gstin: z.string().nullable(),
+    pan: z.string().nullable(),
+    address_line1: z.string().nullable(),
+    address_line2: z.string().nullable(),
+    city: z.string().nullable(),
+    state: z.string().nullable(),
+    state_code: z.string().nullable(),
+    postal_code: z.string().nullable(),
+    country: z.string(),
+    email: z.string().nullable(),
+    phone: z.string().nullable(),
+    website: z.string().nullable(),
+    number_prefix: z.string(),
+    sac_code: z.string().nullable(),
+    tax_label: z.string(),
+    notes: z.string().nullable(),
+    terms: z.string().nullable(),
+    signatory: z.string().nullable(),
+    auto_send: z.boolean(),
+    updated_at: z.string(),
+    missing: z.array(z.string()).openapi({ description: "What's still needed before invoices can be issued" }),
+    email_connected: z.boolean(),
+  })
+  .openapi("InvoiceSettings");
+
+const invoicePartySchema = z
+  .object({
+    name: z.string(),
+    legal_name: z.string().nullable().optional(),
+    company: z.string().nullable().optional(),
+    gstin: z.string().nullable().optional(),
+    pan: z.string().nullable().optional(),
+    address: z.array(z.string()),
+    state: z.string().nullable().optional(),
+    state_code: z.string().nullable().optional(),
+    email: z.string().nullable().optional(),
+    phone: z.string().nullable().optional(),
+    website: z.string().nullable().optional(),
+  })
+  .openapi("InvoiceParty");
+
+const invoiceSchema = z
+  .object({
+    id: z.string().uuid(),
+    number: z.string(),
+    fy: z.string(),
+    booking_id: z.string().uuid(),
+    payment_id: z.string().uuid().nullable(),
+    user_id: z.string().uuid().nullable(),
+    issued_at: z.string(),
+    seller: invoicePartySchema,
+    billed_to: invoicePartySchema,
+    details: z.object({
+      booking_ref: z.string(),
+      listing: z.string(),
+      city: z.string().nullable(),
+      booking_type: z.string(),
+      when: z.string(),
+      payment_ref: z.string().nullable(),
+      payment_method: z.string().nullable(),
+      paid_at: z.string().nullable(),
+    }),
+    currency: z.string(),
+    subtotal_minor_units: z.number().int(),
+    discount_minor_units: z.number().int(),
+    coupon_code: z.string().nullable(),
+    service_fee_minor_units: z.number().int(),
+    tax_minor_units: z.number().int(),
+    tax_rate_bps: z.number().int().nullable(),
+    total_minor_units: z.number().int(),
+    tax_label: z.string(),
+    sac_code: z.string().nullable(),
+    delivery_status: z.enum(["pending", "sent", "failed"]),
+    sent_via: z.enum(["auto", "manual"]).nullable(),
+    sent_at: z.string().nullable(),
+    sent_to: z.string().nullable(),
+    send_count: z.number().int(),
+    last_error: z.string().nullable(),
+  })
+  .openapi("Invoice");
+
+const invoiceEventSchema = z
+  .object({
+    id: z.string().uuid(),
+    kind: z.enum(["issued", "sent_auto", "sent_manual", "failed", "receipt_sent"]),
+    to_email: z.string().nullable(),
+    error: z.string().nullable(),
+    created_at: z.string(),
+    actor: nameRefSchema,
+  })
+  .openapi("InvoiceEvent");
+
+const receiptSchema = z
+  .object({
+    payment_id: z.string().uuid(),
+    booking_id: z.string().uuid(),
+    amount_minor_units: z.number().int(),
+    refunded_minor_units: z.number().int(),
+    currency: z.string(),
+    status: z.string(),
+    method: z.string().nullable(),
+    paid_at: z.string(),
+    booker: z.object({ id: z.string().uuid(), first_name: z.string().nullable(), last_name: z.string().nullable() }).nullable(),
+    listing: z.string().nullable(),
+    invoice_number: z.string().nullable(),
+    last_sent_at: z.string().nullable(),
+  })
+  .openapi("Receipt");
+
+const pdfResponse = { description: "A PDF file", content: { "application/pdf": { schema: z.string().openapi({ format: "binary" }) } } };
+const invoiceCountsSchema = z.object({
+  all: z.number().int(),
+  pending: z.number().int(),
+  sent_auto: z.number().int(),
+  sent_manual: z.number().int(),
+  failed: z.number().int(),
+  waiting: z.number().int().openapi({ description: "Paid bookings with no invoice yet" }),
+});
+
+registry.registerPath({
+  method: "get",
+  path: "/invoice-settings",
+  tags: ["Admin", "Invoices"],
+  summary: "The invoice template: company details, numbering, tax, notes (payments.view)",
+  security,
+  responses: { "200": okResponse(invoiceSettingsOutSchema), ...errorResponses },
+});
+registry.registerPath({
+  method: "patch",
+  path: "/invoice-settings",
+  tags: ["Admin", "Invoices"],
+  summary: "Update the invoice template (invoices.manage). Audited; issued invoices keep their details",
+  security,
+  request: { body: jsonBody(invoiceSettingsSchema) },
+  responses: { "200": okResponse(invoiceSettingsOutSchema), ...errorResponses },
+});
+registry.registerPath({
+  method: "post",
+  path: "/invoice-settings/preview",
+  tags: ["Admin", "Invoices"],
+  summary: "A sample invoice PDF with the saved template plus unsaved edits (payments.view)",
+  security,
+  request: { body: jsonBody(invoicePreviewSchema) },
+  responses: { "200": pdfResponse, ...errorResponses },
+});
+registry.registerPath({
+  method: "get",
+  path: "/invoices",
+  tags: ["Admin", "Invoices"],
+  summary: "Invoices, filtered by delivery: pending, sent automatically, sent manually, failed (payments.view)",
+  security,
+  request: { query: listInvoicesQuerySchema },
+  responses: {
+    "200": {
+      description: "OK",
+      content: { "application/json": { schema: z.object({ data: z.array(invoiceSchema), meta: paginationMeta.extend({ counts: invoiceCountsSchema }) }) } },
+    },
+    ...errorResponses,
+  },
+});
+registry.registerPath({
+  method: "get",
+  path: "/invoices/{id}",
+  tags: ["Admin", "Invoices"],
+  summary: "An invoice with its history (issued, sent, failed) (payments.view)",
+  security,
+  request: { params: invoiceIdParamSchema },
+  responses: { "200": okResponse(invoiceSchema.extend({ events: z.array(invoiceEventSchema) })), ...errorResponses },
+});
+registry.registerPath({
+  method: "get",
+  path: "/invoices/{id}/pdf",
+  tags: ["Admin", "Invoices"],
+  summary: "Download the invoice PDF (payments.view)",
+  security,
+  request: { params: invoiceIdParamSchema },
+  responses: { "200": pdfResponse, ...errorResponses },
+});
+registry.registerPath({
+  method: "post",
+  path: "/invoices/{id}/send",
+  tags: ["Admin", "Invoices"],
+  summary: "Email the invoice to the booker, or to another address (invoices.manage). Audited",
+  security,
+  request: { params: invoiceIdParamSchema, body: jsonBody(invoiceSendSchema) },
+  responses: { "200": okResponse(invoiceSchema), ...errorResponses },
+});
+registry.registerPath({
+  method: "post",
+  path: "/invoices/issue-missing",
+  tags: ["Admin", "Invoices"],
+  summary: "Issue invoices for paid bookings that have none; they wait to be sent (invoices.manage). Audited",
+  security,
+  responses: { "200": okResponse(z.object({ issued: z.number().int() })), ...errorResponses },
+});
+registry.registerPath({
+  method: "post",
+  path: "/invoices/send-pending",
+  tags: ["Admin", "Invoices"],
+  summary: "Email every invoice that's pending or failed (invoices.manage). Audited",
+  security,
+  responses: { "200": okResponse(z.object({ sent: z.number().int(), failed: z.number().int() })), ...errorResponses },
+});
+registry.registerPath({
+  method: "get",
+  path: "/receipts",
+  tags: ["Admin", "Invoices"],
+  summary: "Payment receipts: every settled payment (payments.view)",
+  security,
+  request: { query: listReceiptsQuerySchema },
+  responses: { "200": paginatedResponse(receiptSchema), ...errorResponses },
+});
+registry.registerPath({
+  method: "get",
+  path: "/receipts/{id}/pdf",
+  tags: ["Admin", "Invoices"],
+  summary: "Download a payment receipt PDF (payments.view)",
+  security,
+  request: { params: receiptPaymentIdParamSchema },
+  responses: { "200": pdfResponse, ...errorResponses },
+});
+registry.registerPath({
+  method: "post",
+  path: "/receipts/{id}/send",
+  tags: ["Admin", "Invoices"],
+  summary: "Email a payment receipt to the booker (invoices.manage). Audited",
+  security,
+  request: { params: receiptPaymentIdParamSchema, body: jsonBody(invoiceSendSchema) },
+  responses: { "200": okResponse(z.object({ to: z.string() })), ...errorResponses },
 });
 
 const generator = new OpenApiGeneratorV3(registry.definitions);

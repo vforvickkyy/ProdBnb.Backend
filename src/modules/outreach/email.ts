@@ -18,6 +18,8 @@ export interface OutgoingEmail {
   html: string;
   text: string;
   headers?: Record<string, string>;
+  /** Files to attach (e.g. an invoice PDF). */
+  attachments?: { filename: string; content: Buffer; contentType: string }[];
 }
 
 let transport: { version: string; transporter: Transporter } | null = null;
@@ -66,6 +68,7 @@ export async function sendEmail(message: OutgoingEmail): Promise<string | null> 
     html: message.html,
     text: message.text,
     headers: message.headers,
+    attachments: message.attachments,
   });
   return (info as { messageId?: string }).messageId ?? null;
 }

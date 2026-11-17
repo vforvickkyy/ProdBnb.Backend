@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "crypto";
+import { issueInvoiceForPayment } from "../invoices/invoices.service";
 import { SupabaseClient } from "@supabase/supabase-js";
 import { env } from "../../config/env";
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from "../../errors/AppError";
@@ -308,6 +309,10 @@ async function applyPaymentStatusUpdate(
       if (hostId) {
         await notifyBookingRequestReceived(hostId, payment.booking_id);
       }
+      // The booker's tax invoice: issued once per paid booking and emailed if email is set up.
+      // Never allowed to fail the payment -- anything missed shows up in the admin's
+      // "waiting for an invoice" count and can be issued from there.
+      await issueInvoiceForPayment(payment.id).catch((error) => console.error(`Invoice for payment ${payment.id} not issued:`, error));
     }
   }
 

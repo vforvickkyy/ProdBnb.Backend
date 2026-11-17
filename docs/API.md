@@ -1754,3 +1754,42 @@ discount). A coupon that has been used can't be deleted (`409`): turn it off ins
 List and detail need `payments.view`; create, edit and delete need `coupons.manage` (finance,
 moderator, super admin) and are audited. An admin can create a ProdBnb coupon or one on a host's
 behalf (`owner_type: "host"`, `host_id`). See `docs/admin-openapi.json`.
+
+## Invoices and receipts
+
+One tax invoice per paid booking, for the full amount the booker paid (listing price, any discount,
+service fee and tax). It's issued when the payment settles -- but only once the invoice template has
+a legal name and address (`GET /v1/admin/invoice-settings` → `missing`). Paid bookings without an
+invoice are counted as `waiting` and can be issued in one go.
+
+* Numbers run per Indian financial year: `INV/26-27/0001` (prefix set in the template, 1–4 characters;
+  the whole number stays within GST's 16-character limit).
+* The seller (template) and the booker (name, company and GSTIN from billing details, address) are
+  copied onto the invoice when it's issued, so later edits don't change issued invoices.
+* Tax is shown as CGST + SGST when the booker's state matches the company's, otherwise IGST.
+* Delivery: if *Send automatically* is on and email (SMTP) is connected, the PDF is emailed straight
+  away (`sent`, `sent_via: auto`). Otherwise it waits as `pending`; a send that fails is `failed`.
+  The team sends or resends from the admin (`sent_via: manual`). Invoices issued in bulk for older
+  bookings are left `pending`, so nobody gets an unexpected email.
+
+### The booker's own
+
+* `GET /v1/me/invoices` → `[{ id, number, booking_id, issued_at, total_minor_units, currency }]`
+* `GET /v1/me/invoices/:id/pdf` → `application/pdf` (404 for anyone else's)
+
+### Admin (`/v1/admin`)
+
+| Endpoint | Permission | |
+| --- | --- | --- |
+| `GET /invoice-settings` | payments.view | Template, plus `missing` and `email_connected` |
+| `PATCH /invoice-settings` | invoices.manage | Audited |
+| `POST /invoice-settings/preview` | payments.view | Sample PDF with unsaved edits |
+| `GET /invoices?filter=all\|pending\|sent_auto\|sent_manual\|failed&search=` | payments.view | `meta.counts` has every tab's count and `waiting` |
+| `GET /invoices/:id` | payments.view | With `events` (issued, sent, failed) |
+| `GET /invoices/:id/pdf` | payments.view | |
+| `POST /invoices/:id/send` `{ to? }` | invoices.manage | Audited |
+| `POST /invoices/issue-missing` | invoices.manage | Audited |
+| `POST /invoices/send-pending` | invoices.manage | Audited |
+| `GET /receipts` | payments.view | Every settled payment, with refunds and invoice number |
+| `GET /receipts/:paymentId/pdf` | payments.view | Proof of payment (not a tax invoice) |
+| `POST /receipts/:paymentId/send` `{ to? }` | invoices.manage | Audited |

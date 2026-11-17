@@ -1387,7 +1387,11 @@
               "ADMIN_RECORDED_PAYOUT",
               "ADMIN_CREATED_COUPON",
               "ADMIN_UPDATED_COUPON",
-              "ADMIN_DELETED_COUPON"
+              "ADMIN_DELETED_COUPON",
+              "ADMIN_UPDATED_INVOICE_SETTINGS",
+              "ADMIN_ISSUED_INVOICES",
+              "ADMIN_SENT_INVOICE",
+              "ADMIN_SENT_RECEIPT"
             ]
           },
           "target_type": {
@@ -1416,7 +1420,8 @@
               "deletion_request",
               "payout_account",
               "payout",
-              "coupon"
+              "coupon",
+              "invoice"
             ]
           },
           "target_id": {
@@ -4815,6 +4820,484 @@
           "booking",
           "booker"
         ]
+      },
+      "InvoiceSettings": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "legal_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "trade_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "gstin": {
+            "type": "string",
+            "nullable": true
+          },
+          "pan": {
+            "type": "string",
+            "nullable": true
+          },
+          "address_line1": {
+            "type": "string",
+            "nullable": true
+          },
+          "address_line2": {
+            "type": "string",
+            "nullable": true
+          },
+          "city": {
+            "type": "string",
+            "nullable": true
+          },
+          "state": {
+            "type": "string",
+            "nullable": true
+          },
+          "state_code": {
+            "type": "string",
+            "nullable": true
+          },
+          "postal_code": {
+            "type": "string",
+            "nullable": true
+          },
+          "country": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string",
+            "nullable": true
+          },
+          "phone": {
+            "type": "string",
+            "nullable": true
+          },
+          "website": {
+            "type": "string",
+            "nullable": true
+          },
+          "number_prefix": {
+            "type": "string"
+          },
+          "sac_code": {
+            "type": "string",
+            "nullable": true
+          },
+          "tax_label": {
+            "type": "string"
+          },
+          "notes": {
+            "type": "string",
+            "nullable": true
+          },
+          "terms": {
+            "type": "string",
+            "nullable": true
+          },
+          "signatory": {
+            "type": "string",
+            "nullable": true
+          },
+          "auto_send": {
+            "type": "boolean"
+          },
+          "updated_at": {
+            "type": "string"
+          },
+          "missing": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "What's still needed before invoices can be issued"
+          },
+          "email_connected": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "legal_name",
+          "trade_name",
+          "gstin",
+          "pan",
+          "address_line1",
+          "address_line2",
+          "city",
+          "state",
+          "state_code",
+          "postal_code",
+          "country",
+          "email",
+          "phone",
+          "website",
+          "number_prefix",
+          "sac_code",
+          "tax_label",
+          "notes",
+          "terms",
+          "signatory",
+          "auto_send",
+          "updated_at",
+          "missing",
+          "email_connected"
+        ]
+      },
+      "InvoiceParty": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "legal_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "company": {
+            "type": "string",
+            "nullable": true
+          },
+          "gstin": {
+            "type": "string",
+            "nullable": true
+          },
+          "pan": {
+            "type": "string",
+            "nullable": true
+          },
+          "address": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "state": {
+            "type": "string",
+            "nullable": true
+          },
+          "state_code": {
+            "type": "string",
+            "nullable": true
+          },
+          "email": {
+            "type": "string",
+            "nullable": true
+          },
+          "phone": {
+            "type": "string",
+            "nullable": true
+          },
+          "website": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "name",
+          "address"
+        ]
+      },
+      "Invoice": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "number": {
+            "type": "string"
+          },
+          "fy": {
+            "type": "string"
+          },
+          "booking_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "payment_id": {
+            "type": "string",
+            "nullable": true,
+            "format": "uuid"
+          },
+          "user_id": {
+            "type": "string",
+            "nullable": true,
+            "format": "uuid"
+          },
+          "issued_at": {
+            "type": "string"
+          },
+          "seller": {
+            "$ref": "#/components/schemas/InvoiceParty"
+          },
+          "billed_to": {
+            "$ref": "#/components/schemas/InvoiceParty"
+          },
+          "details": {
+            "type": "object",
+            "properties": {
+              "booking_ref": {
+                "type": "string"
+              },
+              "listing": {
+                "type": "string"
+              },
+              "city": {
+                "type": "string",
+                "nullable": true
+              },
+              "booking_type": {
+                "type": "string"
+              },
+              "when": {
+                "type": "string"
+              },
+              "payment_ref": {
+                "type": "string",
+                "nullable": true
+              },
+              "payment_method": {
+                "type": "string",
+                "nullable": true
+              },
+              "paid_at": {
+                "type": "string",
+                "nullable": true
+              }
+            },
+            "required": [
+              "booking_ref",
+              "listing",
+              "city",
+              "booking_type",
+              "when",
+              "payment_ref",
+              "payment_method",
+              "paid_at"
+            ]
+          },
+          "currency": {
+            "type": "string"
+          },
+          "subtotal_minor_units": {
+            "type": "integer"
+          },
+          "discount_minor_units": {
+            "type": "integer"
+          },
+          "coupon_code": {
+            "type": "string",
+            "nullable": true
+          },
+          "service_fee_minor_units": {
+            "type": "integer"
+          },
+          "tax_minor_units": {
+            "type": "integer"
+          },
+          "tax_rate_bps": {
+            "type": "integer",
+            "nullable": true
+          },
+          "total_minor_units": {
+            "type": "integer"
+          },
+          "tax_label": {
+            "type": "string"
+          },
+          "sac_code": {
+            "type": "string",
+            "nullable": true
+          },
+          "delivery_status": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "sent",
+              "failed"
+            ]
+          },
+          "sent_via": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "auto",
+              "manual"
+            ]
+          },
+          "sent_at": {
+            "type": "string",
+            "nullable": true
+          },
+          "sent_to": {
+            "type": "string",
+            "nullable": true
+          },
+          "send_count": {
+            "type": "integer"
+          },
+          "last_error": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "number",
+          "fy",
+          "booking_id",
+          "payment_id",
+          "user_id",
+          "issued_at",
+          "seller",
+          "billed_to",
+          "details",
+          "currency",
+          "subtotal_minor_units",
+          "discount_minor_units",
+          "coupon_code",
+          "service_fee_minor_units",
+          "tax_minor_units",
+          "tax_rate_bps",
+          "total_minor_units",
+          "tax_label",
+          "sac_code",
+          "delivery_status",
+          "sent_via",
+          "sent_at",
+          "sent_to",
+          "send_count",
+          "last_error"
+        ]
+      },
+      "InvoiceEvent": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "issued",
+              "sent_auto",
+              "sent_manual",
+              "failed",
+              "receipt_sent"
+            ]
+          },
+          "to_email": {
+            "type": "string",
+            "nullable": true
+          },
+          "error": {
+            "type": "string",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "actor": {
+            "$ref": "#/components/schemas/NameRef"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "to_email",
+          "error",
+          "created_at",
+          "actor"
+        ]
+      },
+      "Receipt": {
+        "type": "object",
+        "properties": {
+          "payment_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "booking_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "amount_minor_units": {
+            "type": "integer"
+          },
+          "refunded_minor_units": {
+            "type": "integer"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "method": {
+            "type": "string",
+            "nullable": true
+          },
+          "paid_at": {
+            "type": "string"
+          },
+          "booker": {
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "first_name": {
+                "type": "string",
+                "nullable": true
+              },
+              "last_name": {
+                "type": "string",
+                "nullable": true
+              }
+            },
+            "required": [
+              "id",
+              "first_name",
+              "last_name"
+            ]
+          },
+          "listing": {
+            "type": "string",
+            "nullable": true
+          },
+          "invoice_number": {
+            "type": "string",
+            "nullable": true
+          },
+          "last_sent_at": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "payment_id",
+          "booking_id",
+          "amount_minor_units",
+          "refunded_minor_units",
+          "currency",
+          "status",
+          "method",
+          "paid_at",
+          "booker",
+          "listing",
+          "invoice_number",
+          "last_sent_at"
+        ]
       }
     },
     "parameters": {}
@@ -6968,7 +7451,8 @@
                 "deletion_request",
                 "payout_account",
                 "payout",
-                "coupon"
+                "coupon",
+                "invoice"
               ]
             },
             "required": false,
@@ -7063,7 +7547,11 @@
                 "ADMIN_RECORDED_PAYOUT",
                 "ADMIN_CREATED_COUPON",
                 "ADMIN_UPDATED_COUPON",
-                "ADMIN_DELETED_COUPON"
+                "ADMIN_DELETED_COUPON",
+                "ADMIN_UPDATED_INVOICE_SETTINGS",
+                "ADMIN_ISSUED_INVOICES",
+                "ADMIN_SENT_INVOICE",
+                "ADMIN_SENT_RECEIPT"
               ]
             },
             "required": false,
@@ -17048,6 +17536,1052 @@
           },
           "409": {
             "description": "Already used: turn it off instead"
+          }
+        }
+      }
+    },
+    "/invoice-settings": {
+      "get": {
+        "tags": [
+          "Admin",
+          "Invoices"
+        ],
+        "summary": "The invoice template: company details, numbering, tax, notes (payments.view)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/InvoiceSettings"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Admin",
+          "Invoices"
+        ],
+        "summary": "Update the invoice template (invoices.manage). Audited; issued invoices keep their details",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "legal_name": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 160
+                  },
+                  "trade_name": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 120
+                  },
+                  "gstin": {
+                    "type": "string",
+                    "nullable": true,
+                    "pattern": "^([0-9]{2}[A-Z0-9]{10}[0-9A-Z]Z[0-9A-Z])?$"
+                  },
+                  "pan": {
+                    "type": "string",
+                    "nullable": true,
+                    "pattern": "^([A-Z]{5}[0-9]{4}[A-Z])?$"
+                  },
+                  "address_line1": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 160
+                  },
+                  "address_line2": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 160
+                  },
+                  "city": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 80
+                  },
+                  "state": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 80
+                  },
+                  "state_code": {
+                    "type": "string",
+                    "nullable": true,
+                    "pattern": "^([0-9]{2})?$"
+                  },
+                  "postal_code": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 12
+                  },
+                  "country": {
+                    "type": "string",
+                    "minLength": 2,
+                    "maxLength": 60
+                  },
+                  "email": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 200
+                  },
+                  "phone": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 30
+                  },
+                  "website": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 200
+                  },
+                  "number_prefix": {
+                    "type": "string",
+                    "pattern": "^[A-Z0-9]{1,4}$"
+                  },
+                  "sac_code": {
+                    "type": "string",
+                    "nullable": true,
+                    "pattern": "^([0-9]{4,8})?$"
+                  },
+                  "tax_label": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 20
+                  },
+                  "notes": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 1000
+                  },
+                  "terms": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 2000
+                  },
+                  "signatory": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 120
+                  },
+                  "auto_send": {
+                    "type": "boolean"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/InvoiceSettings"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/invoice-settings/preview": {
+      "post": {
+        "tags": [
+          "Admin",
+          "Invoices"
+        ],
+        "summary": "A sample invoice PDF with the saved template plus unsaved edits (payments.view)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "legal_name": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 160
+                  },
+                  "trade_name": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 120
+                  },
+                  "gstin": {
+                    "type": "string",
+                    "nullable": true,
+                    "pattern": "^([0-9]{2}[A-Z0-9]{10}[0-9A-Z]Z[0-9A-Z])?$"
+                  },
+                  "pan": {
+                    "type": "string",
+                    "nullable": true,
+                    "pattern": "^([A-Z]{5}[0-9]{4}[A-Z])?$"
+                  },
+                  "address_line1": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 160
+                  },
+                  "address_line2": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 160
+                  },
+                  "city": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 80
+                  },
+                  "state": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 80
+                  },
+                  "state_code": {
+                    "type": "string",
+                    "nullable": true,
+                    "pattern": "^([0-9]{2})?$"
+                  },
+                  "postal_code": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 12
+                  },
+                  "country": {
+                    "type": "string",
+                    "minLength": 2,
+                    "maxLength": 60
+                  },
+                  "email": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 200
+                  },
+                  "phone": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 30
+                  },
+                  "website": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 200
+                  },
+                  "number_prefix": {
+                    "type": "string",
+                    "pattern": "^[A-Z0-9]{1,4}$"
+                  },
+                  "sac_code": {
+                    "type": "string",
+                    "nullable": true,
+                    "pattern": "^([0-9]{4,8})?$"
+                  },
+                  "tax_label": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 20
+                  },
+                  "notes": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 1000
+                  },
+                  "terms": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 2000
+                  },
+                  "signatory": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 120
+                  },
+                  "auto_send": {
+                    "type": "boolean"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "A PDF file",
+            "content": {
+              "application/pdf": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/invoices": {
+      "get": {
+        "tags": [
+          "Admin",
+          "Invoices"
+        ],
+        "summary": "Invoices, filtered by delivery: pending, sent automatically, sent manually, failed (payments.view)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "pending",
+                "sent_auto",
+                "sent_manual",
+                "failed"
+              ],
+              "default": "all"
+            },
+            "required": false,
+            "name": "filter",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "maxLength": 60
+            },
+            "required": false,
+            "name": "search",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            },
+            "required": false,
+            "name": "page",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            },
+            "required": false,
+            "name": "pageSize",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Invoice"
+                      }
+                    },
+                    "meta": {
+                      "type": "object",
+                      "properties": {
+                        "page": {
+                          "type": "integer"
+                        },
+                        "pageSize": {
+                          "type": "integer"
+                        },
+                        "total": {
+                          "type": "integer"
+                        },
+                        "counts": {
+                          "type": "object",
+                          "properties": {
+                            "all": {
+                              "type": "integer"
+                            },
+                            "pending": {
+                              "type": "integer"
+                            },
+                            "sent_auto": {
+                              "type": "integer"
+                            },
+                            "sent_manual": {
+                              "type": "integer"
+                            },
+                            "failed": {
+                              "type": "integer"
+                            },
+                            "waiting": {
+                              "type": "integer",
+                              "description": "Paid bookings with no invoice yet"
+                            }
+                          },
+                          "required": [
+                            "all",
+                            "pending",
+                            "sent_auto",
+                            "sent_manual",
+                            "failed",
+                            "waiting"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "page",
+                        "pageSize",
+                        "total",
+                        "counts"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "meta"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/invoices/{id}": {
+      "get": {
+        "tags": [
+          "Admin",
+          "Invoices"
+        ],
+        "summary": "An invoice with its history (issued, sent, failed) (payments.view)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "allOf": [
+                        {
+                          "$ref": "#/components/schemas/Invoice"
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "events": {
+                              "type": "array",
+                              "items": {
+                                "$ref": "#/components/schemas/InvoiceEvent"
+                              }
+                            }
+                          },
+                          "required": [
+                            "events"
+                          ]
+                        }
+                      ]
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/invoices/{id}/pdf": {
+      "get": {
+        "tags": [
+          "Admin",
+          "Invoices"
+        ],
+        "summary": "Download the invoice PDF (payments.view)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A PDF file",
+            "content": {
+              "application/pdf": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/invoices/{id}/send": {
+      "post": {
+        "tags": [
+          "Admin",
+          "Invoices"
+        ],
+        "summary": "Email the invoice to the booker, or to another address (invoices.manage). Audited",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "to": {
+                    "type": "string",
+                    "maxLength": 200,
+                    "format": "email"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/Invoice"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/invoices/issue-missing": {
+      "post": {
+        "tags": [
+          "Admin",
+          "Invoices"
+        ],
+        "summary": "Issue invoices for paid bookings that have none; they wait to be sent (invoices.manage). Audited",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "issued": {
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "issued"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/invoices/send-pending": {
+      "post": {
+        "tags": [
+          "Admin",
+          "Invoices"
+        ],
+        "summary": "Email every invoice that's pending or failed (invoices.manage). Audited",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "sent": {
+                          "type": "integer"
+                        },
+                        "failed": {
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "sent",
+                        "failed"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/receipts": {
+      "get": {
+        "tags": [
+          "Admin",
+          "Invoices"
+        ],
+        "summary": "Payment receipts: every settled payment (payments.view)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            },
+            "required": false,
+            "name": "page",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 50
+            },
+            "required": false,
+            "name": "pageSize",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Receipt"
+                      }
+                    },
+                    "meta": {
+                      "type": "object",
+                      "properties": {
+                        "page": {
+                          "type": "integer"
+                        },
+                        "pageSize": {
+                          "type": "integer"
+                        },
+                        "total": {
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "page",
+                        "pageSize",
+                        "total"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "meta"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/receipts/{id}/pdf": {
+      "get": {
+        "tags": [
+          "Admin",
+          "Invoices"
+        ],
+        "summary": "Download a payment receipt PDF (payments.view)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A PDF file",
+            "content": {
+              "application/pdf": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/receipts/{id}/send": {
+      "post": {
+        "tags": [
+          "Admin",
+          "Invoices"
+        ],
+        "summary": "Email a payment receipt to the booker (invoices.manage). Audited",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "to": {
+                    "type": "string",
+                    "maxLength": 200,
+                    "format": "email"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "to": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "to"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
           }
         }
       }
