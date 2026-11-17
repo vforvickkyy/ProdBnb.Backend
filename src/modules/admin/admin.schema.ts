@@ -144,6 +144,10 @@ export const auditActionSchema = z.enum([
   // Host payouts (migration 20261117100000_host_payouts.sql)
   "ADMIN_VIEWED_PAYOUT_DETAILS",
   "ADMIN_RECORDED_PAYOUT",
+  // Coupons
+  "ADMIN_CREATED_COUPON",
+  "ADMIN_UPDATED_COUPON",
+  "ADMIN_DELETED_COUPON",
 ]);
 
 export const auditTargetTypeSchema = z.enum([
@@ -170,6 +174,7 @@ export const auditTargetTypeSchema = z.enum([
   "deletion_request",
   "payout_account",
   "payout",
+  "coupon",
 ]);
 
 export const auditLogQuerySchema = z

@@ -23,6 +23,8 @@ export interface EarningRow {
   currency: string;
   /** The listing price: the host's share before refunds. */
   listing_price_minor_units: number;
+  /** The host's own coupon on this booking (comes out of their share); 0 otherwise. */
+  host_discount_minor_units: number;
   /** What the booker paid in total (listing price + fee + tax). */
   paid_minor_units: number;
   refunded_minor_units: number;
@@ -57,6 +59,8 @@ interface RawBooking {
   start_at: string;
   end_at: string;
   base_amount_minor_units: number;
+  discount_minor_units: number;
+  discount_funded_by: "platform" | "host" | null;
   currency: string;
   cancelled_by: string | null;
   location: { id: string; title: string; city: string | null; host_id: string };
@@ -69,7 +73,7 @@ interface RawBooking {
 }
 
 const SELECT = `
-  id, status, booking_type, start_at, end_at, base_amount_minor_units, currency, cancelled_by,
+  id, status, booking_type, start_at, end_at, base_amount_minor_units, discount_minor_units, discount_funded_by, currency, cancelled_by,
   location:locations!inner(id, title, city, host_id),
   payments(id, status, amount_minor_units, created_at, payment_refunds(amount_minor_units, status)),
   refund_requests(status),
@@ -81,7 +85,10 @@ export function earningFor(b: RawBooking, now = Date.now()): EarningRow | null {
   if (!payment) return null;
   const refunded = (payment.payment_refunds ?? []).filter((r) => r.status === "success").reduce((s, r) => s + r.amount_minor_units, 0);
   const paid = payment.amount_minor_units;
-  let net = paid > 0 ? Math.max(0, Math.round((b.base_amount_minor_units * (paid - refunded)) / paid)) : 0;
+  // A host's own coupon comes out of their share; a ProdBnb coupon doesn't.
+  const hostDiscount = b.discount_funded_by === "host" ? (b.discount_minor_units ?? 0) : 0;
+  const share = Math.max(0, b.base_amount_minor_units - hostDiscount);
+  let net = paid > 0 ? Math.max(0, Math.round((share * (paid - refunded)) / paid)) : 0;
   const item = Array.isArray(b.payout_item) ? (b.payout_item[0] ?? null) : b.payout_item;
 
   let state: EarningState;
@@ -112,6 +119,7 @@ export function earningFor(b: RawBooking, now = Date.now()): EarningRow | null {
     end_at: b.end_at,
     currency: b.currency,
     listing_price_minor_units: b.base_amount_minor_units,
+    host_discount_minor_units: hostDiscount,
     paid_minor_units: paid,
     refunded_minor_units: refunded,
     net_minor_units: net,

@@ -56,6 +56,7 @@ import {
 } from "../src/modules/account/account.schema";
 import { earningStateSchema, hostIdParamSchema, listPayoutsQuerySchema, recordPayoutSchema } from "../src/modules/payouts/payouts.schema";
 import { revealSchema } from "../src/modules/payouts/payouts.routes";
+import { adminCreateCouponSchema, couponIdParamSchema, listCouponsQuerySchema, updateCouponSchema } from "../src/modules/coupons/coupons.schema";
 import {
   addTeamMemberSchema,
   adminConversationsQuerySchema,
@@ -2316,6 +2317,7 @@ const earningRowSchema = z
     end_at: z.string(),
     currency: z.string(),
     listing_price_minor_units: z.number().int(),
+    host_discount_minor_units: z.number().int(),
     paid_minor_units: z.number().int(),
     refunded_minor_units: z.number().int(),
     net_minor_units: z.number().int(),
@@ -2409,6 +2411,97 @@ registry.registerPath({
   security,
   request: { params: hostIdParamSchema, body: jsonBody(recordPayoutSchema) },
   responses: { "201": createdResponse(payoutSchema), "409": { description: "Booking already paid out" }, ...errorResponses },
+});
+
+// -- Coupons -------------------------------------------------------------------------------------
+
+const couponSchema = z
+  .object({
+    id: z.string().uuid(),
+    code: z.string(),
+    owner_type: z.enum(["platform", "host"]),
+    host_id: z.string().uuid().nullable(),
+    host: hostRefSchema.nullable(),
+    title: z.string(),
+    description: z.string().nullable(),
+    discount_type: z.enum(["percent", "fixed"]),
+    percent_off: z.number().int().nullable(),
+    amount_off_minor_units: z.number().int().nullable(),
+    max_discount_minor_units: z.number().int().nullable(),
+    min_booking_minor_units: z.number().int().nullable(),
+    booking_types: z.array(z.string()).nullable(),
+    starts_at: z.string().nullable(),
+    ends_at: z.string().nullable(),
+    usage_limit: z.number().int().nullable(),
+    per_user_limit: z.number().int().nullable(),
+    first_booking_only: z.boolean(),
+    is_public: z.boolean(),
+    is_active: z.boolean(),
+    location_ids: z.array(z.string().uuid()),
+    status: z.enum(["active", "scheduled", "ended", "inactive", "used_up"]),
+    uses: z.number().int(),
+    discount_given_minor_units: z.number().int(),
+    created_at: z.string(),
+    updated_at: z.string(),
+  })
+  .openapi("Coupon");
+
+const redemptionSchema = z
+  .object({
+    id: z.string().uuid(),
+    booking_id: z.string().uuid(),
+    discount_minor_units: z.number().int(),
+    funded_by: z.enum(["platform", "host"]),
+    created_at: z.string(),
+    booking: z.object({ status: z.string(), start_at: z.string(), paid: z.boolean(), location: z.object({ id: z.string().uuid(), title: z.string() }).nullable() }).nullable(),
+    booker: z.object({ first_name: z.string().nullable(), last_name: z.string().nullable() }).nullable(),
+  })
+  .openapi("CouponRedemption");
+
+registry.registerPath({
+  method: "get",
+  path: "/coupons",
+  tags: ["Admin", "Coupons"],
+  summary: "Every coupon (ProdBnb's and hosts'), with status and uses (payments.view)",
+  security,
+  request: { query: listCouponsQuerySchema },
+  responses: { "200": paginatedResponse(couponSchema), ...errorResponses },
+});
+registry.registerPath({
+  method: "post",
+  path: "/coupons",
+  tags: ["Admin", "Coupons"],
+  summary: "Create a ProdBnb coupon, or one on a host's behalf (coupons.manage). Audited",
+  security,
+  request: { body: jsonBody(adminCreateCouponSchema) },
+  responses: { "201": createdResponse(couponSchema), "409": { description: "Code already taken" }, ...errorResponses },
+});
+registry.registerPath({
+  method: "get",
+  path: "/coupons/{id}",
+  tags: ["Admin", "Coupons"],
+  summary: "A coupon with every booking that used it (payments.view)",
+  security,
+  request: { params: couponIdParamSchema },
+  responses: { "200": okResponse(couponSchema.extend({ redemptions: z.array(redemptionSchema) })), ...errorResponses },
+});
+registry.registerPath({
+  method: "patch",
+  path: "/coupons/{id}",
+  tags: ["Admin", "Coupons"],
+  summary: "Edit, pause or resume a coupon (coupons.manage). Audited; bookings keep their discount",
+  security,
+  request: { params: couponIdParamSchema, body: jsonBody(updateCouponSchema) },
+  responses: { "200": okResponse(couponSchema), ...errorResponses },
+});
+registry.registerPath({
+  method: "delete",
+  path: "/coupons/{id}",
+  tags: ["Admin", "Coupons"],
+  summary: "Delete a coupon nobody has used (coupons.manage). Audited",
+  security,
+  request: { params: couponIdParamSchema },
+  responses: { "200": okResponse(z.object({ deleted: z.boolean() })), "409": { description: "Already used: turn it off instead" }, ...errorResponses },
 });
 
 const generator = new OpenApiGeneratorV3(registry.definitions);

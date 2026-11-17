@@ -1710,3 +1710,47 @@ be a downstream effect of. Creating a conversation still produces no notificatio
 does. Android (FCM) and Web Push are future
 `NotificationProvider` adapters, not built this phase. Video transcoding, image processing, and AI
 analysis remain out of scope for the R2 integration.
+
+## Offers and coupons
+
+A coupon is created by ProdBnb (`owner_type: "platform"`, admin console) or by a host for their own
+listings (`owner_type: "host"`). The discount comes off the **listing price**; the service fee and
+tax are then worked out on the lower price. **Who pays for it follows who created it**: a ProdBnb
+coupon leaves the host's earning at the full listing price; a host coupon comes out of that host's
+earning (`host_discount_minor_units` on their earnings rows). Each booking records the coupon, the
+discount (`pricing.discount_minor_units`) and who funded it, so later edits never change a booking.
+
+Coupon fields: `code` (3–30 of A–Z 0–9 `-` `_`, case-insensitive, unique), `title`, `description`,
+`discount_type` (`percent` with `percent_off` 1–100 and optional `max_discount_minor_units`, or
+`fixed` with `amount_off_minor_units`), `min_booking_minor_units` (on the listing price),
+`booking_types`, `starts_at`/`ends_at`, `usage_limit` (total), `per_user_limit`,
+`first_booking_only`, `is_public` (shown on listings and the Offers page), `is_active`, and
+`location_ids` (empty = every listing; a host's coupon only ever covers their own listings).
+
+A use counts while its booking is live (requested/confirmed/completed) or once it was paid; an
+unpaid booking that expires gives the use back.
+
+### Using a code
+
+`POST /v1/bookings/quote` and `POST /v1/bookings` accept an optional `coupon_code`. The quote
+returns `coupon: { code, title, discount_minor_units, funded_by } | null` and, when the code doesn't
+apply, `coupon_error` in plain words ("That offer has ended.", "You've already used that code."…) with
+the price shown without it. Booking with a code that doesn't apply is `400` with the same message.
+
+### Public offers
+
+- `GET /v1/offers`: every live public offer (ProdBnb's first); host offers list the listings they cover.
+- `GET /v1/locations/:id/offers`: the public offers that work on one listing.
+
+### A host's coupons (`host` role)
+
+`GET /v1/me/coupons`, `POST /v1/me/coupons`, `GET|PATCH|DELETE /v1/me/coupons/:id`. Each coupon
+comes with `status` (`active`, `scheduled`, `ended`, `used_up`, `inactive`), `uses` and
+`discount_given_minor_units`; the detail adds `redemptions` (booking, date, booker's name,
+discount). A coupon that has been used can't be deleted (`409`): turn it off instead.
+
+### Admin (`/v1/admin/coupons`)
+
+List and detail need `payments.view`; create, edit and delete need `coupons.manage` (finance,
+moderator, super admin) and are audited. An admin can create a ProdBnb coupon or one on a host's
+behalf (`owner_type: "host"`, `host_id`). See `docs/admin-openapi.json`.

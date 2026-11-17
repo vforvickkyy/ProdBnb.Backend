@@ -4,6 +4,8 @@ import { bookingTypeSchema } from "../pricing/pricing.schema";
 const uuid = z.string().uuid();
 const offsetDateTime = z.string().datetime({ offset: true });
 const dateOnly = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Must be an ISO date, e.g. 2026-10-05.");
+// A coupon or offer code (optional on every booking type).
+const couponCodeField = z.string().trim().min(1).max(40).optional();
 
 export const bookingStatusSchema = z.enum(["requested", "confirmed", "cancelled", "completed", "rejected"]);
 
@@ -19,6 +21,7 @@ const hourlyBookingSchema = z
     booking_type: z.literal("hourly"),
     start_at: offsetDateTime,
     end_at: offsetDateTime,
+    coupon_code: couponCodeField,
   })
   .strict();
 
@@ -29,6 +32,7 @@ const halfDayBookingSchema = z
     // end_at is derived from the location's configured half_day_duration_hours,
     // not client-supplied — see resolveInterval() in bookings.service.ts.
     start_at: offsetDateTime,
+    coupon_code: couponCodeField,
   })
   .strict();
 
@@ -39,6 +43,7 @@ const dayBookingSchema = z
     // No times at all — the reserved interval is derived from the location's
     // actual availability that date (never a naive 24-hour assumption).
     date: dateOnly,
+    coupon_code: couponCodeField,
   })
   .strict();
 
@@ -48,6 +53,7 @@ const multiDayBookingSchema = z
     booking_type: z.literal("multi_day"),
     start_date: dateOnly,
     end_date: dateOnly,
+    coupon_code: couponCodeField,
   })
   .strict();
 

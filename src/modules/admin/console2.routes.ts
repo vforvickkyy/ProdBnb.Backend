@@ -49,6 +49,7 @@ import { browserUploadOrigins } from "../site/integrations.service";
 import { adminContentRouter } from "../content/content.routes";
 import { adminAccountRouter } from "../account/account.routes";
 import { adminPayoutsRouter } from "../payouts/payouts.routes";
+import { adminCouponsRouter } from "../coupons/coupons.routes";
 import { requirePermission as can } from "./permissions";
 
 /**
@@ -160,6 +161,7 @@ adminConsole2Router.use(adminSiteRouter);
 adminConsole2Router.use(adminContentRouter);
 adminConsole2Router.use(adminAccountRouter);
 adminConsole2Router.use(adminPayoutsRouter);
+adminConsole2Router.use(adminCouponsRouter);
 
 // -- R2 browser uploads -----------------------------------------------------------------------------
 // One click on the Integrations page adds a CORS rule letting the backend's CORS_ORIGINS PUT to the

@@ -46,6 +46,10 @@ export const ADMIN_PERMISSIONS = [
   "site.manage",
   // Website pages (policies, about...) and SEO titles/descriptions.
   "content.manage",
+  // Offers: ProdBnb's coupons and any host's.
+  "coupons.manage",
+  // Invoices: template, numbering, sending and resending.
+  "invoices.manage",
 ] as const;
 export type AdminPermission = (typeof ADMIN_PERMISSIONS)[number];
 
@@ -57,10 +61,10 @@ export type AdminPermission = (typeof ADMIN_PERMISSIONS)[number];
  *
  *  - moderator  -- listings and people: approve/reject/suspend, create listings for hosts,
  *                  photos/sections/pricing/timings, catalog + collections, user roles, website
- *                  pages and SEO
+ *                  pages and SEO, coupons
  *  - support    -- bookings and disputes: booking actions, re-checking payments, private messages,
  *                  announcements and direct notifications, incidents
- *  - finance    -- money: payments, refunds, analytics
+ *  - finance    -- money: payments, refunds, analytics, coupons, invoices
  *  - super_admin -- everything, plus the team, platform settings, integrations, sending-channel
  *                  credentials and platform release control
  */
@@ -85,6 +89,7 @@ export const ROLE_PERMISSIONS: Record<TeamRole, readonly AdminPermission[]> = {
     "catalog.manage",
     "campaigns.view",
     "content.manage",
+    "coupons.manage",
   ],
   support: [
     ...BASE,
@@ -97,7 +102,7 @@ export const ROLE_PERMISSIONS: Record<TeamRole, readonly AdminPermission[]> = {
     "campaigns.send",
     "incidents.manage",
   ],
-  finance: [...BASE, "analytics.view", "payments.view", "payments.verify", "payments.refund"],
+  finance: [...BASE, "analytics.view", "payments.view", "payments.verify", "payments.refund", "coupons.manage", "invoices.manage"],
 };
 
 export function permissionsFor(role: TeamRole): readonly AdminPermission[] {

@@ -15,6 +15,7 @@ import { getPlatformSettings, platformCharges } from "../platform/settings.servi
 import { expireUnpaidHolds } from "./holds";
 import { openRefundRequestAfterCancellation } from "../account/refundRequests.service";
 import { calculateBookingPrice, getActivePricing } from "./pricing";
+import { recordRedemption, resolveCoupon, type AppliedCoupon } from "../coupons/coupons.service";
 
 const EXCLUSION_VIOLATION = "23P01";
 
@@ -444,6 +445,10 @@ export interface BookingQuote {
   hold_minutes: number | null;
   /** The caller hosts this listing (the website won't offer to book it). */
   own_listing: boolean;
+  /** The code that was applied, or null. */
+  coupon: { code: string; title: string; discount_minor_units: number; funded_by: "platform" | "host" } | null;
+  /** Why the code in the request didn't apply (the price is then shown without it). */
+  coupon_error: string | null;
 }
 
 /**
@@ -471,6 +476,8 @@ export async function quoteBooking(supabase: SupabaseClient, callerId: string, i
     instant_booking: location.instant_booking_enabled,
     hold_minutes: settings.unpaid_hold_minutes,
     own_listing: location.host_id === callerId,
+    coupon: null,
+    coupon_error: null,
   };
   const unavailable = (reason: string, extra: Partial<BookingQuote> = {}): BookingQuote => ({ ...base, ...extra, available: false, reason });
 
@@ -496,7 +503,15 @@ export async function quoteBooking(supabase: SupabaseClient, callerId: string, i
   if (availabilityError) throw availabilityError;
 
   const pricing = await calculateBookingPrice(supabase, input.location_id, input.booking_type as BookingType, interval.start_at, interval.end_at, location.timezone);
-  const charges = platformCharges(pricing.base_amount_minor_units, settings);
+  let applied: AppliedCoupon | null = null;
+  let couponError: string | null = null;
+  if (input.coupon_code) {
+    const r = await resolveCoupon(input.coupon_code, { locationId: input.location_id, hostId: location.host_id, bookingType: input.booking_type, baseMinor: pricing.base_amount_minor_units, userId: callerId });
+    if ("error" in r) couponError = r.error;
+    else applied = r;
+  }
+  const discount = applied?.discount ?? 0;
+  const charges = platformCharges(pricing.base_amount_minor_units - discount, settings);
   const hours = (new Date(interval.end_at).getTime() - new Date(interval.start_at).getTime()) / 3_600_000;
   const units: BookingQuote["units"] =
     input.booking_type === "hourly"
@@ -512,10 +527,12 @@ export async function quoteBooking(supabase: SupabaseClient, callerId: string, i
       base_amount_minor_units: pricing.base_amount_minor_units,
       platform_fee_minor_units: charges.platform_fee_minor_units,
       tax_minor_units: charges.tax_minor_units,
-      discount_minor_units: 0,
+      discount_minor_units: discount,
       total_amount_minor_units: charges.total_amount_minor_units,
       currency: pricing.currency,
     },
+    coupon: applied ? { code: applied.coupon.code, title: applied.coupon.title, discount_minor_units: discount, funded_by: applied.coupon.owner_type } : null,
+    coupon_error: couponError,
   };
   if (!available) return unavailable("Someone has already booked part of that time, or the host closed it. Pick another time.", priced);
   return { ...base, ...priced, available: true, reason: null };
@@ -561,10 +578,19 @@ export async function createBooking(
     interval.end_at,
     location.timezone
   );
+  // Offers: a coupon comes off the listing price; the fee and tax are then worked out on the lower
+  // price. The booking records the coupon, the discount and who funds it (ProdBnb or the host).
+  let applied: AppliedCoupon | null = null;
+  if (input.coupon_code) {
+    const r = await resolveCoupon(input.coupon_code, { locationId: input.location_id, hostId: location.host_id, bookingType: input.booking_type, baseMinor: pricing.base_amount_minor_units, userId: bookerId });
+    if ("error" in r) throw new ValidationError(r.error);
+    applied = r;
+  }
+  const discount = applied?.discount ?? 0;
   // Admin Console: platform fee and tax from platform_settings, applied on top of the location's own
   // price. Both default to 0, in which case `charges.total_amount_minor_units === base` and every
   // booking prices exactly as it always has. The snapshot below records whichever rates applied.
-  const charges = platformCharges(pricing.base_amount_minor_units, await getPlatformSettings());
+  const charges = platformCharges(pricing.base_amount_minor_units - discount, await getPlatformSettings());
   const status = location.instant_booking_enabled ? "confirmed" : "requested";
 
   // Every authorization/business-rule check above already ran against the
@@ -586,6 +612,9 @@ export async function createBooking(
       base_amount_minor_units: pricing.base_amount_minor_units,
       platform_fee_minor_units: charges.platform_fee_minor_units,
       tax_minor_units: charges.tax_minor_units,
+      discount_minor_units: discount,
+      coupon_id: applied?.coupon.id ?? null,
+      discount_funded_by: applied ? applied.coupon.owner_type : null,
       total_amount_minor_units: charges.total_amount_minor_units,
       currency: pricing.currency,
     })
@@ -605,6 +634,7 @@ export async function createBooking(
   }
 
   const booking = toBookingDetail(data as unknown as RawBookingRow);
+  if (applied) await recordRedemption(applied, booking.id, bookerId);
 
   // Phase 29.14-D: the host is deliberately NOT notified here.
   //
