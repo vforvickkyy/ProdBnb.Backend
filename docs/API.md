@@ -1793,3 +1793,49 @@ invoice are counted as `waiting` and can be issued in one go.
 | `GET /receipts` | payments.view | Every settled payment, with refunds and invoice number |
 | `GET /receipts/:paymentId/pdf` | payments.view | Proof of payment (not a tax invoice) |
 | `POST /receipts/:paymentId/send` `{ to? }` | invoices.manage | Audited |
+
+## Onboarding answers
+
+New people are asked three required things -- their name, a mobile number (both on the profile,
+`PATCH /v1/me`) and what they do -- and a few optional ones they can finish later.
+
+* `GET /v1/me` now also returns `onboarding: { basics_done, missing: ("name"|"mobile"|"profession")[], completed }`.
+* `GET /v1/me/preferences` → `{ preferences, onboarding }`
+* `PUT /v1/me/preferences` with any of: `professions` (up to 5 of `producer`, `director`,
+  `cinematographer`, `photographer`, `production_house`, `ad_agency`, `content_creator`,
+  `art_director`, `location_manager`, `student`, `location_owner`, `other`), `company`, `cities`
+  (up to 10), `use_case_ids` (what they shoot, from `/v1/use-cases`), `category_ids` (kinds of
+  places, from `/v1/categories`), `heard_from`, `new_listing_alerts`, and `complete: true` to finish
+  (refused until the basics are given).
+
+Nothing is blocked on onboarding; the website uses it to welcome people, and the team uses the
+answers to target notifications. Admins see them on the user's page (`preferences`).
+
+## Notification templates and variables (admin)
+
+Notification text can use variables, filled in for each person when it's sent:
+
+* Person: `{first_name}`, `{last_name}`, `{name}`, `{city}`, `{city_suffix}` (" in Mumbai" or
+  nothing), `{profession}`.
+* Listing (pick `location_id`): `{listing_title}`, `{listing_city}`, `{listing_price}`, `{listing_url}`.
+* Offer (pick `coupon_id`): `{offer_code}`, `{offer_title}`, `{offer_discount}`, `{offer_ends}`.
+* `{first_name|there}` uses "there" when the person hasn't given a first name.
+
+Unknown variables, and listing/offer variables with nothing picked, are refused when a campaign or
+template is saved. A campaign about a listing links to it (website page when a domain is set,
+otherwise the app's `prodbnb://location/{id}`) unless a link is given.
+
+| Endpoint | Permission | |
+| --- | --- | --- |
+| `GET /v1/admin/notification-templates` | campaigns.view | Built-in and the team's own |
+| `POST /v1/admin/notification-templates` | campaigns.send | Audited |
+| `PATCH /v1/admin/notification-templates/:id` | campaigns.send | Audited (built-ins can be edited) |
+| `DELETE /v1/admin/notification-templates/:id` | campaigns.send | 409 for built-ins. Audited |
+| `GET /v1/admin/notification-variables` | campaigns.view | |
+| `POST /v1/admin/campaigns/render-preview` | campaigns.view | As the admin, or `user_id` |
+| `GET /v1/admin/campaigns/audience-options` | campaigns.view | Professions, cities, shoot types with counts |
+
+Campaigns accept `location_id`, `coupon_id` and `template_id`, and a new audience:
+`{ type: "segment", role?, professions?, cities?, use_case_ids?, booked?: "yes"|"no", new_listing_alerts? }`
+-- every filter optional, filters combined with AND, values inside a filter with OR. Cities match the
+person's onboarding cities or their address city, ignoring case.

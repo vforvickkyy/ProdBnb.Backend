@@ -1,3 +1,4 @@
+import { getPreferences, myOnboarding, onboardingStatus, savePreferences, type PreferencesInput } from "./preferences.service";
 import { Request, Response } from "express";
 import { ok } from "../../utils/respond";
 import { listRoles } from "../roles/roles.service";
@@ -8,9 +9,17 @@ export async function getMe(req: Request, res: Response): Promise<void> {
   const userId = req.user!.id;
   const supabase = req.supabase!;
 
-  const [profile, roles] = await Promise.all([getProfile(supabase, userId), listRoles(supabase, userId)]);
+  const [profile, roles, preferences] = await Promise.all([getProfile(supabase, userId), listRoles(supabase, userId), getPreferences(userId)]);
 
-  ok(res, { profile, roles });
+  ok(res, { profile, roles, onboarding: onboardingStatus(profile, preferences) });
+}
+
+export async function getMyPreferences(req: Request, res: Response): Promise<void> {
+  ok(res, await myOnboarding(req.user!.id));
+}
+
+export async function putMyPreferences(req: Request, res: Response): Promise<void> {
+  ok(res, await savePreferences(req.user!.id, req.valid!.body as PreferencesInput));
 }
 
 export async function patchMe(req: Request, res: Response): Promise<void> {

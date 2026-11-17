@@ -123,7 +123,13 @@ import {
   channelNameSchema,
   channelParamSchema,
   createCampaignSchema,
+  createTemplateSchema,
   jobsConfigSchema,
+  PROFESSIONS,
+  renderPreviewSchema,
+  templateCategorySchema,
+  templateIdParamSchema,
+  updateTemplateSchema,
   listCampaignsQuerySchema,
   pushPlatformSchema,
   saveChannelSchema,
@@ -309,6 +315,18 @@ const adminUserFullDetailSchema = adminUserDetailSchema
       address_postal_code: z.string().nullable(),
     }),
     billing: z.object({ company_name: z.string().nullable(), gst_number: z.string().nullable(), updated_at: z.string().datetime() }).nullable(),
+    preferences: z
+      .object({
+        professions: z.array(z.enum(PROFESSIONS)),
+        company: z.string().nullable(),
+        cities: z.array(z.string()),
+        use_case_ids: z.array(z.string().uuid()),
+        category_ids: z.array(z.string().uuid()),
+        heard_from: z.string().nullable(),
+        new_listing_alerts: z.boolean(),
+        onboarding_completed_at: z.string().nullable(),
+      })
+      .openapi("UserPreferences"),
   })
   .openapi("AdminUserFullDetail");
 
@@ -1571,6 +1589,9 @@ const campaignSchema = z
     link_url: z.string().nullable(),
     email_subject: z.string().nullable(),
     email_body: z.string().nullable(),
+    location_id: z.string().uuid().nullable(),
+    coupon_id: z.string().uuid().nullable(),
+    template_id: z.string().uuid().nullable(),
     status: z.enum(["draft", "scheduled", "sending", "sent", "cancelled", "failed"]),
     scheduled_at: z.string().datetime().nullable(),
     started_at: z.string().datetime().nullable(),
@@ -2749,6 +2770,124 @@ registry.registerPath({
   security,
   request: { params: receiptPaymentIdParamSchema, body: jsonBody(invoiceSendSchema) },
   responses: { "200": okResponse(z.object({ to: z.string() })), ...errorResponses },
+});
+
+// -- Notification templates and variables ------------------------------------------------------------
+
+const notificationTemplateSchema = z
+  .object({
+    id: z.string().uuid(),
+    name: z.string(),
+    category: templateCategorySchema,
+    description: z.string().nullable(),
+    needs: z.enum(["listing", "offer"]).nullable(),
+    title: z.string(),
+    body: z.string(),
+    email_subject: z.string().nullable(),
+    email_body: z.string().nullable(),
+    channels: z.array(campaignChannelSchema),
+    is_builtin: z.boolean(),
+    created_at: z.string(),
+    updated_at: z.string(),
+    uses: z.number().int(),
+  })
+  .openapi("NotificationTemplate");
+
+const notificationVariableSchema = z
+  .object({ key: z.string(), label: z.string(), example: z.string(), scope: z.enum(["person", "listing", "offer"]) })
+  .openapi("NotificationVariable");
+
+registry.registerPath({
+  method: "get",
+  path: "/notification-templates",
+  tags: ["Admin", "Messaging"],
+  summary: "Notification templates (built-in and the team's own) (campaigns.view)",
+  security,
+  responses: { "200": okResponse(z.array(notificationTemplateSchema)), ...errorResponses },
+});
+registry.registerPath({
+  method: "post",
+  path: "/notification-templates",
+  tags: ["Admin", "Messaging"],
+  summary: "Create a template (campaigns.send). Unknown {variables} are refused. Audited",
+  security,
+  request: { body: jsonBody(createTemplateSchema) },
+  responses: { "201": createdResponse(notificationTemplateSchema), ...errorResponses },
+});
+registry.registerPath({
+  method: "get",
+  path: "/notification-templates/{templateId}",
+  tags: ["Admin", "Messaging"],
+  summary: "One template (campaigns.view)",
+  security,
+  request: { params: templateIdParamSchema },
+  responses: { "200": okResponse(notificationTemplateSchema), ...errorResponses },
+});
+registry.registerPath({
+  method: "patch",
+  path: "/notification-templates/{templateId}",
+  tags: ["Admin", "Messaging"],
+  summary: "Edit a template, built-in ones included (campaigns.send). Audited",
+  security,
+  request: { params: templateIdParamSchema, body: jsonBody(updateTemplateSchema) },
+  responses: { "200": okResponse(notificationTemplateSchema), ...errorResponses },
+});
+registry.registerPath({
+  method: "delete",
+  path: "/notification-templates/{templateId}",
+  tags: ["Admin", "Messaging"],
+  summary: "Delete one of the team's templates (campaigns.send). Built-in ones can't be deleted. Audited",
+  security,
+  request: { params: templateIdParamSchema },
+  responses: { "200": okResponse(z.object({ deleted: z.boolean() })), "409": { description: "Built-in template" }, ...errorResponses },
+});
+registry.registerPath({
+  method: "get",
+  path: "/notification-variables",
+  tags: ["Admin", "Messaging"],
+  summary: "Variables usable in notification text: per person ({first_name}), listing ({listing_title}) and offer ({offer_code})",
+  security,
+  responses: { "200": okResponse(z.array(notificationVariableSchema)), ...errorResponses },
+});
+registry.registerPath({
+  method: "post",
+  path: "/campaigns/render-preview",
+  tags: ["Admin", "Messaging"],
+  summary: "The text as one person gets it (the signed-in admin, or user_id), with the listing/offer filled in (campaigns.view)",
+  security,
+  request: { body: jsonBody(renderPreviewSchema) },
+  responses: {
+    "200": okResponse(
+      z.object({
+        title: z.string(),
+        body: z.string(),
+        link_url: z.string().nullable(),
+        email_subject: z.string().nullable(),
+        email_body: z.string().nullable(),
+        user_id: z.string().uuid(),
+        missing: z.array(z.string()).openapi({ description: "Person variables that person hasn't filled in (the fallback was used)" }),
+      })
+    ),
+    ...errorResponses,
+  },
+});
+registry.registerPath({
+  method: "get",
+  path: "/campaigns/audience-options",
+  tags: ["Admin", "Messaging"],
+  summary: "Choices for a segment audience (professions, cities, shoot types) with how many people each reaches (campaigns.view)",
+  security,
+  responses: {
+    "200": okResponse(
+      z.object({
+        professions: z.array(z.object({ value: z.enum(PROFESSIONS), label: z.string(), count: z.number().int() })),
+        cities: z.array(z.object({ name: z.string(), count: z.number().int() })),
+        use_cases: z.array(z.object({ id: z.string().uuid(), name: z.string(), count: z.number().int() })),
+        onboarded: z.number().int(),
+      })
+    ),
+    ...errorResponses,
+  },
 });
 
 const generator = new OpenApiGeneratorV3(registry.definitions);

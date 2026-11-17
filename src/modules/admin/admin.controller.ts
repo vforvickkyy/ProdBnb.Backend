@@ -1,3 +1,4 @@
+import { getPreferences } from "../users/preferences.service";
 import { Request, Response } from "express";
 import { cancelBooking, getBooking, listBookings } from "../bookings/bookings.service";
 import { BookingActionInput, BookingIdParam, ListBookingsQuery } from "../bookings/bookings.schema";
@@ -44,8 +45,8 @@ export async function getSystemStatusHandler(_req: Request, res: Response): Prom
 
 export async function getUserDetail(req: Request, res: Response): Promise<void> {
   const { id } = req.valid!.params as AdminUserIdParam;
-  const user = await getAdminUserDetail(req.supabase!, id);
-  ok(res, user);
+  const [user, preferences] = await Promise.all([getAdminUserDetail(req.supabase!, id), getPreferences(id)]);
+  ok(res, { ...user, preferences });
 }
 
 export async function postSuspendUser(req: Request, res: Response): Promise<void> {

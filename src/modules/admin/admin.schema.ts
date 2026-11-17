@@ -153,6 +153,9 @@ export const auditActionSchema = z.enum([
   "ADMIN_ISSUED_INVOICES",
   "ADMIN_SENT_INVOICE",
   "ADMIN_SENT_RECEIPT",
+  "ADMIN_CREATED_NOTIFICATION_TEMPLATE",
+  "ADMIN_UPDATED_NOTIFICATION_TEMPLATE",
+  "ADMIN_DELETED_NOTIFICATION_TEMPLATE",
 ]);
 
 export const auditTargetTypeSchema = z.enum([
@@ -181,6 +184,7 @@ export const auditTargetTypeSchema = z.enum([
   "payout",
   "coupon",
   "invoice",
+  "notification_template",
 ]);
 
 export const auditLogQuerySchema = z

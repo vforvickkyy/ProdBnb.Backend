@@ -83,11 +83,44 @@ export type TestChannelInput = z.infer<typeof testChannelSchema>;
 export const campaignChannelSchema = z.enum(["in_app", "push", "email"]);
 export const pushPlatformSchema = z.enum(["ios", "android", "web"]);
 
+export const PROFESSIONS = [
+  "producer",
+  "director",
+  "cinematographer",
+  "photographer",
+  "production_house",
+  "ad_agency",
+  "content_creator",
+  "art_director",
+  "location_manager",
+  "student",
+  "location_owner",
+  "other",
+] as const;
+export const professionSchema = z.enum(PROFESSIONS);
+
+/**
+ * "segment": people matching every filter given (by role, what they do, city, what they shoot,
+ * whether they've booked, whether they want new-listing alerts). Values inside one filter are ORed.
+ */
+export const segmentAudienceSchema = z
+  .object({
+    type: z.literal("segment"),
+    role: z.enum(["booker", "host"]).optional(),
+    professions: z.array(professionSchema).max(12).optional(),
+    cities: z.array(z.string().trim().min(1).max(80)).max(20).optional(),
+    use_case_ids: z.array(uuid).max(20).optional(),
+    booked: z.enum(["yes", "no"]).optional(),
+    new_listing_alerts: z.boolean().optional(),
+  })
+  .strict();
+
 export const audienceSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("all") }).strict(),
   z.object({ type: z.literal("role"), role: z.enum(["booker", "host", "admin"]) }).strict(),
   z.object({ type: z.literal("users"), user_ids: z.array(uuid).min(1).max(5000) }).strict(),
   z.object({ type: z.literal("platform_users") }).strict(),
+  segmentAudienceSchema,
 ]);
 export type Audience = z.infer<typeof audienceSchema>;
 
@@ -108,6 +141,10 @@ const campaignFields = {
     .optional(),
   email_subject: z.string().trim().min(1).max(200).nullable().optional(),
   email_body: z.string().trim().min(1).max(50_000).nullable().optional(),
+  /** The listing / offer the message is about: their details fill {listing_…} / {offer_…}. */
+  location_id: uuid.nullable().optional(),
+  coupon_id: uuid.nullable().optional(),
+  template_id: uuid.nullable().optional(),
 };
 
 function emailFieldsPresent(d: { channels?: string[]; email_subject?: string | null; email_body?: string | null }): boolean {
@@ -132,6 +169,9 @@ export const updateCampaignSchema = z
     link_url: campaignFields.link_url,
     email_subject: campaignFields.email_subject,
     email_body: campaignFields.email_body,
+    location_id: campaignFields.location_id,
+    coupon_id: campaignFields.coupon_id,
+    template_id: campaignFields.template_id,
   })
   .strict()
   .refine((d) => Object.keys(d).length > 0, { message: "Provide at least one field to update." });
@@ -181,10 +221,65 @@ export const testCampaignSchema = z
     link_url: campaignFields.link_url,
     email_subject: campaignFields.email_subject,
     email_body: campaignFields.email_body,
+    location_id: campaignFields.location_id,
+    coupon_id: campaignFields.coupon_id,
   })
   .strict()
   .refine(emailFieldsPresent, { message: "Email needs a subject and a body.", path: ["email_subject"] });
 export type TestCampaignInput = z.infer<typeof testCampaignSchema>;
+
+/** Show the text as one person would get it (the signed-in admin, or someone chosen). */
+export const renderPreviewSchema = z
+  .object({
+    title: z.string().max(400),
+    body: z.string().max(2000),
+    email_subject: z.string().max(400).nullable().optional(),
+    email_body: z.string().max(50_000).nullable().optional(),
+    link_url: z.string().max(500).nullable().optional(),
+    location_id: uuid.nullable().optional(),
+    coupon_id: uuid.nullable().optional(),
+    user_id: uuid.optional(),
+  })
+  .strict();
+export type RenderPreviewInput = z.infer<typeof renderPreviewSchema>;
+
+// -- Templates ---------------------------------------------------------------------------------------
+
+export const templateCategorySchema = z.enum(["new_listing", "new_offer", "casual", "reminder", "host", "custom"]);
+
+const templateFields = {
+  name: z.string().trim().min(1).max(80),
+  category: templateCategorySchema.default("custom"),
+  description: z.string().trim().max(300).nullable().optional(),
+  needs: z.enum(["listing", "offer"]).nullable().optional(),
+  title: z.string().trim().min(1).max(160),
+  body: z.string().trim().min(1).max(1000),
+  email_subject: z.string().trim().min(1).max(200).nullable().optional(),
+  email_body: z.string().trim().min(1).max(50_000).nullable().optional(),
+  channels: z.array(campaignChannelSchema).min(1).max(3).default(["in_app", "push"]),
+};
+
+export const createTemplateSchema = z.object(templateFields).strict().refine(emailFieldsPresent, { message: "Email needs a subject and a body.", path: ["email_subject"] });
+export type CreateTemplateInput = z.infer<typeof createTemplateSchema>;
+
+export const updateTemplateSchema = z
+  .object({
+    name: templateFields.name.optional(),
+    category: templateCategorySchema.optional(),
+    description: templateFields.description,
+    needs: templateFields.needs,
+    title: templateFields.title.optional(),
+    body: templateFields.body.optional(),
+    email_subject: templateFields.email_subject,
+    email_body: templateFields.email_body,
+    channels: z.array(campaignChannelSchema).min(1).max(3).optional(),
+  })
+  .strict()
+  .refine((d) => Object.keys(d).length > 0, { message: "Provide at least one field to update." });
+export type UpdateTemplateInput = z.infer<typeof updateTemplateSchema>;
+
+export const templateIdParamSchema = z.object({ templateId: uuid });
+export type TemplateIdParam = z.infer<typeof templateIdParamSchema>;
 
 // -- Background jobs ---------------------------------------------------------------------------------
 

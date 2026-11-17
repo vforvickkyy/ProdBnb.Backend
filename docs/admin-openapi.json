@@ -278,6 +278,76 @@
           "bookings_count"
         ]
       },
+      "UserPreferences": {
+        "type": "object",
+        "properties": {
+          "professions": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "producer",
+                "director",
+                "cinematographer",
+                "photographer",
+                "production_house",
+                "ad_agency",
+                "content_creator",
+                "art_director",
+                "location_manager",
+                "student",
+                "location_owner",
+                "other"
+              ]
+            }
+          },
+          "company": {
+            "type": "string",
+            "nullable": true
+          },
+          "cities": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "use_case_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "category_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "heard_from": {
+            "type": "string",
+            "nullable": true
+          },
+          "new_listing_alerts": {
+            "type": "boolean"
+          },
+          "onboarding_completed_at": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "professions",
+          "company",
+          "cities",
+          "use_case_ids",
+          "category_ids",
+          "heard_from",
+          "new_listing_alerts",
+          "onboarding_completed_at"
+        ]
+      },
       "AdminUserFullDetail": {
         "allOf": [
           {
@@ -360,12 +430,16 @@
                   "gst_number",
                   "updated_at"
                 ]
+              },
+              "preferences": {
+                "$ref": "#/components/schemas/UserPreferences"
               }
             },
             "required": [
               "team_role",
               "contact",
-              "billing"
+              "billing",
+              "preferences"
             ]
           }
         ]
@@ -1391,7 +1465,10 @@
               "ADMIN_UPDATED_INVOICE_SETTINGS",
               "ADMIN_ISSUED_INVOICES",
               "ADMIN_SENT_INVOICE",
-              "ADMIN_SENT_RECEIPT"
+              "ADMIN_SENT_RECEIPT",
+              "ADMIN_CREATED_NOTIFICATION_TEMPLATE",
+              "ADMIN_UPDATED_NOTIFICATION_TEMPLATE",
+              "ADMIN_DELETED_NOTIFICATION_TEMPLATE"
             ]
           },
           "target_type": {
@@ -1421,7 +1498,8 @@
               "payout_account",
               "payout",
               "coupon",
-              "invoice"
+              "invoice",
+              "notification_template"
             ]
           },
           "target_id": {
@@ -2861,6 +2939,76 @@
                   "type"
                 ],
                 "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": [
+                      "segment"
+                    ]
+                  },
+                  "role": {
+                    "type": "string",
+                    "enum": [
+                      "booker",
+                      "host"
+                    ]
+                  },
+                  "professions": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "producer",
+                        "director",
+                        "cinematographer",
+                        "photographer",
+                        "production_house",
+                        "ad_agency",
+                        "content_creator",
+                        "art_director",
+                        "location_manager",
+                        "student",
+                        "location_owner",
+                        "other"
+                      ]
+                    },
+                    "maxItems": 12
+                  },
+                  "cities": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 80
+                    },
+                    "maxItems": 20
+                  },
+                  "use_case_ids": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "maxItems": 20
+                  },
+                  "booked": {
+                    "type": "string",
+                    "enum": [
+                      "yes",
+                      "no"
+                    ]
+                  },
+                  "new_listing_alerts": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "type"
+                ],
+                "additionalProperties": false
               }
             ]
           },
@@ -2881,6 +3029,21 @@
           "email_body": {
             "type": "string",
             "nullable": true
+          },
+          "location_id": {
+            "type": "string",
+            "nullable": true,
+            "format": "uuid"
+          },
+          "coupon_id": {
+            "type": "string",
+            "nullable": true,
+            "format": "uuid"
+          },
+          "template_id": {
+            "type": "string",
+            "nullable": true,
+            "format": "uuid"
           },
           "status": {
             "type": "string",
@@ -2950,6 +3113,9 @@
           "link_url",
           "email_subject",
           "email_body",
+          "location_id",
+          "coupon_id",
+          "template_id",
           "status",
           "scheduled_at",
           "started_at",
@@ -5298,6 +5464,122 @@
           "invoice_number",
           "last_sent_at"
         ]
+      },
+      "NotificationTemplate": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "new_listing",
+              "new_offer",
+              "casual",
+              "reminder",
+              "host",
+              "custom"
+            ]
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "needs": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "listing",
+              "offer"
+            ]
+          },
+          "title": {
+            "type": "string"
+          },
+          "body": {
+            "type": "string"
+          },
+          "email_subject": {
+            "type": "string",
+            "nullable": true
+          },
+          "email_body": {
+            "type": "string",
+            "nullable": true
+          },
+          "channels": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "in_app",
+                "push",
+                "email"
+              ]
+            }
+          },
+          "is_builtin": {
+            "type": "boolean"
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string"
+          },
+          "uses": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "category",
+          "description",
+          "needs",
+          "title",
+          "body",
+          "email_subject",
+          "email_body",
+          "channels",
+          "is_builtin",
+          "created_at",
+          "updated_at",
+          "uses"
+        ]
+      },
+      "NotificationVariable": {
+        "type": "object",
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "example": {
+            "type": "string"
+          },
+          "scope": {
+            "type": "string",
+            "enum": [
+              "person",
+              "listing",
+              "offer"
+            ]
+          }
+        },
+        "required": [
+          "key",
+          "label",
+          "example",
+          "scope"
+        ]
       }
     },
     "parameters": {}
@@ -7452,7 +7734,8 @@
                 "payout_account",
                 "payout",
                 "coupon",
-                "invoice"
+                "invoice",
+                "notification_template"
               ]
             },
             "required": false,
@@ -7551,7 +7834,10 @@
                 "ADMIN_UPDATED_INVOICE_SETTINGS",
                 "ADMIN_ISSUED_INVOICES",
                 "ADMIN_SENT_INVOICE",
-                "ADMIN_SENT_RECEIPT"
+                "ADMIN_SENT_RECEIPT",
+                "ADMIN_CREATED_NOTIFICATION_TEMPLATE",
+                "ADMIN_UPDATED_NOTIFICATION_TEMPLATE",
+                "ADMIN_DELETED_NOTIFICATION_TEMPLATE"
               ]
             },
             "required": false,
@@ -12128,6 +12414,76 @@
                           "type"
                         ],
                         "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "segment"
+                            ]
+                          },
+                          "role": {
+                            "type": "string",
+                            "enum": [
+                              "booker",
+                              "host"
+                            ]
+                          },
+                          "professions": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "enum": [
+                                "producer",
+                                "director",
+                                "cinematographer",
+                                "photographer",
+                                "production_house",
+                                "ad_agency",
+                                "content_creator",
+                                "art_director",
+                                "location_manager",
+                                "student",
+                                "location_owner",
+                                "other"
+                              ]
+                            },
+                            "maxItems": 12
+                          },
+                          "cities": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 80
+                            },
+                            "maxItems": 20
+                          },
+                          "use_case_ids": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "format": "uuid"
+                            },
+                            "maxItems": 20
+                          },
+                          "booked": {
+                            "type": "string",
+                            "enum": [
+                              "yes",
+                              "no"
+                            ]
+                          },
+                          "new_listing_alerts": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "type"
+                        ],
+                        "additionalProperties": false
                       }
                     ]
                   },
@@ -12158,6 +12514,21 @@
                     "nullable": true,
                     "minLength": 1,
                     "maxLength": 50000
+                  },
+                  "location_id": {
+                    "type": "string",
+                    "nullable": true,
+                    "format": "uuid"
+                  },
+                  "coupon_id": {
+                    "type": "string",
+                    "nullable": true,
+                    "format": "uuid"
+                  },
+                  "template_id": {
+                    "type": "string",
+                    "nullable": true,
+                    "format": "uuid"
                   }
                 },
                 "required": [
@@ -12305,6 +12676,76 @@
                           "type"
                         ],
                         "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "segment"
+                            ]
+                          },
+                          "role": {
+                            "type": "string",
+                            "enum": [
+                              "booker",
+                              "host"
+                            ]
+                          },
+                          "professions": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "enum": [
+                                "producer",
+                                "director",
+                                "cinematographer",
+                                "photographer",
+                                "production_house",
+                                "ad_agency",
+                                "content_creator",
+                                "art_director",
+                                "location_manager",
+                                "student",
+                                "location_owner",
+                                "other"
+                              ]
+                            },
+                            "maxItems": 12
+                          },
+                          "cities": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 80
+                            },
+                            "maxItems": 20
+                          },
+                          "use_case_ids": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "format": "uuid"
+                            },
+                            "maxItems": 20
+                          },
+                          "booked": {
+                            "type": "string",
+                            "enum": [
+                              "yes",
+                              "no"
+                            ]
+                          },
+                          "new_listing_alerts": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "type"
+                        ],
+                        "additionalProperties": false
                       }
                     ]
                   },
@@ -12446,6 +12887,16 @@
                     "nullable": true,
                     "minLength": 1,
                     "maxLength": 50000
+                  },
+                  "location_id": {
+                    "type": "string",
+                    "nullable": true,
+                    "format": "uuid"
+                  },
+                  "coupon_id": {
+                    "type": "string",
+                    "nullable": true,
+                    "format": "uuid"
                   }
                 },
                 "required": [
@@ -12712,6 +13163,76 @@
                           "type"
                         ],
                         "additionalProperties": false
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "enum": [
+                              "segment"
+                            ]
+                          },
+                          "role": {
+                            "type": "string",
+                            "enum": [
+                              "booker",
+                              "host"
+                            ]
+                          },
+                          "professions": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "enum": [
+                                "producer",
+                                "director",
+                                "cinematographer",
+                                "photographer",
+                                "production_house",
+                                "ad_agency",
+                                "content_creator",
+                                "art_director",
+                                "location_manager",
+                                "student",
+                                "location_owner",
+                                "other"
+                              ]
+                            },
+                            "maxItems": 12
+                          },
+                          "cities": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "minLength": 1,
+                              "maxLength": 80
+                            },
+                            "maxItems": 20
+                          },
+                          "use_case_ids": {
+                            "type": "array",
+                            "items": {
+                              "type": "string",
+                              "format": "uuid"
+                            },
+                            "maxItems": 20
+                          },
+                          "booked": {
+                            "type": "string",
+                            "enum": [
+                              "yes",
+                              "no"
+                            ]
+                          },
+                          "new_listing_alerts": {
+                            "type": "boolean"
+                          }
+                        },
+                        "required": [
+                          "type"
+                        ],
+                        "additionalProperties": false
                       }
                     ]
                   },
@@ -12742,6 +13263,21 @@
                     "nullable": true,
                     "minLength": 1,
                     "maxLength": 50000
+                  },
+                  "location_id": {
+                    "type": "string",
+                    "nullable": true,
+                    "format": "uuid"
+                  },
+                  "coupon_id": {
+                    "type": "string",
+                    "nullable": true,
+                    "format": "uuid"
+                  },
+                  "template_id": {
+                    "type": "string",
+                    "nullable": true,
+                    "format": "uuid"
                   }
                 },
                 "additionalProperties": false
@@ -18561,6 +19097,764 @@
                       },
                       "required": [
                         "to"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/notification-templates": {
+      "get": {
+        "tags": [
+          "Admin",
+          "Messaging"
+        ],
+        "summary": "Notification templates (built-in and the team's own) (campaigns.view)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/NotificationTemplate"
+                      }
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Admin",
+          "Messaging"
+        ],
+        "summary": "Create a template (campaigns.send). Unknown {variables} are refused. Audited",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 80
+                  },
+                  "category": {
+                    "type": "string",
+                    "enum": [
+                      "new_listing",
+                      "new_offer",
+                      "casual",
+                      "reminder",
+                      "host",
+                      "custom"
+                    ],
+                    "default": "custom"
+                  },
+                  "description": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 300
+                  },
+                  "needs": {
+                    "type": "string",
+                    "nullable": true,
+                    "enum": [
+                      "listing",
+                      "offer"
+                    ]
+                  },
+                  "title": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 160
+                  },
+                  "body": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1000
+                  },
+                  "email_subject": {
+                    "type": "string",
+                    "nullable": true,
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "email_body": {
+                    "type": "string",
+                    "nullable": true,
+                    "minLength": 1,
+                    "maxLength": 50000
+                  },
+                  "channels": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "in_app",
+                        "push",
+                        "email"
+                      ]
+                    },
+                    "minItems": 1,
+                    "maxItems": 3,
+                    "default": [
+                      "in_app",
+                      "push"
+                    ]
+                  }
+                },
+                "required": [
+                  "name",
+                  "title",
+                  "body"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/NotificationTemplate"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/notification-templates/{templateId}": {
+      "get": {
+        "tags": [
+          "Admin",
+          "Messaging"
+        ],
+        "summary": "One template (campaigns.view)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "templateId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/NotificationTemplate"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "Admin",
+          "Messaging"
+        ],
+        "summary": "Edit a template, built-in ones included (campaigns.send). Audited",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "templateId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 80
+                  },
+                  "category": {
+                    "type": "string",
+                    "enum": [
+                      "new_listing",
+                      "new_offer",
+                      "casual",
+                      "reminder",
+                      "host",
+                      "custom"
+                    ]
+                  },
+                  "description": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 300
+                  },
+                  "needs": {
+                    "type": "string",
+                    "nullable": true,
+                    "enum": [
+                      "listing",
+                      "offer"
+                    ]
+                  },
+                  "title": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 160
+                  },
+                  "body": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 1000
+                  },
+                  "email_subject": {
+                    "type": "string",
+                    "nullable": true,
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "email_body": {
+                    "type": "string",
+                    "nullable": true,
+                    "minLength": 1,
+                    "maxLength": 50000
+                  },
+                  "channels": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": [
+                        "in_app",
+                        "push",
+                        "email"
+                      ]
+                    },
+                    "minItems": 1,
+                    "maxItems": 3
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/NotificationTemplate"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Admin",
+          "Messaging"
+        ],
+        "summary": "Delete one of the team's templates (campaigns.send). Built-in ones can't be deleted. Audited",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "templateId",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "deleted": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "deleted"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "409": {
+            "description": "Built-in template"
+          }
+        }
+      }
+    },
+    "/notification-variables": {
+      "get": {
+        "tags": [
+          "Admin",
+          "Messaging"
+        ],
+        "summary": "Variables usable in notification text: per person ({first_name}), listing ({listing_title}) and offer ({offer_code})",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/NotificationVariable"
+                      }
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/campaigns/render-preview": {
+      "post": {
+        "tags": [
+          "Admin",
+          "Messaging"
+        ],
+        "summary": "The text as one person gets it (the signed-in admin, or user_id), with the listing/offer filled in (campaigns.view)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "title": {
+                    "type": "string",
+                    "maxLength": 400
+                  },
+                  "body": {
+                    "type": "string",
+                    "maxLength": 2000
+                  },
+                  "email_subject": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 400
+                  },
+                  "email_body": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 50000
+                  },
+                  "link_url": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 500
+                  },
+                  "location_id": {
+                    "type": "string",
+                    "nullable": true,
+                    "format": "uuid"
+                  },
+                  "coupon_id": {
+                    "type": "string",
+                    "nullable": true,
+                    "format": "uuid"
+                  },
+                  "user_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                },
+                "required": [
+                  "title",
+                  "body"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "title": {
+                          "type": "string"
+                        },
+                        "body": {
+                          "type": "string"
+                        },
+                        "link_url": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "email_subject": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "email_body": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "user_id": {
+                          "type": "string",
+                          "format": "uuid"
+                        },
+                        "missing": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "description": "Person variables that person hasn't filled in (the fallback was used)"
+                        }
+                      },
+                      "required": [
+                        "title",
+                        "body",
+                        "link_url",
+                        "email_subject",
+                        "email_body",
+                        "user_id",
+                        "missing"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/campaigns/audience-options": {
+      "get": {
+        "tags": [
+          "Admin",
+          "Messaging"
+        ],
+        "summary": "Choices for a segment audience (professions, cities, shoot types) with how many people each reaches (campaigns.view)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "professions": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "value": {
+                                "type": "string",
+                                "enum": [
+                                  "producer",
+                                  "director",
+                                  "cinematographer",
+                                  "photographer",
+                                  "production_house",
+                                  "ad_agency",
+                                  "content_creator",
+                                  "art_director",
+                                  "location_manager",
+                                  "student",
+                                  "location_owner",
+                                  "other"
+                                ]
+                              },
+                              "label": {
+                                "type": "string"
+                              },
+                              "count": {
+                                "type": "integer"
+                              }
+                            },
+                            "required": [
+                              "value",
+                              "label",
+                              "count"
+                            ]
+                          }
+                        },
+                        "cities": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "name": {
+                                "type": "string"
+                              },
+                              "count": {
+                                "type": "integer"
+                              }
+                            },
+                            "required": [
+                              "name",
+                              "count"
+                            ]
+                          }
+                        },
+                        "use_cases": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "string",
+                                "format": "uuid"
+                              },
+                              "name": {
+                                "type": "string"
+                              },
+                              "count": {
+                                "type": "integer"
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "name",
+                              "count"
+                            ]
+                          }
+                        },
+                        "onboarded": {
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "professions",
+                        "cities",
+                        "use_cases",
+                        "onboarded"
                       ]
                     }
                   },

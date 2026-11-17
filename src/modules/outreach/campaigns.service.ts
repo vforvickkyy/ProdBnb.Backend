@@ -4,12 +4,14 @@ import { writeAuditLog } from "../admin/audit.service";
 import { createAnnouncementNotification, deliverPush, NotificationDetail } from "../notifications/notification.service";
 import { listChannels } from "./channels.service";
 import { renderEmailBody, sendEmail, unsubscribeToken, wrapEmail } from "./email";
+import { checkVariables, loadContext, personVars, renderFor, VARIABLES, type CampaignContext, type RenderableContent } from "./templating";
 import {
   Audience,
   AudiencePreviewInput,
   CampaignRecipientsQuery,
   CreateCampaignInput,
   ListCampaignsQuery,
+  RenderPreviewInput,
   TestCampaignInput,
   UpdateCampaignInput,
 } from "./outreach.schema";
@@ -30,7 +32,7 @@ import {
  */
 
 const COLUMNS =
-  "id, name, kind, channels, platforms, audience, title, body, link_url, email_subject, email_body, status, " +
+  "id, name, kind, channels, platforms, audience, title, body, link_url, email_subject, email_body, location_id, coupon_id, template_id, status, " +
   "scheduled_at, started_at, completed_at, recipient_count, last_error, created_by, sent_by, created_at, updated_at";
 
 export type CampaignStatus = "draft" | "scheduled" | "sending" | "sent" | "cancelled" | "failed";
@@ -47,6 +49,9 @@ export interface CampaignRow {
   link_url: string | null;
   email_subject: string | null;
   email_body: string | null;
+  location_id: string | null;
+  coupon_id: string | null;
+  template_id: string | null;
   status: CampaignStatus;
   scheduled_at: string | null;
   started_at: string | null;
@@ -153,7 +158,14 @@ export async function listCampaigns(query: ListCampaignsQuery): Promise<{ data: 
   return { data: rows.map((r) => ({ ...r, stats: stats.get(r.id) ?? EMPTY_STATS })), total: count ?? 0 };
 }
 
+/** Unknown variables, or listing/offer variables with nothing picked, are refused up front. */
+async function checkContent(c: { title: string; body: string; email_subject?: string | null; email_body?: string | null; location_id?: string | null; coupon_id?: string | null }) {
+  checkVariables([c.title, c.body, c.email_subject, c.email_body], { listing: Boolean(c.location_id), offer: Boolean(c.coupon_id) });
+  if (c.location_id || c.coupon_id) await loadContext(c);
+}
+
 export async function createCampaign(actorId: string, input: CreateCampaignInput): Promise<CampaignView> {
+  await checkContent(input);
   const { data, error } = await adminClient
     .from("notification_campaigns")
     .insert({
@@ -162,6 +174,9 @@ export async function createCampaign(actorId: string, input: CreateCampaignInput
       link_url: input.link_url ?? null,
       email_subject: input.email_subject ?? null,
       email_body: input.email_body ?? null,
+      location_id: input.location_id ?? null,
+      coupon_id: input.coupon_id ?? null,
+      template_id: input.template_id ?? null,
       created_by: actorId,
     })
     .select("id")
@@ -181,6 +196,7 @@ export async function updateCampaign(id: string, input: UpdateCampaignInput): Pr
   if (next.channels.includes("email") && (!next.email_subject || !next.email_body)) {
     throw new ValidationError("Email needs a subject and a body.");
   }
+  await checkContent(next);
   const { error } = await adminClient
     .from("notification_campaigns")
     .update({ ...input, channels: next.channels })
@@ -225,6 +241,7 @@ export async function channelReadiness(): Promise<{ email: boolean; push: { ios:
 }
 
 async function assertSendable(row: CampaignRow): Promise<void> {
+  await checkContent(row);
   const ready = await channelReadiness();
   if (row.channels.includes("email") && !ready.email) {
     throw new ValidationError("Email is not connected. Connect SMTP under Messaging -> Email, or untick Email.");
@@ -351,7 +368,8 @@ async function isSuppressed(email: string): Promise<boolean> {
   return Boolean(data);
 }
 
-async function processRecipient(campaign: CampaignRow, r: RecipientRow, rendered: { html: string; text: string } | null) {
+async function processRecipient(campaign: CampaignRow, r: RecipientRow, content: RenderableContent) {
+  const rendered = campaign.channels.includes("email") && content.email_body ? renderEmailBody(content.email_body) : null;
   const update: Record<string, unknown> = {};
   const errors: string[] = [];
   let notification: NotificationDetail | null = null;
@@ -361,9 +379,9 @@ async function processRecipient(campaign: CampaignRow, r: RecipientRow, rendered
       notification = await createAnnouncementNotification({
         userId: r.user_id,
         campaignId: campaign.id,
-        title: campaign.title,
-        body: campaign.body,
-        linkUrl: campaign.link_url,
+        title: content.title,
+        body: content.body,
+        linkUrl: content.link_url,
       });
       update.notification_id = notification.id;
       if (r.in_app_status === "pending") {
@@ -412,15 +430,15 @@ async function processRecipient(campaign: CampaignRow, r: RecipientRow, rendered
             ? `${apiBaseUrl()}/v1/email/unsubscribe?token=${encodeURIComponent(await unsubscribeToken(r.email))}`
             : null;
         const email = wrapEmail({
-          subject: campaign.email_subject!,
+          subject: content.email_subject!,
           bodyHtml: rendered.html,
           bodyText: rendered.text,
-          ctaUrl: campaign.link_url,
+          ctaUrl: content.link_url,
           unsubscribeUrl,
         });
         await sendEmail({
           to: r.email,
-          subject: campaign.email_subject!,
+          subject: content.email_subject!,
           html: email.html,
           text: email.text,
           headers: unsubscribeUrl
@@ -459,9 +477,20 @@ export async function processCampaign(id: string, deadline: number): Promise<{ p
   if (campaign.status !== "sending") {
     return { processed: 0, done: campaign.status === "sent" };
   }
-  const rendered = campaign.channels.includes("email") && campaign.email_body ? renderEmailBody(campaign.email_body) : null;
+  const sendsEmail = campaign.channels.includes("email") && Boolean(campaign.email_body);
+  let context: CampaignContext;
+  try {
+    context = await loadContext(campaign);
+  } catch (error) {
+    // The listing or offer it's about was deleted: stop rather than send half-filled text.
+    await adminClient
+      .from("notification_campaigns")
+      .update({ status: "failed", last_error: error instanceof Error ? error.message.slice(0, 500) : "Context missing." })
+      .eq("id", id);
+    throw error;
+  }
   let emailBudget = Infinity;
-  if (rendered) {
+  if (sendsEmail) {
     const smtp = (await listChannels()).find((c) => c.channel === "smtp");
     emailBudget = Number((smtp?.config as { max_per_minute?: number } | undefined)?.max_per_minute ?? 60);
   }
@@ -469,7 +498,7 @@ export async function processCampaign(id: string, deadline: number): Promise<{ p
   let processed = 0;
   while (Date.now() < deadline) {
     const batchSize = Math.max(1, Math.min(25, emailBudget - processed));
-    if (rendered && processed >= emailBudget) {
+    if (sendsEmail && processed >= emailBudget) {
       break;
     }
     const { data, error } = await adminClient.rpc("campaign_claim_recipients", { _campaign_id: id, _limit: batchSize });
@@ -480,9 +509,10 @@ export async function processCampaign(id: string, deadline: number): Promise<{ p
     if (batch.length === 0) {
       break;
     }
+    const people = await personVars(batch.map((r) => r.user_id));
     for (const recipient of batch) {
       try {
-        await processRecipient(campaign, recipient, rendered);
+        await processRecipient(campaign, recipient, renderFor(campaign, context, people.get(recipient.user_id)));
       } catch (err) {
         console.error(`Campaign ${id}: recipient ${recipient.user_id} failed:`, err);
         await adminClient
@@ -593,7 +623,16 @@ export async function listCampaignRecipients(id: string, query: CampaignRecipien
  * "Send test to me": the exact content, to the signed-in admin only -- their own email and their
  * own devices. Nothing is recorded as a campaign recipient.
  */
-export async function sendTestToSelf(actorId: string, actorEmail: string | null, input: TestCampaignInput) {
+export async function sendTestToSelf(actorId: string, actorEmail: string | null, raw: TestCampaignInput) {
+  await checkContent(raw);
+  const context = await loadContext(raw);
+  const me = (await personVars([actorId])).get(actorId);
+  const content = renderFor(
+    { title: raw.title, body: raw.body, link_url: raw.link_url ?? null, email_subject: raw.email_subject ?? null, email_body: raw.email_body ?? null },
+    context,
+    me
+  );
+  const input = { ...raw, ...content };
   const result: { push?: { outcome: string; sent: number; failed: number }; email?: { ok: boolean; detail: string } } = {};
   if (input.channels.includes("push") || input.channels.includes("in_app")) {
     const notification = await createAnnouncementNotification({
@@ -623,4 +662,23 @@ export async function sendTestToSelf(actorId: string, actorEmail: string | null,
     }
   }
   return result;
+}
+
+/**
+ * The text as one person would get it: the signed-in admin by default, or someone chosen. Also
+ * says which of that person's details were missing (so a fallback was used).
+ */
+export async function renderPreview(actorId: string, input: RenderPreviewInput) {
+  checkVariables([input.title, input.body, input.email_subject, input.email_body], { listing: Boolean(input.location_id), offer: Boolean(input.coupon_id) });
+  const context = await loadContext(input);
+  const userId = input.user_id ?? actorId;
+  const person = (await personVars([userId])).get(userId) ?? {};
+  const content = renderFor(
+    { title: input.title, body: input.body, link_url: input.link_url ?? null, email_subject: input.email_subject ?? null, email_body: input.email_body ?? null },
+    context,
+    person
+  );
+  const used = new Set([input.title, input.body, input.email_subject ?? "", input.email_body ?? ""].join(" ").match(/\{([a-z_]+)/g)?.map((m) => m.slice(1)) ?? []);
+  const missing = VARIABLES.filter((v) => v.scope === "person" && used.has(v.key) && !person[v.key]).map((v) => v.key);
+  return { ...content, user_id: userId, missing };
 }

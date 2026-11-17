@@ -1,4 +1,9 @@
-import express, { Router } from "express";
+import express, { Request, Response, Router } from "express";
+import { created, ok } from "../../utils/respond";
+import { writeAuditLog } from "../admin/audit.service";
+import { renderPreview } from "./campaigns.service";
+import { audienceOptions, createTemplate, deleteTemplate, getTemplate, listTemplates, updateTemplate } from "./templates.service";
+import { VARIABLES } from "./templating";
 import { validate } from "../../middleware/validate";
 import { requirePermission as can } from "../admin/permissions";
 import {
@@ -29,6 +34,14 @@ import {
   audiencePreviewSchema,
   campaignIdParamSchema,
   campaignRecipientsQuerySchema,
+  createTemplateSchema,
+  renderPreviewSchema,
+  templateIdParamSchema,
+  updateTemplateSchema,
+  type CreateTemplateInput,
+  type RenderPreviewInput,
+  type TemplateIdParam,
+  type UpdateTemplateInput,
   channelEnabledSchema,
   channelParamSchema,
   createCampaignSchema,
@@ -67,6 +80,45 @@ adminOutreachRouter.post(
 );
 adminOutreachRouter.get("/messaging/jobs", can("campaigns.view"), getJobsHandler);
 adminOutreachRouter.put("/messaging/jobs", can("channels.manage"), validate({ body: jobsConfigSchema }), putJobsHandler);
+
+// -- Templates, variables and personalised previews ------------------------------------------------
+
+adminOutreachRouter.get("/notification-templates", can("campaigns.view"), async (_req: Request, res: Response) => {
+  ok(res, await listTemplates());
+});
+adminOutreachRouter.post("/notification-templates", can("campaigns.send"), validate({ body: createTemplateSchema }), async (req: Request, res: Response) => {
+  const t = await createTemplate(req.user!.id, req.valid!.body as CreateTemplateInput);
+  await writeAuditLog(req.user!.id, "ADMIN_CREATED_NOTIFICATION_TEMPLATE", "notification_template", t.id, null, { name: t.name });
+  created(res, t);
+});
+adminOutreachRouter.get("/notification-templates/:templateId", can("campaigns.view"), validate({ params: templateIdParamSchema }), async (req: Request, res: Response) => {
+  ok(res, await getTemplate((req.valid!.params as TemplateIdParam).templateId));
+});
+adminOutreachRouter.patch(
+  "/notification-templates/:templateId",
+  can("campaigns.send"),
+  validate({ params: templateIdParamSchema, body: updateTemplateSchema }),
+  async (req: Request, res: Response) => {
+    const input = req.valid!.body as UpdateTemplateInput;
+    const t = await updateTemplate(req.user!.id, (req.valid!.params as TemplateIdParam).templateId, input);
+    await writeAuditLog(req.user!.id, "ADMIN_UPDATED_NOTIFICATION_TEMPLATE", "notification_template", t.id, null, { name: t.name, fields: Object.keys(input) });
+    ok(res, t);
+  }
+);
+adminOutreachRouter.delete("/notification-templates/:templateId", can("campaigns.send"), validate({ params: templateIdParamSchema }), async (req: Request, res: Response) => {
+  const t = await deleteTemplate((req.valid!.params as TemplateIdParam).templateId);
+  await writeAuditLog(req.user!.id, "ADMIN_DELETED_NOTIFICATION_TEMPLATE", "notification_template", t.id, null, { name: t.name });
+  ok(res, { deleted: true });
+});
+adminOutreachRouter.get("/notification-variables", can("campaigns.view"), (_req: Request, res: Response) => {
+  ok(res, VARIABLES);
+});
+adminOutreachRouter.post("/campaigns/render-preview", can("campaigns.view"), validate({ body: renderPreviewSchema }), async (req: Request, res: Response) => {
+  ok(res, await renderPreview(req.user!.id, req.valid!.body as RenderPreviewInput));
+});
+adminOutreachRouter.get("/campaigns/audience-options", can("campaigns.view"), async (_req: Request, res: Response) => {
+  ok(res, await audienceOptions());
+});
 
 adminOutreachRouter.get("/campaigns", can("campaigns.view"), validate({ query: listCampaignsQuerySchema }), getCampaignsHandler);
 adminOutreachRouter.post("/campaigns", can("campaigns.send"), validate({ body: createCampaignSchema }), postCampaignHandler);
