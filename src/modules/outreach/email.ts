@@ -3,6 +3,8 @@ import nodemailer, { Transporter } from "nodemailer";
 import { ValidationError } from "../../errors/AppError";
 import { adminClient } from "../../lib/supabase";
 import { smtpCredentials } from "./channels.service";
+import { env } from "../../config/env";
+import { escapeHtml } from "../../utils/html";
 
 /**
  * Admin Console 2: outbound email over the SMTP server an admin connected in the dashboard.
@@ -88,10 +90,6 @@ export async function verifySmtp(): Promise<{ ok: boolean; detail: string }> {
 // Rendering
 // ---------------------------------------------------------------------------------------------------
 
-function escapeHtml(value: string): string {
-  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
-}
-
 function inline(text: string): string {
   // Escape first, then re-introduce the two allowed constructs on the escaped text.
   let out = escapeHtml(text);
@@ -120,7 +118,7 @@ export function wrapEmail(params: { subject: string; bodyHtml: string; bodyText:
       ? `<p style="margin:24px 0"><a href="${escapeHtml(params.ctaUrl)}" style="background:#C28014;color:#ffffff;padding:12px 20px;border-radius:8px;text-decoration:none;font-weight:600;display:inline-block">Open</a></p>`
       : "";
   const footer = params.unsubscribeUrl
-    ? `<p style="margin:24px 0 0;font-size:12px;color:#6b7280">You are receiving this because you have a ProdBnb account. <a href="${escapeHtml(params.unsubscribeUrl)}" style="color:#6b7280">Unsubscribe from announcements</a>.</p>`
+    ? `<p style="margin:24px 0 0;font-size:12px;color:#6b7280">You are receiving this because you have a ${escapeHtml(env.BRAND_NAME)} account. <a href="${escapeHtml(params.unsubscribeUrl)}" style="color:#6b7280">Unsubscribe from announcements</a>.</p>`
     : "";
   const html = `<!doctype html><html><body style="margin:0;background:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#18181b">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:32px 16px"><tr><td align="center">

@@ -46,13 +46,13 @@ export const createCouponSchema = z
   .refine(datesOk, { message: "The end must be after the start.", path: ["ends_at"] });
 export type CreateCouponInput = z.infer<typeof createCouponSchema>;
 
-/** Admin: a ProdBnb coupon, or one on a host's behalf (owner_type host + host_id). */
+/** Admin: a platform coupon, or one on a host's behalf (owner_type host + host_id). */
 export const adminCreateCouponSchema = z
   .object({ ...couponFields, owner_type: z.enum(["platform", "host"]).default("platform"), host_id: uuid.nullable().optional() })
   .strict()
   .refine(shapeOk, { message: "A percentage coupon needs percent_off; a fixed one needs amount_off_minor_units (and no cap).", path: ["discount_type"] })
   .refine(datesOk, { message: "The end must be after the start.", path: ["ends_at"] })
-  .refine((d) => (d.owner_type === "host") === Boolean(d.host_id), { message: "A host coupon needs host_id (and a ProdBnb one must not have it).", path: ["host_id"] });
+  .refine((d) => (d.owner_type === "host") === Boolean(d.host_id), { message: "A host coupon needs host_id (and a platform one must not have it).", path: ["host_id"] });
 export type AdminCreateCouponInput = z.infer<typeof adminCreateCouponSchema>;
 
 export const updateCouponSchema = z

@@ -35,7 +35,7 @@ const apnsSchema = z
     channel: z.literal("apns"),
     team_id: z.string().trim().regex(/^[A-Z0-9]{10}$/, "Apple Team ID: 10 letters/digits."),
     key_id: z.string().trim().regex(/^[A-Z0-9]{10}$/, "APNs Key ID: 10 letters/digits."),
-    bundle_id: z.string().trim().min(3).max(155).regex(/^[A-Za-z0-9.-]+$/, "A bundle id like com.prodbnb.app."),
+    bundle_id: z.string().trim().min(3).max(155).regex(/^[A-Za-z0-9.-]+$/, "A bundle id like com.example.app."),
     environment: z.enum(["production", "sandbox"]),
     private_key: z.string().min(1).max(10_000).optional(),
   })
@@ -54,7 +54,7 @@ const webPushSchema = z
     subject: z
       .string()
       .trim()
-      .regex(/^(mailto:\S+@\S+|https:\/\/\S+)$/, "A contact such as mailto:ops@prodbnb.com or https://prodbnb.com."),
+      .regex(/^(mailto:\S+@\S+|https:\/\/\S+)$/, "A contact such as mailto:ops@example.com or https://example.com."),
     generate_keys: z.boolean().default(false),
     public_key: z.string().trim().min(10).max(200).optional(),
     private_key: z.string().trim().min(10).max(200).optional(),

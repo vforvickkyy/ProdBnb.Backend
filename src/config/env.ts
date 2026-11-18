@@ -93,6 +93,8 @@ export function apnsPrivateKeyProblem(pem: string): string | null {
 
 const baseEnvSchema = z.object({
   PORT: z.coerce.number().int().positive().default(4000),
+  /** The product's public name, as emails and pages show it. Never write the name into copy. */
+  BRAND_NAME: z.string().trim().min(1).default("Heken"),
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   CORS_ORIGINS: z
     .string()

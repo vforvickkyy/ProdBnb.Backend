@@ -5,6 +5,8 @@ import { created, ok } from "../../utils/respond";
 import { BookingIdParam } from "../bookings/bookings.schema";
 import { CreatePaymentInput, CreateRefundInput, PaymentIdParam } from "./payment.schema";
 import { createPayment, createRefund, getPayment, handleWebhook, listPaymentsForBooking, listRefunds, verifyPayment } from "./payment.service";
+import { env } from "../../config/env";
+import { escapeHtml } from "../../utils/html";
 
 // Admin Console: "may this caller act as an administrator here" is a team-role permission,
 // not bare admin-role membership -- see src/modules/admin/permissions.ts.
@@ -103,7 +105,7 @@ export function getPaymentReturn(_req: Request, res: Response): void {
         `background:#f7f7f5;color:#1c1c1e;text-align:center;padding:24px}` +
         `main{max-width:22rem}h1{font-size:1.25rem;margin:0 0 .5rem}p{margin:0;color:#6b6b70}` +
         `@media(prefers-color-scheme:dark){body{background:#111113;color:#f2f2f7}p{color:#9b9ba1}}</style>` +
-        `</head><body><main><h1>You can return to Prod.Bnb</h1>` +
+        `</head><body><main><h1>You can return to ${escapeHtml(env.BRAND_NAME)}</h1>` +
         `<p>Your booking and payment status will be confirmed in the app.</p></main></body></html>`
     );
 }

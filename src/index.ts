@@ -12,7 +12,7 @@ import { env } from "./config/env";
 // exits cleanly) and for any non-Vercel Node host.
 
 const server = app.listen(env.PORT, () => {
-  console.log(`ProdBnb backend listening on port ${env.PORT} (${env.NODE_ENV})`);
+  console.log(`${env.BRAND_NAME} backend listening on port ${env.PORT} (${env.NODE_ENV})`);
 });
 
 // Graceful shutdown for a persistent process -- SIGTERM before stopping/

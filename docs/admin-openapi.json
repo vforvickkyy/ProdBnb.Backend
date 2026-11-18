@@ -17459,7 +17459,7 @@
           "Admin",
           "Coupons"
         ],
-        "summary": "Every coupon (ProdBnb's and hosts'), with status and uses (payments.view)",
+        "summary": "Every coupon (the platform's and hosts'), with status and uses (payments.view)",
         "security": [
           {
             "bearerAuth": []
@@ -17597,7 +17597,7 @@
           "Admin",
           "Coupons"
         ],
-        "summary": "Create a ProdBnb coupon, or one on a host's behalf (coupons.manage). Audited",
+        "summary": "Create a platform coupon, or one on a host's behalf (coupons.manage). Audited",
         "security": [
           {
             "bearerAuth": []

@@ -39,6 +39,8 @@ import {
   UnsubscribeQuery,
   UpdateCampaignInput,
 } from "./outreach.schema";
+import { env } from "../../config/env";
+import { escapeHtml } from "../../utils/html";
 
 // -- Overview ---------------------------------------------------------------------------------------
 
@@ -127,10 +129,11 @@ export async function postTestChannelHandler(req: Request, res: Response): Promi
     }
     try {
       const rendered = renderEmailBody(
-        "This is a test email from the ProdBnb Admin Console.\n\nIf you can read this, your SMTP connection works."
+        `This is a test email from the ${env.BRAND_NAME} Admin Console.\n\nIf you can read this, your SMTP connection works.`
       );
-      const email = wrapEmail({ subject: "ProdBnb test email", bodyHtml: rendered.html, bodyText: rendered.text });
-      await sendEmail({ to, subject: "ProdBnb test email", html: email.html, text: email.text });
+      const subject = `${env.BRAND_NAME} test email`;
+      const email = wrapEmail({ subject, bodyHtml: rendered.html, bodyText: rendered.text });
+      await sendEmail({ to, subject, html: email.html, text: email.text });
       await recordTestResult(channel, true, null);
       ok(res, { ok: true, detail: `Test email sent to ${to}.` });
     } catch (error) {
@@ -175,7 +178,7 @@ export async function postTestChannelHandler(req: Request, res: Response): Promi
   const notification = await createAnnouncementNotification({
     userId: req.user!.id,
     campaignId: crypto.randomUUID(),
-    title: "ProdBnb test notification",
+    title: `${env.BRAND_NAME} test notification`,
     body: "If you can see this, push delivery works.",
     linkUrl: null,
   });
@@ -291,7 +294,7 @@ export async function getUnsubscribeHandler(req: Request, res: Response): Promis
   res.status(200).send(
     page(
       "Unsubscribe",
-      `<h1>Unsubscribe from ProdBnb announcements?</h1><p>You will still receive emails about your own bookings and account.</p>
+      `<h1>Unsubscribe from ${escapeHtml(env.BRAND_NAME)} announcements?</h1><p>You will still receive emails about your own bookings and account.</p>
 <form method="post" action="?token=${encodeURIComponent(token)}"><button type="submit">Unsubscribe</button></form>`
     )
   );
@@ -312,7 +315,7 @@ export async function postUnsubscribeHandler(req: Request, res: Response): Promi
   if (error) {
     throw error;
   }
-  res.status(200).send(page("Unsubscribed", "<h1>You're unsubscribed</h1><p>You won't receive ProdBnb announcement emails any more.</p>"));
+  res.status(200).send(page("Unsubscribed", `<h1>You're unsubscribed</h1><p>You won't receive ${escapeHtml(env.BRAND_NAME)} announcement emails any more.</p>`));
 }
 
 let jobsSecret: string | null = null;

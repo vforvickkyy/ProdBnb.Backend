@@ -2,6 +2,7 @@ import { ConflictError, NotFoundError, ValidationError } from "../../errors/AppE
 import { adminClient } from "../../lib/supabase";
 import { writeAuditLog } from "./audit.service";
 import { AdminPermission, permissionsFor, TeamRole } from "./permissions";
+import { env } from "../../config/env";
 
 export interface TeamMember {
   user_id: string;
@@ -144,14 +145,14 @@ export async function setTeamMember(actorId: string, userId: string, teamRole: T
   return getMember(userId);
 }
 
-/** Adds by email -- the account must already exist (they sign up in any ProdBnb app first). */
+/** Adds by email -- the account must already exist (they sign up in any of the platform's apps first). */
 export async function addTeamMemberByEmail(actorId: string, email: string, teamRole: TeamRole): Promise<TeamMember> {
   const { data: userId, error } = await adminClient.rpc("admin_find_user_id_by_email", { _email: email });
   if (error) {
     throw error;
   }
   if (!userId) {
-    throw new NotFoundError("No ProdBnb account uses that email. Ask them to sign up first, then add them.");
+    throw new NotFoundError(`No ${env.BRAND_NAME} account uses that email. Ask them to sign up first, then add them.`);
   }
   return setTeamMember(actorId, userId as string, teamRole);
 }
