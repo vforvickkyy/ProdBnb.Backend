@@ -124,6 +124,13 @@ const baseEnvSchema = z.object({
   // influenced by a client request.
   API_BASE_URL: z.string().url().default("http://localhost:4000"),
 
+  // The website's on-demand refresh endpoint (https://<site>/api/revalidate) and the secret it
+  // expects. When both are set, a change to a listing refreshes its website page at once instead of
+  // after the page cache runs out (src/middleware/websiteRevalidate.ts). Optional: unset, nothing
+  // is sent and pages refresh on their own timer.
+  WEBSITE_REVALIDATE_URL: z.string().url().optional(),
+  WEBSITE_REVALIDATE_SECRET: z.string().min(16).optional(),
+
   // Which PaymentProvider implementation is active (see
   // src/modules/payments/providers/index.ts). Only "cashfree" exists so far.
   PAYMENT_PROVIDER: z.enum(["cashfree"]).default("cashfree"),

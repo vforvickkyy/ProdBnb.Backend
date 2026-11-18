@@ -1,3 +1,4 @@
+import { websiteRevalidate } from "./middleware/websiteRevalidate";
 import cors from "cors";
 import express, { Express } from "express";
 import helmet from "helmet";
@@ -124,6 +125,9 @@ export function createApp(): Express {
       res.status(503).json({ error: { code: "SERVICE_UNAVAILABLE", message: "Not ready to accept traffic." } });
     }
   });
+
+  // Listing changes refresh the website's cached page right away (no-op unless configured).
+  app.use("/v1", websiteRevalidate);
 
   app.use("/v1", usersRouter);
   app.use("/v1", rolesRouter);
