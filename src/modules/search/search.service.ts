@@ -1,6 +1,6 @@
 import { anonClient } from "../../lib/supabase";
 import { publicUrlFor } from "../../lib/r2";
-import { CatalogRef } from "../locations/locations.service";
+import { APPROXIMATE_RADIUS_M, CatalogRef } from "../locations/locations.service";
 import { SearchLocationsQuery } from "./search.schema";
 
 /**
@@ -34,14 +34,17 @@ interface SearchLocationRow {
   city: string;
   region: string | null;
   country: string;
+  area: string | null;
   latitude: number | null;
   longitude: number | null;
+  exact_location: boolean;
   capacity: number | null;
   distance_km: number | null;
   categories: CatalogRef[];
   use_cases: CatalogRef[];
   primary_media_key: string | null;
   starting_price: StartingPrice | null;
+  price_on_request: boolean;
   created_at: string;
   total_count: number;
 }
@@ -53,13 +56,23 @@ export interface SearchLocationCard {
   city: string;
   region: string | null;
   country: string;
+  area: string | null;
+  /**
+   * The point a map may show: APPROXIMATE (up to ~1.4 km off, draw a circle of
+   * `approximate_radius_m`) unless `location_precision` is "exact" -- the team marked the listing
+   * "show exact location". Search never returns a real pin otherwise, to anyone.
+   */
   latitude: number | null;
   longitude: number | null;
+  location_precision: "exact" | "approximate";
+  approximate_radius_m: number | null;
   capacity: number | null;
   categories: CatalogRef[];
   use_cases: CatalogRef[];
   primary_media_url: string | null;
+  /** Null for a price-on-request listing. */
   starting_price: StartingPrice | null;
+  price_on_request: boolean;
   created_at: string;
   distance_km?: number;
 }
@@ -77,8 +90,11 @@ function toCard(row: SearchLocationRow): SearchLocationCard {
     city: row.city,
     region: row.region,
     country: row.country,
+    area: row.area ?? null,
     latitude: row.latitude,
     longitude: row.longitude,
+    location_precision: row.exact_location ? "exact" : "approximate",
+    approximate_radius_m: row.exact_location ? null : APPROXIMATE_RADIUS_M,
     capacity: row.capacity,
     categories: row.categories,
     use_cases: row.use_cases,
@@ -86,6 +102,7 @@ function toCard(row: SearchLocationRow): SearchLocationCard {
     // Passed through untouched — the database decided which tier this is, and
     // re-deriving or reformatting it here would create a second source of truth.
     starting_price: row.starting_price ?? null,
+    price_on_request: row.price_on_request ?? false,
     created_at: row.created_at,
     ...(row.distance_km !== null ? { distance_km: row.distance_km } : {}),
   };

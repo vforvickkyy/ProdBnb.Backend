@@ -59,7 +59,15 @@ const SETTLED = new Set(["success", "partially_refunded", "refunded"]);
 export function withHoldDeadline<T extends BookingDetail>(booking: T, holdMinutes: number | null): T & { hold_expires_at: string | null } {
   const active = booking.status === "requested" || booking.status === "confirmed";
   const paid = booking.payments.some((p) => SETTLED.has(p.status));
-  return { ...booking, hold_expires_at: active && !paid ? holdDeadline(booking.created_at, holdMinutes) : null };
+  // Same rule as expire_unpaid_bookings(): a request waiting for a price holds nothing; a quoted one
+  // has at least 24 hours from the quote.
+  if (!active || paid || booking.pricing_status === "awaiting_quote") {
+    return { ...booking, hold_expires_at: null };
+  }
+  if (booking.pricing_status === "quoted" && holdMinutes !== null) {
+    return { ...booking, hold_expires_at: holdDeadline(booking.quoted_at ?? booking.created_at, Math.max(holdMinutes, 1440)) };
+  }
+  return { ...booking, hold_expires_at: holdDeadline(booking.created_at, holdMinutes) };
 }
 
 // -- Me / team ----------------------------------------------------------------------------------

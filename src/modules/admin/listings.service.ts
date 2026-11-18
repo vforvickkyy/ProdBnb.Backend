@@ -79,7 +79,7 @@ export async function createLocationForHost(actorId: string, input: AdminCreateL
     granted_host_role: !role,
   });
 
-  return getLocation(adminClient, created.id);
+  return getLocation(adminClient, created.id, { userId: actorId, isAdmin: true });
 }
 
 export interface HostCandidate {

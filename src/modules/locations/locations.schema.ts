@@ -21,6 +21,18 @@ export const ianaTimezoneSchema = z.string().refine(
 // from requiring a migration, while still rejecting obvious garbage.
 export const currencySchema = z.string().regex(/^[A-Z]{3}$/, "Must be a 3-letter ISO currency code, e.g. 'INR'.");
 
+/**
+ * The neighbourhood shown to everyone before booking (with the city), e.g. "Bandra West". The street
+ * address, postcode and exact pin are only shown once a booking is confirmed and paid. Blank clears it.
+ */
+const areaSchema = z
+  .string()
+  .trim()
+  .max(80)
+  .transform((v) => (v === "" ? null : v))
+  .nullable()
+  .optional();
+
 export const locationStatusSchema = z.enum([
   "draft",
   "submitted",
@@ -47,6 +59,9 @@ export const createLocationSchema = z
     capacity: z.number().int().positive().nullable().optional(),
     timezone: ianaTimezoneSchema.optional(),
     instant_booking_enabled: z.boolean().optional(),
+    area: areaSchema,
+    /** Hide prices: bookings become requests the host answers with a price. */
+    price_on_request: z.boolean().optional(),
     category_ids: z.array(uuid).max(20).default([]),
     amenity_ids: z.array(uuid).max(30).default([]),
     use_case_ids: z.array(uuid).max(10).default([]),
@@ -70,6 +85,8 @@ export const updateLocationSchema = z
     capacity: z.number().int().positive().nullable().optional(),
     timezone: ianaTimezoneSchema.optional(),
     instant_booking_enabled: z.boolean().optional(),
+    area: areaSchema,
+    price_on_request: z.boolean().optional(),
     category_ids: z.array(uuid).max(20).optional(),
     amenity_ids: z.array(uuid).max(30).optional(),
     use_case_ids: z.array(uuid).max(10).optional(),

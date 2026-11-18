@@ -45,7 +45,7 @@ export async function approveLocation(supabase: SupabaseClient, adminId: string,
 
   await updateLocationRow(locationId, { status: "published", moderation_reason: null });
   await writeAuditLog(adminId, "ADMIN_APPROVED_LOCATION", "location", locationId, null, { previous_status: location.status });
-  return getLocation(supabase, locationId);
+  return getLocation(supabase, locationId, { userId: adminId, isAdmin: true });
 }
 
 export async function rejectLocation(
@@ -64,7 +64,7 @@ export async function rejectLocation(
 
   await updateLocationRow(locationId, { status: "rejected", moderation_reason: reason });
   await writeAuditLog(adminId, "ADMIN_REJECTED_LOCATION", "location", locationId, reason, { previous_status: location.status });
-  return getLocation(supabase, locationId);
+  return getLocation(supabase, locationId, { userId: adminId, isAdmin: true });
 }
 
 /** Always clears suspended_by_host_suspension -- a manual suspend is always an independent admin decision. */
@@ -88,7 +88,7 @@ export async function suspendLocation(
     suspended_by_host_suspension: false,
   });
   await writeAuditLog(adminId, "ADMIN_SUSPENDED_LOCATION", "location", locationId, reason, { previous_status: "published" });
-  return getLocation(supabase, locationId);
+  return getLocation(supabase, locationId, { userId: adminId, isAdmin: true });
 }
 
 /** Always clears suspended_by_host_suspension too -- restoring a location is always an independent admin decision. */
@@ -107,5 +107,5 @@ export async function restoreLocation(supabase: SupabaseClient, adminId: string,
     suspended_by_host_suspension: false,
   });
   await writeAuditLog(adminId, "ADMIN_RESTORED_LOCATION", "location", locationId, null, {});
-  return getLocation(supabase, locationId);
+  return getLocation(supabase, locationId, { userId: adminId, isAdmin: true });
 }

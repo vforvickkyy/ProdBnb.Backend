@@ -332,7 +332,11 @@ export type LocationSectionParam = z.infer<typeof locationSectionParamSchema>;
 export const adminUpdateLocationSchema = updateLocationSchema
   .innerType()
   .omit({ status: true })
-  .extend({ reason: z.string().trim().min(1).max(1000).optional() })
+  .extend({
+    reason: z.string().trim().min(1).max(1000).optional(),
+    /** The team's call, never the host's: show the full address and exact pin before booking. */
+    show_exact_location: z.boolean().optional(),
+  })
   .strict()
   .refine((d) => Object.keys(d).some((k) => k !== "reason"), { message: "Provide at least one field to update." });
 export type AdminUpdateLocationInput = z.infer<typeof adminUpdateLocationSchema>;
@@ -424,6 +428,7 @@ export const adminCreateLocationSchema = createLocationSchema
     host_id: uuid,
     grant_host_role: z.boolean().default(false),
     status: z.enum(["draft", "published"]).default("draft"),
+    show_exact_location: z.boolean().optional(),
   })
   .strict();
 export type AdminCreateLocationInput = z.infer<typeof adminCreateLocationSchema>;

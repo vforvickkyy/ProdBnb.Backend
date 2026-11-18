@@ -250,15 +250,34 @@ describe("search & discovery", () => {
       expect(resultIds).not.toContain(mumbaiVilla);
     });
 
-    it("orders by distance when sort=nearest", async () => {
+    it("orders by distance when sort=nearest -- measured to the approximate point, never the real one", async () => {
       const res = await request(app)
         .get("/v1/locations")
         .query({ lat: 51.5233, lng: -0.0785, sort: "nearest", pageSize: 20 });
-      const resultIds = ids(res);
-      // londonWarehouse is exactly at these coordinates, so it must come first.
-      expect(resultIds[0]).toBe(londonWarehouse);
+      const distances = res.body.data.map((l: { distance_km: number }) => l.distance_km);
+      expect(distances).toEqual([...distances].sort((a, b) => a - b));
+      // londonWarehouse is exactly at these coordinates, but search only knows a point 0.6-1.4 km
+      // away from it, drawn as a 2 km circle.
       const warehouseCard = res.body.data.find((l: { id: string }) => l.id === londonWarehouse);
-      expect(warehouseCard.distance_km).toBeLessThan(0.1);
+      expect(warehouseCard.distance_km).toBeGreaterThan(0.55);
+      expect(warehouseCard.distance_km).toBeLessThan(1.45);
+      expect(warehouseCard.latitude).not.toBe(51.5233);
+      expect(warehouseCard).toMatchObject({ location_precision: "approximate", approximate_radius_m: 2000 });
+    });
+
+    it("uses the real point once the team marks a listing 'show exact location'", async () => {
+      await adminClient.from("locations").update({ show_exact_location: true }).eq("id", londonWarehouse);
+      try {
+        const res = await request(app)
+          .get("/v1/locations")
+          .query({ lat: 51.5233, lng: -0.0785, sort: "nearest", pageSize: 20 });
+        expect(ids(res)[0]).toBe(londonWarehouse);
+        const warehouseCard = res.body.data.find((l: { id: string }) => l.id === londonWarehouse);
+        expect(warehouseCard.distance_km).toBeLessThan(0.1);
+        expect(warehouseCard).toMatchObject({ latitude: 51.5233, location_precision: "exact", approximate_radius_m: null });
+      } finally {
+        await adminClient.from("locations").update({ show_exact_location: false }).eq("id", londonWarehouse);
+      }
     });
 
     it("bounding-box search returns only locations inside the box", async () => {

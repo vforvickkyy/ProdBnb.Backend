@@ -521,6 +521,24 @@
           "instant_booking_enabled": {
             "type": "boolean"
           },
+          "area": {
+            "type": "string",
+            "nullable": true
+          },
+          "public_latitude": {
+            "type": "number",
+            "nullable": true
+          },
+          "public_longitude": {
+            "type": "number",
+            "nullable": true
+          },
+          "show_exact_location": {
+            "type": "boolean"
+          },
+          "price_on_request": {
+            "type": "boolean"
+          },
           "status": {
             "type": "string",
             "enum": [
@@ -599,6 +617,11 @@
           "capacity",
           "timezone",
           "instant_booking_enabled",
+          "area",
+          "public_latitude",
+          "public_longitude",
+          "show_exact_location",
+          "price_on_request",
           "status",
           "moderation_reason",
           "suspended_by_host_suspension",
@@ -769,6 +792,24 @@
           "instant_booking_enabled": {
             "type": "boolean"
           },
+          "area": {
+            "type": "string",
+            "nullable": true
+          },
+          "public_latitude": {
+            "type": "number",
+            "nullable": true
+          },
+          "public_longitude": {
+            "type": "number",
+            "nullable": true
+          },
+          "show_exact_location": {
+            "type": "boolean"
+          },
+          "price_on_request": {
+            "type": "boolean"
+          },
           "status": {
             "type": "string",
             "enum": [
@@ -829,6 +870,35 @@
             "items": {
               "$ref": "#/components/schemas/BookingOption"
             }
+          },
+          "bookable_options": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string"
+                },
+                "half_day_duration_hours": {
+                  "type": "integer",
+                  "nullable": true
+                }
+              },
+              "required": [
+                "type"
+              ]
+            }
+          },
+          "location_precision": {
+            "type": "string",
+            "enum": [
+              "exact",
+              "approximate"
+            ]
+          },
+          "approximate_radius_m": {
+            "type": "integer",
+            "nullable": true
           }
         },
         "required": [
@@ -847,6 +917,11 @@
           "capacity",
           "timezone",
           "instant_booking_enabled",
+          "area",
+          "public_latitude",
+          "public_longitude",
+          "show_exact_location",
+          "price_on_request",
           "status",
           "moderation_reason",
           "suspended_by_host_suspension",
@@ -857,7 +932,10 @@
           "use_cases",
           "media",
           "host",
-          "booking_options"
+          "booking_options",
+          "bookable_options",
+          "location_precision",
+          "approximate_radius_m"
         ]
       },
       "NameRef": {
@@ -876,6 +954,50 @@
         "required": [
           "first_name",
           "last_name"
+        ]
+      },
+      "BookingShootDetails": {
+        "type": "object",
+        "properties": {
+          "type_id": {
+            "type": "string",
+            "nullable": true,
+            "format": "uuid"
+          },
+          "type": {
+            "type": "string",
+            "nullable": true
+          },
+          "crew_size": {
+            "type": "integer",
+            "nullable": true
+          },
+          "project_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "production_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "notes": {
+            "type": "string",
+            "nullable": true
+          },
+          "terms_accepted_at": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "type_id",
+          "type",
+          "crew_size",
+          "project_name",
+          "production_name",
+          "notes",
+          "terms_accepted_at"
         ]
       },
       "BookingDetail": {
@@ -1047,6 +1169,22 @@
             "type": "string",
             "nullable": true,
             "format": "date-time"
+          },
+          "shoot": {
+            "$ref": "#/components/schemas/BookingShootDetails"
+          },
+          "pricing_status": {
+            "type": "string",
+            "enum": [
+              "priced",
+              "awaiting_quote",
+              "quoted"
+            ]
+          },
+          "quoted_at": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
           }
         },
         "required": [
@@ -1065,7 +1203,10 @@
           "cancelled_at",
           "cancelled_by",
           "cancellation_reason",
-          "hold_expired_at"
+          "hold_expired_at",
+          "shoot",
+          "pricing_status",
+          "quoted_at"
         ]
       },
       "AdminBooking": {
@@ -6219,6 +6360,14 @@
                   "instant_booking_enabled": {
                     "type": "boolean"
                   },
+                  "area": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 80
+                  },
+                  "price_on_request": {
+                    "type": "boolean"
+                  },
                   "category_ids": {
                     "type": "array",
                     "items": {
@@ -6261,6 +6410,9 @@
                       "published"
                     ],
                     "default": "draft"
+                  },
+                  "show_exact_location": {
+                    "type": "boolean"
                   }
                 },
                 "required": [
@@ -6456,6 +6608,14 @@
                   "instant_booking_enabled": {
                     "type": "boolean"
                   },
+                  "area": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 80
+                  },
+                  "price_on_request": {
+                    "type": "boolean"
+                  },
                   "category_ids": {
                     "type": "array",
                     "items": {
@@ -6484,6 +6644,9 @@
                     "type": "string",
                     "minLength": 1,
                     "maxLength": 1000
+                  },
+                  "show_exact_location": {
+                    "type": "boolean"
                   }
                 },
                 "additionalProperties": false

@@ -389,6 +389,11 @@ const locationDetailSchema = z
     capacity: z.number().int().nullable(),
     timezone: z.string(),
     instant_booking_enabled: z.boolean(),
+    area: z.string().nullable(),
+    public_latitude: z.number().nullable(),
+    public_longitude: z.number().nullable(),
+    show_exact_location: z.boolean(),
+    price_on_request: z.boolean(),
     status: z.enum(["draft", "submitted", "under_review", "approved", "published", "rejected", "suspended", "archived"]),
     moderation_reason: z.string().nullable(),
     suspended_by_host_suspension: z.boolean(),
@@ -400,6 +405,9 @@ const locationDetailSchema = z
     media: z.array(publicMediaItemSchema),
     host: hostPublicSummarySchema,
     booking_options: z.array(bookingOptionSchema),
+    bookable_options: z.array(z.object({ type: z.string(), half_day_duration_hours: z.number().int().nullable().optional() })),
+    location_precision: z.enum(["exact", "approximate"]),
+    approximate_radius_m: z.number().int().nullable(),
   })
   .openapi("LocationDetail");
 
@@ -425,6 +433,11 @@ const adminLocationListItemSchema = z
     capacity: z.number().int().nullable(),
     timezone: z.string(),
     instant_booking_enabled: z.boolean(),
+    area: z.string().nullable(),
+    public_latitude: z.number().nullable(),
+    public_longitude: z.number().nullable(),
+    show_exact_location: z.boolean(),
+    price_on_request: z.boolean(),
     status: z.enum(["draft", "submitted", "under_review", "approved", "published", "rejected", "suspended", "archived"]),
     moderation_reason: z.string().nullable(),
     suspended_by_host_suspension: z.boolean(),
@@ -543,6 +556,19 @@ const bookingDetailSchema = z
     cancelled_by: z.string().uuid().nullable(),
     cancellation_reason: z.string().nullable(),
     hold_expired_at: z.string().datetime().nullable(),
+    shoot: z
+      .object({
+        type_id: z.string().uuid().nullable(),
+        type: z.string().nullable(),
+        crew_size: z.number().int().nullable(),
+        project_name: z.string().nullable(),
+        production_name: z.string().nullable(),
+        notes: z.string().nullable(),
+        terms_accepted_at: z.string().datetime().nullable(),
+      })
+      .openapi("BookingShootDetails"),
+    pricing_status: z.enum(["priced", "awaiting_quote", "quoted"]),
+    quoted_at: z.string().datetime().nullable(),
   })
   .openapi("BookingDetail");
 

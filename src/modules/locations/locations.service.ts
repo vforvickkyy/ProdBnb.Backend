@@ -18,12 +18,22 @@ const FOREIGN_KEY_VIOLATION = "23503";
 // publicly-visible (published) row therefore always has moderation_reason
 // null by construction, never leaking anything through the public detail/
 // search response. See src/modules/admin/locations.service.ts.
+//
+// Address privacy (migration 20261118150000): address_line1/address_line2/postal_code/latitude/
+// longitude are NOT readable by anon/authenticated any more. Every read of these columns therefore
+// runs on the service role, AFTER the caller's own client has shown the row is visible to them
+// (`visibleRow`) -- RLS still decides who sees a listing at all; the service role only fills in
+// columns. What a non-owner then gets to see is decided by `forViewer`.
 const LOCATION_COLUMNS = `
   id, host_id, title, description,
-  address_line1, address_line2, city, region, country, postal_code,
-  latitude, longitude, capacity, timezone, instant_booking_enabled,
+  address_line1, address_line2, city, region, country, postal_code, area,
+  latitude, longitude, public_latitude, public_longitude, show_exact_location,
+  capacity, timezone, instant_booking_enabled, price_on_request,
   status, moderation_reason, suspended_by_host_suspension, created_at, updated_at
 `;
+
+/** Radius of the circle maps draw around an approximate location, in metres. */
+export const APPROXIMATE_RADIUS_M = 2000;
 
 const LOCATION_DETAIL_SELECT = `
   ${LOCATION_COLUMNS},
@@ -64,6 +74,15 @@ export interface LocationSummary {
   postal_code: string | null;
   latitude: number | null;
   longitude: number | null;
+  /** Neighbourhood shown before booking, e.g. "Bandra West". */
+  area: string | null;
+  /** The point maps show before booking (approximate, or exact when show_exact_location). */
+  public_latitude: number | null;
+  public_longitude: number | null;
+  /** Set by the team: full address and exact pin visible before booking. */
+  show_exact_location: boolean;
+  /** Prices hidden; a booking is a request the host answers with a price. */
+  price_on_request: boolean;
   capacity: number | null;
   timezone: string;
   instant_booking_enabled: boolean;
@@ -152,7 +171,56 @@ export interface LocationDetail extends LocationSummary {
   use_cases: CatalogRef[];
   media: PublicMediaItem[];
   host: HostPublicSummary | null;
+  /** Bookable types with their prices. Empty for a price-on-request listing (prices are hidden). */
   booking_options: BookingOption[];
+  /**
+   * The booking types that can be chosen, priced or not -- what a request form offers (a
+   * price-on-request listing has no `booking_options`). Half-day options say how long they are.
+   */
+  bookable_options: { type: string; half_day_duration_hours?: number | null }[];
+  /**
+   * How exact latitude/longitude in THIS response are: "approximate" means a point up to ~1.4 km
+   * away from the real spot, to be drawn as a circle of `approximate_radius_m`, never as a pin.
+   */
+  location_precision: "exact" | "approximate";
+  approximate_radius_m: number | null;
+}
+
+/** Who is reading a listing -- decides whether the street address and exact pin are included. */
+export interface LocationViewer {
+  userId: string | null;
+  isAdmin: boolean;
+}
+
+export const PUBLIC_VIEWER: LocationViewer = { userId: null, isAdmin: false };
+
+function seesEverything(location: Pick<LocationSummary, "host_id">, viewer: LocationViewer): boolean {
+  return viewer.isAdmin || (viewer.userId !== null && viewer.userId === location.host_id);
+}
+
+/**
+ * The listing as `viewer` may see it. The host and the team see everything. Everyone else sees the
+ * town, region and area, and an approximate point -- the street, postcode and real pin come with a
+ * confirmed, paid booking (bookings/contacts.ts) -- unless the team marked the listing
+ * "show exact location". A price-on-request listing shows no prices to them.
+ */
+export function forViewer<T extends LocationSummary>(location: T, viewer: LocationViewer): T {
+  if (seesEverything(location, viewer) || location.show_exact_location) {
+    return location;
+  }
+  return {
+    ...location,
+    address_line1: null,
+    address_line2: null,
+    postal_code: null,
+    latitude: location.public_latitude,
+    longitude: location.public_longitude,
+  };
+}
+
+function precisionFor(location: LocationSummary, viewer: LocationViewer): Pick<LocationDetail, "location_precision" | "approximate_radius_m"> {
+  const exact = seesEverything(location, viewer) || location.show_exact_location;
+  return { location_precision: exact ? "exact" : "approximate", approximate_radius_m: exact ? null : APPROXIMATE_RADIUS_M };
 }
 
 interface RawLocationDetailRow extends LocationSummary {
@@ -163,11 +231,14 @@ interface RawLocationDetailRow extends LocationSummary {
   location_pricing: RawLocationPricingRow[];
 }
 
-function flattenDetail(row: RawLocationDetailRow, host: HostPublicSummary | null): LocationDetail {
+function flattenDetail(row: RawLocationDetailRow, host: HostPublicSummary | null, viewer: LocationViewer): LocationDetail {
   const { location_categories, location_amenities, location_use_cases, location_media, location_pricing, ...summary } =
     row as RawLocationDetailRow;
+  const active = location_pricing.filter((p) => p.is_active);
+  const hidePrices = summary.price_on_request && !seesEverything(summary, viewer);
   return {
-    ...(summary as LocationSummary),
+    ...forViewer(summary as LocationSummary, viewer),
+    ...precisionFor(summary as LocationSummary, viewer),
     categories: location_categories.map((r) => r.categories),
     amenities: location_amenities.map((r) => r.amenities),
     use_cases: location_use_cases.map((r) => r.use_cases),
@@ -177,8 +248,14 @@ function flattenDetail(row: RawLocationDetailRow, host: HostPublicSummary | null
     // field, not a management one, so it's filtered the same way regardless
     // of who's viewing (the owner/admin management view of inactive pricing
     // configs lives at GET /v1/locations/:id/pricing, not here).
-    booking_options: location_pricing
-      .filter((p) => p.is_active)
+    //
+    // A type priced at 0 is only bookable as a request: on a listing with prices showing it is left
+    // out, so it can never be booked for free. On a price-on-request listing the prices are hidden
+    // from bookers altogether (`bookable_options` still says which types can be asked for).
+    booking_options: hidePrices
+      ? []
+      : active
+      .filter((p) => summary.price_on_request || p.amount_minor_units > 0)
       // A half-day option also says how long it is (the website offers start times that fit).
       .map((p) => ({
         type: p.booking_type,
@@ -186,7 +263,25 @@ function flattenDetail(row: RawLocationDetailRow, host: HostPublicSummary | null
         currency: p.currency,
         ...(p.booking_type === "half_day" ? { half_day_duration_hours: p.half_day_duration_hours ?? null } : {}),
       })),
+    bookable_options: active
+      .filter((p) => summary.price_on_request || p.amount_minor_units > 0)
+      .map((p) => ({
+        type: p.booking_type,
+        ...(p.booking_type === "half_day" ? { half_day_duration_hours: p.half_day_duration_hours ?? null } : {}),
+      })),
   };
+}
+
+/**
+ * The id/host of a listing if `supabase` (the caller's own client) may see it, else null. RLS on
+ * the caller's client is what decides visibility; this reads only columns every role can read.
+ */
+async function visibleRow(supabase: SupabaseClient, id: string): Promise<{ id: string; host_id: string } | null> {
+  const { data, error } = await supabase.from("locations").select("id, host_id").eq("id", id).maybeSingle();
+  if (error) {
+    throw error;
+  }
+  return (data as { id: string; host_id: string } | null) ?? null;
 }
 
 async function fetchHostPublicSummary(supabase: SupabaseClient, hostId: string): Promise<HostPublicSummary | null> {
@@ -197,8 +292,16 @@ async function fetchHostPublicSummary(supabase: SupabaseClient, hostId: string):
   return (data as HostPublicSummary | null) ?? null;
 }
 
+/**
+ * The full row -- including the private address columns -- of a listing the caller can see, or
+ * null. For server-side decisions (ownership, bookability); a response to a non-owner must go
+ * through `forViewer` first.
+ */
 export async function getVisibleLocationOrNull(supabase: SupabaseClient, id: string): Promise<LocationSummary | null> {
-  const { data, error } = await supabase.from("locations").select(LOCATION_COLUMNS).eq("id", id).maybeSingle();
+  if (!(await visibleRow(supabase, id))) {
+    return null;
+  }
+  const { data, error } = await adminClient.from("locations").select(LOCATION_COLUMNS).eq("id", id).maybeSingle();
   if (error) {
     throw error;
   }
@@ -227,12 +330,21 @@ export async function assertLocationManageable(
   return location;
 }
 
-export async function getLocation(supabase: SupabaseClient, id: string): Promise<LocationDetail> {
+export async function getLocation(supabase: SupabaseClient, id: string, viewer: LocationViewer = PUBLIC_VIEWER): Promise<LocationDetail> {
   // Phase 29.6: `media` on a location detail is the GENERAL gallery only. The embedded filter is
   // what keeps a section's photos out of it -- without it every section photo would be flattened
   // into `media`, and `flattenDetail`'s position sort would happily put a section photo at the
   // front as the location's cover. Section galleries are fetched per section.
-  const { data, error } = await supabase
+  //
+  // Visibility is decided by the caller's own client (RLS); the row and its children are then read
+  // with the service role, because the address columns aren't readable by anyone else. The child
+  // tables gate on exactly the same condition as the parent row, so nothing becomes visible that
+  // the caller couldn't already read -- except a price-on-request listing's pricing rows, which
+  // flattenDetail hides again for anyone but the host and the team.
+  if (!(await visibleRow(supabase, id))) {
+    throw new NotFoundError("Location not found.");
+  }
+  const { data, error } = await adminClient
     .from("locations")
     .select(LOCATION_DETAIL_SELECT)
     .eq("id", id)
@@ -245,7 +357,7 @@ export async function getLocation(supabase: SupabaseClient, id: string): Promise
 
   const row = data as unknown as RawLocationDetailRow;
   const host = await fetchHostPublicSummary(supabase, row.host_id);
-  return flattenDetail(row, host);
+  return flattenDetail(row, host, viewer);
 }
 
 export interface PaginatedLocations {
@@ -273,7 +385,9 @@ async function listLocations(
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
 
-  let query = supabase.from("locations").select(select, { count: "exact" });
+  // Two steps since the address columns became service-role-only: the caller's own client picks the
+  // page (RLS decides which rows it may list), then the service role reads those rows in full.
+  let query = supabase.from("locations").select("id", { count: "exact" });
 
   if (filters.status) {
     query = query.eq("status", filters.status);
@@ -290,8 +404,19 @@ async function listLocations(
   if (error) {
     throw error;
   }
-
-  return { data: (data as unknown as LocationSummary[]) ?? [], total: count ?? 0 };
+  const ids = ((data ?? []) as { id: string }[]).map((r) => r.id);
+  if (ids.length === 0) {
+    return { data: [], total: count ?? 0 };
+  }
+  const { data: rows, error: rowsError } = await adminClient.from("locations").select(select).in("id", ids);
+  if (rowsError) {
+    throw rowsError;
+  }
+  const byId = new Map(((rows ?? []) as unknown as LocationSummary[]).map((r) => [r.id, r]));
+  return {
+    data: ids.map((id) => byId.get(id)).filter((r): r is LocationSummary => Boolean(r)),
+    total: count ?? 0,
+  };
 }
 
 // ============================================================================
@@ -574,7 +699,7 @@ export async function createLocation(
   const { data: createdRow, error } = await supabase
     .from("locations")
     .insert({ ...fields, host_id: hostId })
-    .select(LOCATION_COLUMNS)
+    .select("id")
     .single();
 
   if (error || !createdRow) {
@@ -587,7 +712,7 @@ export async function createLocation(
   await replaceTags(supabase, locationId, "location_amenities", "amenity_id", amenity_ids);
   await replaceTags(supabase, locationId, "location_use_cases", "use_case_id", use_case_ids);
 
-  return getLocation(supabase, locationId);
+  return getLocation(supabase, locationId, { userId: hostId, isAdmin: false });
 }
 
 export async function updateLocation(
@@ -606,7 +731,13 @@ export async function updateLocation(
     throw new ForbiddenError("You do not have permission to modify this location.");
   }
 
-  const { category_ids, amenity_ids, use_case_ids, status, ...fields } = input;
+  const { category_ids, amenity_ids, use_case_ids, status, show_exact_location: showExact, ...fields } =
+    input as UpdateLocationInput & { show_exact_location?: boolean };
+
+  // Whether the full address and pin show before booking is the team's decision, never the host's.
+  if (showExact !== undefined && !isAdmin) {
+    throw new ForbiddenError("Only the team can choose to show this listing's exact location.");
+  }
 
   if (status !== undefined && !isAdmin) {
     const allowed = HOST_ALLOWED_TRANSITIONS[current.status] ?? [];
@@ -635,6 +766,13 @@ export async function updateLocation(
   // full, even for the columns it IS allowed to touch.
   if (Object.keys(fields).length > 0) {
     const { error } = await supabase.from("locations").update(fields).eq("id", locationId);
+    if (error) {
+      throw error;
+    }
+  }
+
+  if (showExact !== undefined && showExact !== current.show_exact_location) {
+    const { error } = await adminClient.from("locations").update({ show_exact_location: showExact }).eq("id", locationId);
     if (error) {
       throw error;
     }
@@ -674,6 +812,7 @@ export async function updateLocation(
   // is the record of what it now says).
   const changedFields = [
     ...Object.keys(fields),
+    ...(showExact !== undefined && showExact !== current.show_exact_location ? ["show_exact_location"] : []),
     ...(category_ids !== undefined ? ["category_ids"] : []),
     ...(amenity_ids !== undefined ? ["amenity_ids"] : []),
     ...(use_case_ids !== undefined ? ["use_case_ids"] : []),
@@ -682,7 +821,7 @@ export async function updateLocation(
     await writeAuditLog(callerId, "ADMIN_UPDATED_LOCATION", "location", locationId, auditReason, { fields: changedFields });
   }
 
-  return getLocation(supabase, locationId);
+  return getLocation(supabase, locationId, { userId: callerId, isAdmin });
 }
 
 export async function deleteLocation(
@@ -717,6 +856,8 @@ export interface LocationCard {
   city: string;
   region: string | null;
   country: string;
+  area: string | null;
+  price_on_request: boolean;
   status: string;
   host_id: string;
   cover_url: string | null;
@@ -733,7 +874,7 @@ export async function getLocationCards(client: SupabaseClient, ids: string[]): P
     return [];
   }
   const [locationsResult, mediaResult, pricingResult] = await Promise.all([
-    client.from("locations").select("id, title, city, region, country, status, host_id").in("id", ids),
+    client.from("locations").select("id, title, city, region, country, area, price_on_request, status, host_id").in("id", ids),
     client
       .from("location_media")
       .select("location_id, storage_key, media_type, position, section_id")
@@ -768,9 +909,12 @@ export async function getLocationCards(client: SupabaseClient, ids: string[]): P
     .map((l) => {
       const own = media.filter((m) => m.location_id === l.id);
       const cover = own.find((m) => m.section_id === null) ?? own[0];
-      const cheapest = pricing
-        .filter((p) => p.location_id === l.id)
-        .sort((a, b) => a.amount_minor_units - b.amount_minor_units)[0];
+      // A price-on-request listing has no public price.
+      const cheapest = l.price_on_request
+        ? undefined
+        : pricing
+            .filter((p) => p.location_id === l.id && p.amount_minor_units > 0)
+            .sort((a, b) => a.amount_minor_units - b.amount_minor_units)[0];
       return {
         ...l,
         cover_url: cover ? publicUrlFor(cover.storage_key) : null,

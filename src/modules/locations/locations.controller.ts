@@ -20,7 +20,10 @@ import { sectionSummariesFor } from "../sections/sections.service";
 
 export async function getLocationDetail(req: Request, res: Response): Promise<void> {
   const { id } = req.valid!.params as LocationIdParam;
-  const location = await getLocation(req.supabase!, id);
+  // The host and the team see the street address and exact pin; everyone else the area and an
+  // approximate point (unless the team marked the listing "show exact location").
+  const isAdmin = req.user ? await callerHasAdminPermission(req, "locations.view") : false;
+  const location = await getLocation(req.supabase!, id, { userId: req.user?.id ?? null, isAdmin });
   // Phase 29.6: lightweight section metadata — id/name/description/cover/photo_count — so a client
   // can render a section rail from this one response. Deliberately NOT every photo of every
   // section: that would make a 20-section location's detail hundreds of media rows. The full

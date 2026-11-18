@@ -69,7 +69,7 @@ export async function postRestoreUser(req: Request, res: Response): Promise<void
 
 export async function getAdminLocationDetail(req: Request, res: Response): Promise<void> {
   const { id } = req.valid!.params as LocationIdParam;
-  const location = await getLocation(req.supabase!, id);
+  const location = await getLocation(req.supabase!, id, { userId: req.user!.id, isAdmin: true });
   ok(res, location);
 }
 

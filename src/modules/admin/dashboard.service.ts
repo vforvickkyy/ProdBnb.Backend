@@ -67,6 +67,7 @@ export async function getDashboardSummary(supabase: SupabaseClient): Promise<Das
       .from("bookings")
       .select("id, settled:payments ( id )", { count: "exact", head: true })
       .in("status", ["requested", "confirmed"])
+      .neq("pricing_status", "awaiting_quote")
       .in("settled.status", ["success", "partially_refunded", "refunded"])
       .is("settled", null),
     supabase

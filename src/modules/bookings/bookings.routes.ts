@@ -11,8 +11,15 @@ import {
   postCompleteBooking,
   postConfirmBooking,
   postRejectBooking,
+  postSendQuote,
 } from "./bookings.controller";
-import { bookingActionSchema, bookingIdParamSchema, createBookingSchema, listBookingsQuerySchema } from "./bookings.schema";
+import {
+  bookingActionSchema,
+  bookingIdParamSchema,
+  createBookingSchema,
+  listBookingsQuerySchema,
+  sendQuoteSchema,
+} from "./bookings.schema";
 
 export const bookingsRouter = Router();
 
@@ -42,6 +49,14 @@ bookingsRouter.post(
   requireAuth,
   validate({ params: bookingIdParamSchema, body: bookingActionSchema }),
   postRejectBooking
+);
+
+// Price-on-request listings: the host answers a request with a price (the booker then pays).
+bookingsRouter.post(
+  "/bookings/:id/send-quote",
+  requireAuth,
+  validate({ params: bookingIdParamSchema, body: sendQuoteSchema }),
+  postSendQuote
 );
 
 bookingsRouter.post(

@@ -6,6 +6,32 @@ const offsetDateTime = z.string().datetime({ offset: true });
 const dateOnly = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Must be an ISO date, e.g. 2026-10-05.");
 // A coupon or offer code (optional on every booking type).
 const couponCodeField = z.string().trim().min(1).max(40).optional();
+const optionalText = (max: number) =>
+  z
+    .string()
+    .trim()
+    .max(max)
+    .transform((v) => (v === "" ? undefined : v))
+    .optional();
+
+/**
+ * What the booker tells the host about the shoot, on every booking type. Optional in the API (older
+ * app versions don't send it); the website asks for the shoot type, people on set and the terms.
+ * A request on a price-on-request listing must say the shoot type and people on set -- the host
+ * prices from them.
+ */
+const shootDetailsShape = {
+  /** One of the use cases (Pre Wedding, Music Video, ...) -- or `shoot_type_other` in their words. */
+  shoot_type_id: uuid.optional(),
+  shoot_type_other: optionalText(80),
+  /** People on set, crew and cast together. */
+  crew_size: z.number().int().min(1).max(10000).optional(),
+  project_name: optionalText(120),
+  production_name: optionalText(120),
+  shoot_notes: optionalText(1000),
+  /** The booker ticked "I agree to the terms" -- recorded as terms_accepted_at. */
+  accept_terms: z.literal(true).optional(),
+};
 
 export const bookingStatusSchema = z.enum(["requested", "confirmed", "cancelled", "completed", "rejected"]);
 
@@ -22,6 +48,7 @@ const hourlyBookingSchema = z
     start_at: offsetDateTime,
     end_at: offsetDateTime,
     coupon_code: couponCodeField,
+    ...shootDetailsShape,
   })
   .strict();
 
@@ -33,6 +60,7 @@ const halfDayBookingSchema = z
     // not client-supplied — see resolveInterval() in bookings.service.ts.
     start_at: offsetDateTime,
     coupon_code: couponCodeField,
+    ...shootDetailsShape,
   })
   .strict();
 
@@ -44,6 +72,7 @@ const dayBookingSchema = z
     // actual availability that date (never a naive 24-hour assumption).
     date: dateOnly,
     coupon_code: couponCodeField,
+    ...shootDetailsShape,
   })
   .strict();
 
@@ -54,6 +83,7 @@ const multiDayBookingSchema = z
     start_date: dateOnly,
     end_date: dateOnly,
     coupon_code: couponCodeField,
+    ...shootDetailsShape,
   })
   .strict();
 
@@ -88,6 +118,10 @@ const bookingUnionSchema = z
   .refine((d) => d.booking_type !== "multi_day" || d.end_date >= d.start_date, {
     message: "end_date must not be before start_date.",
     path: ["end_date"],
+  })
+  .refine((d) => !(d.shoot_type_id && d.shoot_type_other), {
+    message: "Pick a shoot type from the list or describe it, not both.",
+    path: ["shoot_type_other"],
   });
 
 // Backward compatibility (§23): a request with no booking_type at all is the
@@ -116,6 +150,14 @@ export const bookingActionSchema = z
   .strict()
   .default({});
 export type BookingActionInput = z.infer<typeof bookingActionSchema>;
+
+/** The host's price for a request on a price-on-request listing (before platform fee and tax). */
+export const sendQuoteSchema = z
+  .object({
+    amount_minor_units: z.number().int().min(100).max(10_000_000_00),
+  })
+  .strict();
+export type SendQuoteInput = z.infer<typeof sendQuoteSchema>;
 
 export const bookingIdParamSchema = z.object({ id: uuid });
 export type BookingIdParam = z.infer<typeof bookingIdParamSchema>;

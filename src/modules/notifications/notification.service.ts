@@ -338,6 +338,33 @@ export function notifyBookingRequestReceived(hostId: string, bookingId: string):
   });
 }
 
+/** A request on a price-on-request listing: the host prices it (or declines). Nothing paid yet. */
+export function notifyQuoteRequested(hostId: string, bookingId: string): Promise<void> {
+  return safeNotify({
+    userId: hostId,
+    type: "booking_request_received",
+    title: "New price request",
+    body: "Someone wants a price for a shoot at your place. Send a price or decline.",
+    entityType: "booking",
+    entityId: bookingId,
+    // Distinct from the paid-request event, so the "booking paid" notice later still arrives.
+    sourceEventId: `booking:${bookingId}:quote_requested`,
+  });
+}
+
+/** The host priced a request: the booker pays to confirm. */
+export function notifyQuoteReady(bookerId: string, bookingId: string): Promise<void> {
+  return safeNotify({
+    userId: bookerId,
+    type: "booking_updated",
+    title: "Your price is ready",
+    body: "The host sent a price for your booking request. Pay to confirm it.",
+    entityType: "booking",
+    entityId: bookingId,
+    sourceEventId: `booking:${bookingId}:quote_ready`,
+  });
+}
+
 export function notifyBookingConfirmed(bookerId: string, bookingId: string): Promise<void> {
   return safeNotify({
     userId: bookerId,

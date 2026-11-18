@@ -443,6 +443,9 @@ export async function createPayment(
   if (booking.status !== "requested" && booking.status !== "confirmed") {
     throw new ValidationError(`Cannot create a payment for a booking with status '${booking.status}'.`);
   }
+  if (booking.pricing_status === "awaiting_quote") {
+    throw new ValidationError("The host hasn't sent a price yet. You can pay once they do.");
+  }
   if (input.return_url) {
     await assertAllowedReturnUrl(input.return_url);
   }

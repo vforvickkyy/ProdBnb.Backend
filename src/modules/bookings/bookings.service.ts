@@ -8,9 +8,11 @@ import {
   notifyBookingConfirmed,
   notifyBookingDeclined,
   notifyBookingRequestReceived,
+  notifyQuoteReady,
+  notifyQuoteRequested,
 } from "../notifications/notification.service";
 import { BookingType } from "../pricing/pricing.schema";
-import { BookingActionInput, CreateBookingInput, ListBookingsQuery } from "./bookings.schema";
+import { BookingActionInput, CreateBookingInput, ListBookingsQuery, SendQuoteInput } from "./bookings.schema";
 import { getPlatformSettings, platformCharges } from "../platform/settings.service";
 import { expireUnpaidHolds } from "./holds";
 import { openRefundRequestAfterCancellation } from "../account/refundRequests.service";
@@ -53,6 +55,8 @@ const BOOKING_COLUMNS = `
   base_amount_minor_units, platform_fee_minor_units, tax_minor_units, discount_minor_units,
   total_amount_minor_units, currency,
   cancelled_at, cancelled_by, cancellation_reason, hold_expired_at,
+  shoot_type_id, shoot_type, crew_size, project_name, production_name, shoot_notes, terms_accepted_at,
+  pricing_status, quoted_at,
   created_at, updated_at
 `;
 
@@ -224,11 +228,42 @@ interface RawBookingRow {
   cancelled_by: string | null;
   cancellation_reason: string | null;
   hold_expired_at: string | null;
+  shoot_type_id: string | null;
+  shoot_type: string | null;
+  crew_size: number | null;
+  project_name: string | null;
+  production_name: string | null;
+  shoot_notes: string | null;
+  terms_accepted_at: string | null;
+  pricing_status: PricingStatus;
+  quoted_at: string | null;
   created_at: string;
   updated_at: string;
   locations: RawLocationRef;
   booker: NameRef | null;
   payments: PaymentSummary[];
+}
+
+/**
+ * priced: a normal booking. awaiting_quote: a request on a price-on-request listing -- no price yet
+ * (all amounts 0), doesn't hold the slot, the host answers with a price or declines. quoted: the host
+ * sent a price (status is then `confirmed`) and the booker pays next.
+ */
+export type PricingStatus = "priced" | "awaiting_quote" | "quoted";
+
+/** What the booker told the host about the shoot. */
+export interface ShootDetails {
+  /** The use case picked, or null when described in the booker's own words. */
+  type_id: string | null;
+  /** What the shoot is, e.g. "Music Video" (or the booker's own words). */
+  type: string | null;
+  /** People on set. */
+  crew_size: number | null;
+  project_name: string | null;
+  production_name: string | null;
+  notes: string | null;
+  /** When the booker accepted the terms (null when the app that booked didn't ask). */
+  terms_accepted_at: string | null;
 }
 
 export interface BookingDetail {
@@ -268,6 +303,10 @@ export interface BookingDetail {
    * would be a regression for both.
    */
   booker_profile?: BookerProfile | null;
+  shoot: ShootDetails;
+  pricing_status: PricingStatus;
+  /** When the host sent the price (quoted requests only). */
+  quoted_at: string | null;
 }
 
 /**
@@ -341,6 +380,39 @@ function toBookingDetail(row: RawBookingRow): BookingDetail {
     cancelled_by: row.cancelled_by,
     cancellation_reason: row.cancellation_reason,
     hold_expired_at: row.hold_expired_at ?? null,
+    shoot: {
+      type_id: row.shoot_type_id ?? null,
+      type: row.shoot_type ?? null,
+      crew_size: row.crew_size ?? null,
+      project_name: row.project_name ?? null,
+      production_name: row.production_name ?? null,
+      notes: row.shoot_notes ?? null,
+      terms_accepted_at: row.terms_accepted_at ?? null,
+    },
+    pricing_status: row.pricing_status ?? "priced",
+    quoted_at: row.quoted_at ?? null,
+  };
+}
+
+/** The shoot details as booking columns; the shoot type is checked against the use-case list. */
+async function shootColumns(input: CreateBookingInput): Promise<Record<string, unknown>> {
+  let shootTypeId: string | null = null;
+  let shootType: string | null = input.shoot_type_other ?? null;
+  if (input.shoot_type_id) {
+    const { data, error } = await adminClient.from("use_cases").select("id, name").eq("id", input.shoot_type_id).maybeSingle();
+    if (error) throw error;
+    if (!data) throw new ValidationError("Pick a shoot type from the list.");
+    shootTypeId = data.id as string;
+    shootType = data.name as string;
+  }
+  return {
+    shoot_type_id: shootTypeId,
+    shoot_type: shootType,
+    crew_size: input.crew_size ?? null,
+    project_name: input.project_name ?? null,
+    production_name: input.production_name ?? null,
+    shoot_notes: input.shoot_notes ?? null,
+    terms_accepted_at: input.accept_terms ? new Date().toISOString() : null,
   };
 }
 
@@ -396,7 +468,9 @@ async function resolveInterval(
       return { start_at: input.start_at, end_at: input.end_at };
 
     case "half_day": {
-      const pricing = await getActivePricing(supabase, locationId, "half_day");
+      // Service role: the caller already passed the visibility check, and a price-on-request
+      // listing's pricing rows (which hold the half-day length) are hidden from bookers.
+      const pricing = await getActivePricing(adminClient, locationId, "half_day");
       if (pricing.half_day_duration_hours === null) {
         throw new ValidationError("This location's half-day pricing has no duration configured.");
       }
@@ -449,6 +523,11 @@ export interface BookingQuote {
   coupon: { code: string; title: string; discount_minor_units: number; funded_by: "platform" | "host" } | null;
   /** Why the code in the request didn't apply (the price is then shown without it). */
   coupon_error: string | null;
+  /**
+   * The listing's prices are on request: `pricing` is null and booking sends a request the host
+   * answers with a price (nothing is charged until then).
+   */
+  price_on_request: boolean;
 }
 
 /**
@@ -478,13 +557,44 @@ export async function quoteBooking(supabase: SupabaseClient, callerId: string, i
     own_listing: location.host_id === callerId,
     coupon: null,
     coupon_error: null,
+    price_on_request: location.price_on_request,
   };
   const unavailable = (reason: string, extra: Partial<BookingQuote> = {}): BookingQuote => ({ ...base, ...extra, available: false, reason });
+
+  if (location.price_on_request) {
+    let requestInterval: ResolvedWindow;
+    try {
+      await getActivePricing(adminClient, input.location_id, input.booking_type as BookingType);
+      requestInterval = await resolveInterval(supabase, input.location_id, input);
+    } catch (error) {
+      if (error instanceof ValidationError) return unavailable(error.message.includes("does not offer") ? "This place doesn't offer that kind of booking." : "The place isn't open then. Pick another date.");
+      throw error;
+    }
+    if (new Date(requestInterval.start_at).getTime() <= Date.now()) {
+      return unavailable("That time has already passed.", requestInterval);
+    }
+    await expireUnpaidHolds(input.location_id);
+    const { data: free, error: freeError } = await supabase.rpc("is_interval_available", {
+      _location_id: input.location_id,
+      _start_at: requestInterval.start_at,
+      _end_at: requestInterval.end_at,
+    });
+    if (freeError) throw freeError;
+    const extra: Partial<BookingQuote> = {
+      ...requestInterval,
+      coupon_error: input.coupon_code ? "Codes can't be used when the price is on request." : null,
+    };
+    if (!free) return unavailable("Someone has already booked part of that time, or the host closed it. Pick another time.", extra);
+    return { ...base, ...extra, available: true, reason: null };
+  }
 
   let interval: ResolvedWindow;
   let rate: Awaited<ReturnType<typeof getActivePricing>>;
   try {
     rate = await getActivePricing(supabase, input.location_id, input.booking_type as BookingType);
+    if (rate.amount_minor_units <= 0) {
+      throw new ValidationError("This location does not offer that booking type.");
+    }
     interval = await resolveInterval(supabase, input.location_id, input);
   } catch (error) {
     if (error instanceof ValidationError) return unavailable(error.message.includes("does not offer") ? "This place doesn't offer that kind of booking." : "The place isn't open then. Pick another date.");
@@ -551,6 +661,10 @@ export async function createBooking(
     throw new NotFoundError("Location not found.");
   }
 
+  if (location.price_on_request) {
+    return createPriceRequest(supabase, bookerId, location, input);
+  }
+
   const interval = await resolveInterval(supabase, input.location_id, input);
 
   // Admin Console: release any lapsed unpaid hold on this location first, so a slot an abandoned
@@ -578,6 +692,10 @@ export async function createBooking(
     interval.end_at,
     location.timezone
   );
+  // A type priced at 0 is only bookable as a request (it is hidden from the listing's options).
+  if (pricing.base_amount_minor_units <= 0) {
+    throw new ValidationError("This location does not offer that booking type.");
+  }
   // Offers: a coupon comes off the listing price; the fee and tax are then worked out on the lower
   // price. The booking records the coupon, the discount and who funds it (ProdBnb or the host).
   let applied: AppliedCoupon | null = null;
@@ -617,6 +735,7 @@ export async function createBooking(
       discount_funded_by: applied ? applied.coupon.owner_type : null,
       total_amount_minor_units: charges.total_amount_minor_units,
       currency: pricing.currency,
+      ...(await shootColumns(input)),
     })
     .select(BOOKING_DETAIL_SELECT)
     .single();
@@ -654,6 +773,128 @@ export async function createBooking(
     await notifyBookingConfirmed(bookerId, booking.id);
   }
 
+  return booking;
+}
+
+/**
+ * A booking on a price-on-request listing: a request with no price (all amounts 0) that the host
+ * answers with a price (`sendQuote`) or declines. It doesn't hold the slot until it is priced -- so
+ * nobody can block a date for free -- and the host is told straight away, since there is nothing
+ * to pay yet. No coupons: there is no price to take them off.
+ */
+async function createPriceRequest(
+  supabase: SupabaseClient,
+  bookerId: string,
+  location: { id: string; host_id: string },
+  input: CreateBookingInput
+): Promise<BookingDetail> {
+  if (input.coupon_code) {
+    throw new ValidationError("Codes can't be used when the price is on request.");
+  }
+  if (!input.shoot_type_id && !input.shoot_type_other) {
+    throw new ValidationError("Tell the host what the shoot is.");
+  }
+  if (!input.crew_size) {
+    throw new ValidationError("Tell the host how many people will be on set.");
+  }
+  const rate = await getActivePricing(adminClient, location.id, input.booking_type as BookingType);
+  const interval = await resolveInterval(supabase, location.id, input);
+  if (new Date(interval.start_at).getTime() <= Date.now()) {
+    throw new ValidationError("That time has already passed.");
+  }
+  await expireUnpaidHolds(location.id);
+  const { data: available, error: availabilityError } = await supabase.rpc("is_interval_available", {
+    _location_id: location.id,
+    _start_at: interval.start_at,
+    _end_at: interval.end_at,
+  });
+  if (availabilityError) throw availabilityError;
+  if (!available) {
+    throw new ValidationError("The requested time is not available.");
+  }
+
+  const { data, error } = await adminClient
+    .from("bookings")
+    .insert({
+      location_id: location.id,
+      booker_id: bookerId,
+      booking_type: input.booking_type,
+      start_at: interval.start_at,
+      end_at: interval.end_at,
+      status: "requested",
+      pricing_status: "awaiting_quote",
+      base_amount_minor_units: 0,
+      platform_fee_minor_units: 0,
+      tax_minor_units: 0,
+      discount_minor_units: 0,
+      total_amount_minor_units: 0,
+      currency: rate.currency,
+      ...(await shootColumns(input)),
+    })
+    .select(BOOKING_DETAIL_SELECT)
+    .single();
+  if (error || !data) {
+    throw error ?? new Error("Failed to create booking request.");
+  }
+  const [row] = await withHiddenLocations([data as unknown as RawBookingRow]);
+  const booking = toBookingDetail(row!);
+  await notifyQuoteRequested(location.host_id, booking.id);
+  return booking;
+}
+
+/**
+ * The host's answer to a price request: their price (before the platform fee and tax, worked out
+ * here exactly as for any booking). The booking becomes `confirmed` + `quoted` -- the host has
+ * accepted by pricing it -- and from then on holds the slot; the booker pays to finish. If the time
+ * was taken meanwhile (another request was priced first, or the host closed it) this is refused and
+ * the host can decline the request instead.
+ */
+export async function sendQuote(
+  supabase: SupabaseClient,
+  callerId: string,
+  isAdmin: boolean,
+  bookingId: string,
+  input: SendQuoteInput
+): Promise<BookingDetail> {
+  const { row, isHost } = await loadBookingAccess(supabase, callerId, bookingId);
+  if (!isHost && !isAdmin) {
+    throw new ForbiddenError("Only the host can send a price.");
+  }
+  if (row.status !== "requested" || row.pricing_status !== "awaiting_quote") {
+    throw new ValidationError("This request isn't waiting for a price.");
+  }
+  if (new Date(row.start_at).getTime() <= Date.now()) {
+    throw new ValidationError("This request's time has already passed.");
+  }
+  const { data: available, error: availabilityError } = await adminClient.rpc("is_interval_available", {
+    _location_id: row.location_id,
+    _start_at: row.start_at,
+    _end_at: row.end_at,
+  });
+  if (availabilityError) throw availabilityError;
+  if (!available) {
+    throw new ConflictError("That time is no longer free (another booking or a closed period). Decline this request instead.");
+  }
+  const charges = platformCharges(input.amount_minor_units, await getPlatformSettings());
+  let booking: BookingDetail;
+  try {
+    booking = await transitionBooking(bookingId, "requested", {
+      status: "confirmed",
+      pricing_status: "quoted",
+      quoted_at: new Date().toISOString(),
+      base_amount_minor_units: input.amount_minor_units,
+      platform_fee_minor_units: charges.platform_fee_minor_units,
+      tax_minor_units: charges.tax_minor_units,
+      discount_minor_units: 0,
+      total_amount_minor_units: charges.total_amount_minor_units,
+    });
+  } catch (error) {
+    if ((error as { code?: string }).code === EXCLUSION_VIOLATION) {
+      throw new ConflictError("That time was just booked by someone else. Decline this request instead.");
+    }
+    throw error;
+  }
+  await notifyQuoteReady(booking.booker_id, booking.id);
   return booking;
 }
 
@@ -767,9 +1008,10 @@ export async function listBookings(
   if (query.host_id) {
     select = select.replace("locations (", "locations!inner (");
   }
-  if (gateOnPayment) {
-    select = select.replace("payments (", "payments!inner (");
-  }
+  // Price requests are the exception: a request waiting for a price, or priced and waiting for
+  // payment, is exactly what the host has to act on (or wait for), so it is listed unpaid. The gate is
+  // therefore "has a settled payment OR is a price request", expressed as PostgREST's embedded
+  // not-null filter inside an `or` (see below) rather than `payments!inner`.
   // Admin Console payment_state filter. A separately-aliased embed, so the `payments` array every
   // booking already carries is never filtered by it: `!inner` + settled statuses keeps only paid
   // bookings; a plain embed filtered to settled statuses and then required to be empty (`is null`,
@@ -781,7 +1023,9 @@ export async function listBookings(
   }
   let request = supabase.from("bookings").select(select, { count: "exact" });
   if (gateOnPayment) {
-    request = request.in("payments.status", SETTLED_PAYMENT_STATUSES);
+    request = request
+      .in("payments.status", SETTLED_PAYMENT_STATUSES)
+      .or("payments.not.is.null,pricing_status.neq.priced");
   }
   if (query.payment_state) {
     request = request.in("settled_payments.status", SETTLED_PAYMENT_STATUSES);
@@ -854,7 +1098,15 @@ export async function getBooking(supabase: SupabaseClient, bookingId: string): P
 }
 
 interface BookingAccess {
-  row: { id: string; location_id: string; booker_id: string; status: string };
+  row: {
+    id: string;
+    location_id: string;
+    booker_id: string;
+    status: string;
+    pricing_status: PricingStatus;
+    start_at: string;
+    end_at: string;
+  };
   isBooker: boolean;
   isHost: boolean;
 }
@@ -867,7 +1119,7 @@ interface BookingAccess {
 async function loadBookingAccess(supabase: SupabaseClient, callerId: string, bookingId: string): Promise<BookingAccess> {
   const { data, error } = await supabase
     .from("bookings")
-    .select("id, location_id, booker_id, status")
+    .select("id, location_id, booker_id, status, pricing_status, start_at, end_at")
     .eq("id", bookingId)
     .maybeSingle();
   if (error) {
@@ -884,7 +1136,7 @@ async function loadBookingAccess(supabase: SupabaseClient, callerId: string, boo
     isHost = location?.host_id === callerId;
   }
 
-  return { row: data, isBooker, isHost };
+  return { row: data as BookingAccess["row"], isBooker, isHost };
 }
 
 // Writes via adminClient (Phase 12: `bookings` no longer grants authenticated
@@ -931,6 +1183,9 @@ export async function confirmBooking(
   if (row.status !== "requested") {
     throw new ValidationError(`Cannot confirm a booking with status '${row.status}'.`);
   }
+  if (row.pricing_status === "awaiting_quote") {
+    throw new ValidationError("This is a price request: send a price to accept it.");
+  }
   if (!isAdmin && !(await hasSettledPayment(bookingId))) {
     // Phase 29.14-D defence in depth: the host list already excludes unpaid bookings, but the gate
     // must not be a property of one query's shape. A host who reached this id another way still
@@ -959,7 +1214,8 @@ export async function rejectBooking(
   if (row.status !== "requested") {
     throw new ValidationError(`Cannot reject a booking with status '${row.status}'.`);
   }
-  if (!isAdmin && !(await hasSettledPayment(bookingId))) {
+  // A price request has nothing to pay yet -- the host declines it straight away.
+  if (!isAdmin && row.pricing_status !== "awaiting_quote" && !(await hasSettledPayment(bookingId))) {
     // Phase 29.14-D defence in depth: the host list already excludes unpaid bookings, but the gate
     // must not be a property of one query's shape. A host who reached this id another way still
     // cannot act on a booking nobody has paid for.

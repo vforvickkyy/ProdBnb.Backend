@@ -12,8 +12,9 @@ import {
   getBooking,
   listBookings,
   rejectBooking,
+  sendQuote,
 } from "./bookings.service";
-import { BookingActionInput, BookingIdParam, CreateBookingInput, ListBookingsQuery } from "./bookings.schema";
+import { BookingActionInput, BookingIdParam, CreateBookingInput, ListBookingsQuery, SendQuoteInput } from "./bookings.schema";
 
 // Admin Console: "may this caller act as an administrator here" is a team-role permission,
 // not bare admin-role membership -- see src/modules/admin/permissions.ts.
@@ -57,6 +58,14 @@ export async function postRejectBooking(req: Request, res: Response): Promise<vo
   const isAdmin = await isCallerAdmin(req);
   const booking = await rejectBooking(req.supabase!, req.user!.id, isAdmin, id, input);
   ok(res, booking);
+}
+
+/** The host's price for a request on a price-on-request listing. */
+export async function postSendQuote(req: Request, res: Response): Promise<void> {
+  const { id } = req.valid!.params as BookingIdParam;
+  const input = req.valid!.body as SendQuoteInput;
+  const isAdmin = await isCallerAdmin(req);
+  ok(res, await sendQuote(req.supabase!, req.user!.id, isAdmin, id, input));
 }
 
 export async function postCancelBooking(req: Request, res: Response): Promise<void> {
