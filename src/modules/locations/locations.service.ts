@@ -4,6 +4,7 @@ import { adminClient } from "../../lib/supabase";
 import { publicUrlFor } from "../../lib/r2";
 import { writeAuditLog } from "../admin/audit.service";
 import { CreateLocationInput, UpdateLocationInput } from "./locations.schema";
+import { requestableOptions } from "../bookings/pricing";
 
 const FOREIGN_KEY_VIOLATION = "23503";
 
@@ -263,12 +264,14 @@ function flattenDetail(row: RawLocationDetailRow, host: HostPublicSummary | null
         currency: p.currency,
         ...(p.booking_type === "half_day" ? { half_day_duration_hours: p.half_day_duration_hours ?? null } : {}),
       })),
-    bookable_options: active
-      .filter((p) => summary.price_on_request || p.amount_minor_units > 0)
-      .map((p) => ({
-        type: p.booking_type,
-        ...(p.booking_type === "half_day" ? { half_day_duration_hours: p.half_day_duration_hours ?? null } : {}),
-      })),
+    bookable_options: summary.price_on_request
+      ? requestableOptions(location_pricing)
+      : active
+          .filter((p) => p.amount_minor_units > 0)
+          .map((p) => ({
+            type: p.booking_type,
+            ...(p.booking_type === "half_day" ? { half_day_duration_hours: p.half_day_duration_hours ?? null } : {}),
+          })),
   };
 }
 

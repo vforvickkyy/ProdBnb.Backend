@@ -38,6 +38,37 @@ export async function getActivePricing(
   return data;
 }
 
+/** One booking type a price-on-request listing can be asked about. */
+export interface RequestOption {
+  type: BookingType;
+  half_day_duration_hours?: number | null;
+}
+
+/** Offered on a price-on-request listing when no booking type is switched on. */
+export const DEFAULT_REQUEST_TYPES: BookingType[] = ["hourly", "day", "multi_day"];
+
+/**
+ * The booking types a price-on-request listing can be asked about. Prices play no part, so a host
+ * (or the team) never has to set any: the types switched on are offered; with none switched on --
+ * or no pricing at all -- hourly, full day and multi-day are, plus half day when a half-day length
+ * was ever set up (it can't be booked without one). The listing page and the booking checks both
+ * use this, so what is offered is exactly what can be requested.
+ */
+export function requestableOptions(
+  rows: { booking_type: string; is_active: boolean; half_day_duration_hours?: number | null }[]
+): RequestOption[] {
+  const order: BookingType[] = ["hourly", "half_day", "day", "multi_day"];
+  const active = rows.filter((r) => r.is_active);
+  const halfDay = rows.find((r) => r.booking_type === "half_day" && r.half_day_duration_hours);
+  const types =
+    active.length > 0
+      ? active.map((r) => r.booking_type as BookingType).filter((t) => t !== "half_day" || halfDay)
+      : [...DEFAULT_REQUEST_TYPES, ...(halfDay ? (["half_day"] as BookingType[]) : [])];
+  return order
+    .filter((t) => types.includes(t))
+    .map((t) => (t === "half_day" ? { type: t, half_day_duration_hours: halfDay?.half_day_duration_hours ?? null } : { type: t }));
+}
+
 function localDateString(instant: string, timezone: string): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: timezone, year: "numeric", month: "2-digit", day: "2-digit" }).format(
     new Date(instant)

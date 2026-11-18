@@ -175,6 +175,21 @@ describe("listing address privacy, price on request, shoot details", () => {
     });
   });
 
+  describe("prices the team manages", () => {
+    it("shows the team a paused price as paused, not missing (so it isn't added twice)", async () => {
+      const { data: row } = await adminClient.from("location_pricing").select("id").eq("location_id", privateId).eq("booking_type", "hourly").single();
+      await adminClient.from("location_pricing").update({ is_active: false }).eq("id", row!.id);
+      try {
+        const asAdmin = await request(app).get(`/v1/locations/${privateId}/pricing`).set(auth(admin));
+        expect(asAdmin.body.data).toEqual([expect.objectContaining({ booking_type: "hourly", is_active: false })]);
+        const asBooker = await request(app).get(`/v1/locations/${privateId}/pricing`).set(auth(booker));
+        expect(asBooker.body.data).toEqual([]);
+      } finally {
+        await adminClient.from("location_pricing").update({ is_active: true }).eq("id", row!.id);
+      }
+    });
+  });
+
   describe("price on request", () => {
     const slot = { booking_type: "hourly", start_at: "2027-03-15T10:00:00+05:30", end_at: "2027-03-15T14:00:00+05:30" };
     let first: string;
@@ -256,6 +271,24 @@ describe("listing address privacy, price on request, shoot details", () => {
       const declined = await request(app).post(`/v1/bookings/${second}/reject`).set(auth(host)).send({ reason: "Already booked" });
       expect(declined.status).toBe(200);
       expect(declined.body.data.status).toBe("rejected");
+    });
+
+    it("stays requestable with every price switched off (or none set): hourly, full day and multi-day", async () => {
+      const id = await listing("Quote barn", { price_on_request: true });
+      try {
+        const l = (await request(app).get(`/v1/locations/${id}`)).body.data;
+        expect(l.bookable_options).toEqual([{ type: "hourly" }, { type: "day" }, { type: "multi_day" }]);
+        const res = await request(app)
+          .post("/v1/bookings")
+          .set(auth(booker))
+          .send({ location_id: id, booking_type: "day", date: "2027-03-22", shoot_type_other: "Fashion film", crew_size: 6 });
+        expect(res.status).toBe(201);
+        bookingIds.push(res.body.data.id);
+        expect(res.body.data).toMatchObject({ pricing_status: "awaiting_quote", pricing: { currency: "INR" } });
+      } finally {
+        await adminClient.from("bookings").delete().eq("location_id", id);
+        await adminClient.from("locations").delete().eq("id", id);
+      }
     });
 
     it("can't be priced twice", async () => {

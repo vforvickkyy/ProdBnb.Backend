@@ -16,7 +16,7 @@ import { BookingActionInput, CreateBookingInput, ListBookingsQuery, SendQuoteInp
 import { getPlatformSettings, platformCharges } from "../platform/settings.service";
 import { expireUnpaidHolds } from "./holds";
 import { openRefundRequestAfterCancellation } from "../account/refundRequests.service";
-import { calculateBookingPrice, getActivePricing } from "./pricing";
+import { calculateBookingPrice, getActivePricing, requestableOptions } from "./pricing";
 import { recordRedemption, resolveCoupon, type AppliedCoupon } from "../coupons/coupons.service";
 
 const EXCLUSION_VIOLATION = "23P01";
@@ -461,7 +461,9 @@ async function daySpan(supabase: SupabaseClient, locationId: string, date: strin
 async function resolveInterval(
   supabase: SupabaseClient,
   locationId: string,
-  input: CreateBookingInput
+  input: CreateBookingInput,
+  /** A price request already knows the half-day length (its pricing may be switched off). */
+  halfDayHours?: number | null
 ): Promise<ResolvedWindow> {
   switch (input.booking_type) {
     case "hourly":
@@ -470,11 +472,11 @@ async function resolveInterval(
     case "half_day": {
       // Service role: the caller already passed the visibility check, and a price-on-request
       // listing's pricing rows (which hold the half-day length) are hidden from bookers.
-      const pricing = await getActivePricing(adminClient, locationId, "half_day");
-      if (pricing.half_day_duration_hours === null) {
+      const hours = halfDayHours ?? (await getActivePricing(adminClient, locationId, "half_day")).half_day_duration_hours;
+      if (!hours) {
         throw new ValidationError("This location's half-day pricing has no duration configured.");
       }
-      const endAt = new Date(new Date(input.start_at).getTime() + pricing.half_day_duration_hours * 3_600_000);
+      const endAt = new Date(new Date(input.start_at).getTime() + hours * 3_600_000);
       return { start_at: input.start_at, end_at: endAt.toISOString() };
     }
 
@@ -564,8 +566,8 @@ export async function quoteBooking(supabase: SupabaseClient, callerId: string, i
   if (location.price_on_request) {
     let requestInterval: ResolvedWindow;
     try {
-      await getActivePricing(adminClient, input.location_id, input.booking_type as BookingType);
-      requestInterval = await resolveInterval(supabase, input.location_id, input);
+      const option = await requestOption(input.location_id, input.booking_type as BookingType);
+      requestInterval = await resolveInterval(supabase, input.location_id, input, option.half_day_duration_hours);
     } catch (error) {
       if (error instanceof ValidationError) return unavailable(error.message.includes("does not offer") ? "This place doesn't offer that kind of booking." : "The place isn't open then. Pick another date.");
       throw error;
@@ -777,6 +779,26 @@ export async function createBooking(
 }
 
 /**
+ * Whether a price-on-request listing can be asked about this booking type (see
+ * `requestableOptions`), with its half-day length and the currency the host will quote in. Read
+ * with the service role: the caller already passed the visibility check, and a price-on-request
+ * listing's pricing rows are hidden from bookers.
+ */
+async function requestOption(locationId: string, type: BookingType): Promise<{ currency: string; half_day_duration_hours: number | null }> {
+  const { data, error } = await adminClient
+    .from("location_pricing")
+    .select("booking_type, currency, is_active, half_day_duration_hours")
+    .eq("location_id", locationId);
+  if (error) throw error;
+  const rows = (data ?? []) as { booking_type: string; currency: string; is_active: boolean; half_day_duration_hours: number | null }[];
+  const option = requestableOptions(rows).find((o) => o.type === type);
+  if (!option) {
+    throw new ValidationError(`This location does not offer '${type}' bookings.`);
+  }
+  return { currency: rows[0]?.currency ?? "INR", half_day_duration_hours: option.half_day_duration_hours ?? null };
+}
+
+/**
  * A booking on a price-on-request listing: a request with no price (all amounts 0) that the host
  * answers with a price (`sendQuote`) or declines. It doesn't hold the slot until it is priced -- so
  * nobody can block a date for free -- and the host is told straight away, since there is nothing
@@ -797,8 +819,8 @@ async function createPriceRequest(
   if (!input.crew_size) {
     throw new ValidationError("Tell the host how many people will be on set.");
   }
-  const rate = await getActivePricing(adminClient, location.id, input.booking_type as BookingType);
-  const interval = await resolveInterval(supabase, location.id, input);
+  const option = await requestOption(location.id, input.booking_type as BookingType);
+  const interval = await resolveInterval(supabase, location.id, input, option.half_day_duration_hours);
   if (new Date(interval.start_at).getTime() <= Date.now()) {
     throw new ValidationError("That time has already passed.");
   }
@@ -828,7 +850,7 @@ async function createPriceRequest(
       tax_minor_units: 0,
       discount_minor_units: 0,
       total_amount_minor_units: 0,
-      currency: rate.currency,
+      currency: option.currency,
       ...(await shootColumns(input)),
     })
     .select(BOOKING_DETAIL_SELECT)

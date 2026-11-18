@@ -13,7 +13,8 @@ async function isCallerAdmin(req: Request): Promise<boolean> {
 
 export async function getPricing(req: Request, res: Response): Promise<void> {
   const { id } = req.valid!.params as LocationIdParam;
-  const pricing = await listPricing(req.supabase!, req.user?.id, id);
+  const isAdmin = req.user ? await callerHasAdminPermission(req, "locations.view") : false;
+  const pricing = await listPricing(req.supabase!, req.user?.id, id, isAdmin);
   ok(res, pricing);
 }
 

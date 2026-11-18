@@ -25,19 +25,22 @@ export interface LocationPricing {
 /**
  * Public/non-owning callers only ever see active pricing (an inactive row
  * is a host-management concern, not something a booker should be offered).
- * Owner/admin see everything, active or not, so they can manage it.
+ * Owner/admin see everything, active or not, so they can manage it -- the admin
+ * console's price editor shows a paused price as paused, rather than as missing
+ * (which used to offer "Add price" for a type that already existed).
  */
 export async function listPricing(
   supabase: SupabaseClient,
   callerId: string | undefined,
-  locationId: string
+  locationId: string,
+  isAdmin = false
 ): Promise<LocationPricing[]> {
   const location = await getVisibleLocationOrNull(supabase, locationId);
   if (!location) {
     throw new NotFoundError("Location not found.");
   }
 
-  const isManager = callerId !== undefined && location.host_id === callerId;
+  const isManager = isAdmin || (callerId !== undefined && location.host_id === callerId);
 
   let query = supabase.from("location_pricing").select(PRICING_COLUMNS).eq("location_id", locationId);
   if (!isManager) {
