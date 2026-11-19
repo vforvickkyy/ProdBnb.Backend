@@ -394,6 +394,39 @@ Query: `?page=1&pageSize=20&status=submitted` (`status` optional, one of the 8 l
 No authentication. The full lookup list for each, `{ "data": [ { "id": "...", "name": "..." } ] }`.
 No write endpoint — see [`docs/DATABASE.md`](DATABASE.md#categories--amenities--use_cases).
 
+## Place search (for the apps)
+
+The website's "Where" field asks Google Places in the browser; the apps ask this backend, which
+calls Places API (New) with the Maps **server key** from Vault (admin console → Website → Google
+Maps), so no key ships inside an app. Public (guests search too). India only, English (India).
+
+Pass the same `session` (any UUID the app makes up) on every keystroke of one search and on the
+details call for the chosen place: Google bills that as one session.
+
+Until a server key is saved, both answer **503** `SERVICE_UNAVAILABLE` with
+`details.reason: "places_not_configured"`; a key Google refuses (e.g. Places API (New) not
+enabled) gives 503 with `reason: "places_failed"`.
+
+### `GET /v1/places/autocomplete?q=Bandra&session=<uuid>`
+
+`q` 2–120 characters. Up to 6 suggestions:
+
+```json
+{ "data": [ { "id": "ChIJ…", "main": "Bandra West", "secondary": "Mumbai, Maharashtra, India" } ] }
+```
+
+### `GET /v1/places/:placeId?session=<uuid>`
+
+The chosen place's point and viewport. Search inside the viewport with
+`GET /v1/locations?north=&south=&east=&west=&lat=&lng=` (the website does the same); a place with
+no viewport (`null`) is a point: search around it with `lat`, `lng` and `radius_km`.
+
+```json
+{ "data": { "id": "ChIJ…", "name": "Bandra West", "address": "Bandra West, Mumbai, Maharashtra, India",
+            "lat": 19.0596, "lng": 72.8295,
+            "viewport": { "north": 19.08, "south": 19.04, "east": 72.85, "west": 72.81 } } }
+```
+
 ## Media (Cloudflare R2 — Phase 3)
 
 Binary files are never routed through this backend — see

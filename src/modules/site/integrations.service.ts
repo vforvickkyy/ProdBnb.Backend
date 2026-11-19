@@ -278,6 +278,25 @@ let publicCache: { value: PublicSiteConfig; at: number } | null = null;
 
 export function clearSiteConfigCache(): void {
   publicCache = null;
+  serverKeyCache = null;
+}
+
+// -- Maps server key (place search for the apps) ---------------------------------------------------
+
+let serverKeyCache: { key: string | null; at: number } | null = null;
+const SERVER_KEY_TTL_MS = 5 * 60 * 1000;
+
+/**
+ * The Google Maps *server* key from Vault, for calls this backend makes on the apps' behalf
+ * (place search). Null when the team hasn't added one (Website → Google Maps) or Maps is
+ * switched off. Cached for five minutes; saving or removing the integration clears it.
+ */
+export async function getMapsServerKey(): Promise<string | null> {
+  if (serverKeyCache && Date.now() - serverKeyCache.at < SERVER_KEY_TTL_MS) return serverKeyCache.key;
+  const row = await loadRow("google_maps");
+  const key = row?.enabled && row.secret_id ? await loadSecret("google_maps") : null;
+  serverKeyCache = { key, at: Date.now() };
+  return key;
 }
 
 /**

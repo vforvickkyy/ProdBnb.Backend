@@ -4,6 +4,7 @@ export type ErrorCode =
   | "FORBIDDEN"
   | "NOT_FOUND"
   | "CONFLICT"
+  | "SERVICE_UNAVAILABLE"
   | "INTERNAL_ERROR";
 
 /**
@@ -58,5 +59,13 @@ export class ConflictError extends AppError {
   constructor(message = "The request conflicts with the current state.") {
     super(409, "CONFLICT", message);
     this.name = "ConflictError";
+  }
+}
+
+/** A feature that depends on something not set up (or not answering) right now. */
+export class ServiceUnavailableError extends AppError {
+  constructor(message = "This is not available right now.", details?: unknown) {
+    super(503, "SERVICE_UNAVAILABLE", message, details);
+    this.name = "ServiceUnavailableError";
   }
 }
