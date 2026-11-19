@@ -15,16 +15,16 @@ variable before the first deploy, not after.
 |---|---|---|---|---|
 | `PORT` | not used on Vercel | local dev only | n/a (Vercel manages this) | n/a (Vercel manages this) |
 | `NODE_ENV` | server-only | `development` | `production` | `production` |
-| `CORS_ORIGINS` | server-only | local dev value | `https://staging-admin.prodbnb.com` | `https://admin.prodbnb.com` |
-| `API_BASE_URL` | server-only, **highest-risk value** | unchanged | `https://prodbnb-backend-staging.vercel.app` | **not configured yet** — no production backend exists |
+| `CORS_ORIGINS` | server-only | local dev value | `https://staging.heken.co,https://admin-staging.heken.co` | `https://heken.co,https://www.heken.co,https://admin.heken.co` |
+| `API_BASE_URL` | server-only, **highest-risk value** | unchanged | `https://api-staging.heken.co` | `https://api.heken.co` |
 | `SUPABASE_URL` | public-safe | existing project | new staging project | new prod project |
 | `SUPABASE_ANON_KEY` | public-safe | existing | new | new |
 | `SUPABASE_SERVICE_ROLE_KEY` | **secret** | existing | new | new |
 | `R2_ACCOUNT_ID` | not secret | existing | new | new |
-| `R2_BUCKET_NAME` | server-only | existing dev bucket | `prodbnb-media-staging` | `prodbnb-media-prod` |
+| `R2_BUCKET_NAME` | server-only | existing dev bucket | `prodbnb-media-staging` | `heken-media` |
 | `R2_ACCESS_KEY_ID` | **secret** | existing | new, bucket-scoped | new, bucket-scoped |
 | `R2_SECRET_ACCESS_KEY` | **secret** | existing | new, bucket-scoped | new, bucket-scoped |
-| `R2_PUBLIC_BASE_URL` | public-safe | existing | `https://staging-media.prodbnb.com` | `https://media.prodbnb.com` |
+| `R2_PUBLIC_BASE_URL` | public-safe | existing | `https://media-staging.heken.co` | `https://media.heken.co` |
 | `R2_UPLOAD_URL_EXPIRY_SECONDS` | server-only | unchanged default | unchanged default | unchanged default |
 | `MEDIA_MAX_PHOTO_SIZE_MB` / `MEDIA_MAX_VIDEO_SIZE_MB` | server-only | unchanged defaults | unchanged defaults | unchanged defaults |
 | `PAYMENT_PROVIDER` | server-only | `cashfree` | `cashfree` | `cashfree` |
@@ -42,12 +42,10 @@ reach the webhook, so payments silently never reconcile. There is no error, no l
 health check — just payments that stay `pending` forever. Set it explicitly for every deployed
 environment and verify with a real webhook round-trip, not just "the deploy succeeded."
 
-The **current staging value is `https://prodbnb-backend-staging.vercel.app`** — the live Vercel
-deployment URL for the `prodbnb-backend-staging` project. Use exactly that. A `prodbnb.com`
-hostname is *not* a valid value today: that domain is not registered and does not resolve, so
-`API_BASE_URL` pointed at one produces a `notify_url` Cashfree can never deliver to — the precise
-silent failure described above. **Production is not configured yet**; there is no production
-backend, project, or domain, so there is no production value to set.
+The values are **`https://api-staging.heken.co`** (staging: the `staging` branch of the
+`heken-backend` Vercel project) and **`https://api.heken.co`** (production: `main`). Both are set in
+Vercel as Preview and Production values of the same project. Production is configured but switched
+off until launch; see `docs/GO_LIVE.md` for the full map and the go-live steps.
 
 ## Admin Panel
 
@@ -60,7 +58,7 @@ existing build.
 |---|---|---|---|
 | `NEXT_PUBLIC_SUPABASE_URL` | existing project | new staging project | new prod project |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | existing | new | new |
-| `NEXT_PUBLIC_API_BASE_URL` | `http://localhost:4000` | `https://prodbnb-backend-staging.vercel.app` | **not configured yet** — no production backend exists |
+| `NEXT_PUBLIC_API_BASE_URL` | `http://localhost:4000` | `https://api-staging.heken.co` | `https://api.heken.co` |
 
 ## What must never reach the Admin Panel, any client, or Git
 

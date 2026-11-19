@@ -16,7 +16,7 @@ Android apps are final. Until then all work and testing happens on **staging**.
 | Search engines | Hidden until `SITE_INDEXABLE=true` | Always hidden |
 | Who can open it | Everyone, once DNS is added | Website and API: anyone (the website is never indexed). Admin: needs a Vercel login |
 
-All three Vercel projects (`prodbnb-backend-staging`, `prodbnb-web-staging`, `prodbnb-admin-staging`)
+All three Vercel projects (`heken-backend`, `heken-web`, `heken-admin`)
 hold both sets of settings: **Production** values for `main`, **Preview** values for `staging`.
 The API runs in Mumbai (`bom1`); the website and admin too.
 
@@ -24,12 +24,13 @@ The API runs in Mumbai (`bom1`); the website and admin too.
 
 - **Don't merge into `main` and don't redeploy production in Vercel.** Three production keys are
   deliberately missing (below), so a production backend build would not start. The old
-  `prodbnb-*-staging.vercel.app` addresses still serve the pre-split build on the staging database.
+  `prodbnb-backend-staging.vercel.app` address still serves the pre-split API on the staging
+  database, for app builds made before the split; remove it once no build uses it.
 - Normal flow: working branch → `staging` (deploys to the staging addresses) → test there.
 
 ## Go-live steps, in order
 
-1. **Production keys** (Vercel → `prodbnb-backend-staging` → Settings → Environment Variables,
+1. **Production keys** (Vercel → `heken-backend` → Settings → Environment Variables,
    Environment = Production, Sensitive):
    - `SUPABASE_SERVICE_ROLE_KEY`: Supabase → heken-production → Project Settings → API Keys → Legacy → `service_role`
    - `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`: Cloudflare R2 API token for `heken-media` (Object Read & Write)
