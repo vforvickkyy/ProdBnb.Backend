@@ -14,7 +14,7 @@ Android apps are final. Until then all work and testing happens on **staging**.
 | Photos | R2 `heken-media` at https://media.heken.co | R2 `prodbnb-media-staging` at https://media-staging.heken.co |
 | Payments | Cashfree sandbox (production keys come later) | Cashfree sandbox |
 | Search engines | Hidden until `SITE_INDEXABLE=true` | Always hidden |
-| Who can open it | Everyone, once DNS is added | Website and admin need a Vercel login; the API is open |
+| Who can open it | Everyone, once DNS is added | Website and API: anyone (the website is never indexed). Admin: needs a Vercel login |
 
 All three Vercel projects (`prodbnb-backend-staging`, `prodbnb-web-staging`, `prodbnb-admin-staging`)
 hold both sets of settings: **Production** values for `main`, **Preview** values for `staging`.
