@@ -1,5 +1,6 @@
 import { SupabaseClient } from "@supabase/supabase-js";
-import { NotFoundError } from "../../errors/AppError";
+import { ForbiddenError, NotFoundError } from "../../errors/AppError";
+import { closedPairs } from "./conversations.service";
 import { adminClient } from "../../lib/supabase";
 import { notifyNewMessage } from "../notifications/notification.service";
 import { decodeCursor, encodeCursor } from "./cursor";
@@ -60,6 +61,28 @@ async function assertParticipant(supabase: SupabaseClient, conversationId: strin
   }
   if (data !== true) {
     throw new NotFoundError("Conversation not found.");
+  }
+}
+
+/**
+ * Once the latest booking between a booker and a listing is cancelled, declined or expired, the
+ * host can no longer message that booker (the booker still can). Enquiries with no booking stay
+ * open both ways.
+ */
+async function assertHostMayStillWrite(senderId: string, conversationId: string): Promise<void> {
+  const { data, error } = await adminClient
+    .from("conversations")
+    .select("booker_id, location_id, locations!inner(host_id)")
+    .eq("id", conversationId)
+    .maybeSingle();
+  if (error) throw error;
+  const row = data as { booker_id: string; location_id: string; locations: { host_id: string } | { host_id: string }[] } | null;
+  if (!row) return;
+  const hostId = Array.isArray(row.locations) ? row.locations[0]?.host_id : row.locations.host_id;
+  if (senderId !== hostId) return;
+  const closed = await closedPairs([{ bookerId: row.booker_id, locationId: row.location_id }]);
+  if (closed.has(`${row.booker_id}:${row.location_id}`)) {
+    throw new ForbiddenError("This booking was cancelled, so messaging with this booker is closed.");
   }
 }
 
@@ -162,6 +185,7 @@ export async function sendMessage(
   input: SendMessageInput
 ): Promise<MessageDetail> {
   await assertParticipant(supabase, conversationId);
+  await assertHostMayStillWrite(senderId, conversationId);
 
   const { data: inserted, error } = await adminClient
     .from("messages")

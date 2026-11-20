@@ -6,7 +6,8 @@ import type { BookingDetail } from "./bookings.service";
  * Who may contact whom, and when:
  *
  *  - the HOST sees the booker's phone and email once the booking is paid (a host only ever sees
- *    paid bookings anyway), so they can call before accepting;
+ *    paid bookings anyway), so they can call before accepting -- and only while it is live
+ *    (requested, confirmed or completed): a cancelled, declined or expired booking hides them;
  *  - the BOOKER sees the full address, the host's phone and email, and the listing's on-site
  *    contact and arrival notes once the booking is confirmed (or completed) and paid.
  *
@@ -14,6 +15,8 @@ import type { BookingDetail } from "./bookings.service";
  * the booking they could already read.
  */
 const SETTLED = new Set(["success", "partially_refunded", "refunded"]);
+/** Booking statuses where the host may still see how to reach the booker. */
+const HOST_CONTACT_STATUSES = new Set(["requested", "confirmed", "completed"]);
 
 export interface BookingContact {
   address: {
@@ -54,6 +57,7 @@ export async function withContacts(booking: BookingDetail, callerId: string): Pr
   const location = loc as BookingContact["address"] & { host_id: string };
 
   if (callerId === location.host_id && callerId !== booking.booker_id) {
+    if (!HOST_CONTACT_STATUSES.has(booking.status)) return booking;
     const { data: p } = await adminClient.from("profiles").select("phone").eq("id", booking.booker_id).maybeSingle();
     return { ...booking, booker_contact: { phone: (p as { phone: string | null } | null)?.phone ?? null, email: await emailOf(booking.booker_id) } };
   }

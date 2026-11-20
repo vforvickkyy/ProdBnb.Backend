@@ -60,6 +60,13 @@ export interface ConversationDetail {
    * unread thread would dominate a whole page.
    */
   unread_count: number;
+  /**
+   * Whether the viewer may send a message. Always true for the booker. False for the host once
+   * the latest booking between them for this listing was cancelled, declined or expired: the
+   * relationship is over, so the host can no longer reach the booker (nor see their phone or
+   * email). An enquiry with no booking stays open.
+   */
+  can_send: boolean;
 }
 
 /** Exactly the columns `get_conversations_for_viewer()` returns. */
@@ -118,7 +125,51 @@ function toConversation(row: ConversationViewRow): ConversationDetail {
     // Coerced rather than trusted so the DTO is always a number, never a
     // numeric string.
     unread_count: Number(row.unread_count),
+    can_send: true,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Closed threads (host side)
+// ---------------------------------------------------------------------------
+
+const CLOSED_BOOKING_STATUSES = new Set(["cancelled", "rejected", "expired"]);
+
+/**
+ * For each (booker, location) pair, whether the latest booking between them is over (cancelled,
+ * declined or expired). Read with the service role: the caller's relationship to each pair is
+ * already established by the conversation they could read.
+ */
+export async function closedPairs(pairs: { bookerId: string; locationId: string }[]): Promise<Set<string>> {
+  const closed = new Set<string>();
+  if (pairs.length === 0) return closed;
+  const bookers = [...new Set(pairs.map((p) => p.bookerId))];
+  const locations = [...new Set(pairs.map((p) => p.locationId))];
+  const { data, error } = await adminClient
+    .from("bookings")
+    .select("booker_id, location_id, status, created_at")
+    .in("booker_id", bookers)
+    .in("location_id", locations)
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  const seen = new Set<string>();
+  for (const row of (data ?? []) as { booker_id: string; location_id: string; status: string }[]) {
+    const key = `${row.booker_id}:${row.location_id}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    if (CLOSED_BOOKING_STATUSES.has(row.status)) closed.add(key);
+  }
+  return closed;
+}
+
+/** Marks host-side conversations whose latest booking is over as read-only for the host. */
+async function withCanSend(conversations: ConversationDetail[]): Promise<ConversationDetail[]> {
+  const hostRows = conversations.filter((c) => c.viewer_role === "host" && c.counterparty);
+  if (hostRows.length === 0) return conversations;
+  const closed = await closedPairs(hostRows.map((c) => ({ bookerId: c.counterparty!.id, locationId: c.location.id })));
+  return conversations.map((c) =>
+    c.viewer_role === "host" && c.counterparty && closed.has(`${c.counterparty.id}:${c.location.id}`) ? { ...c, can_send: false } : c
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -167,7 +218,7 @@ export async function listConversations(
   const rows = await fetchConversationView(supabase, { cursor, limit: query.limit + 1 });
 
   const has_more = rows.length > query.limit;
-  const page = rows.slice(0, query.limit).map(toConversation);
+  const page = await withCanSend(rows.slice(0, query.limit).map(toConversation));
   const last = page[page.length - 1];
 
   return {
@@ -190,7 +241,8 @@ export async function getConversation(supabase: SupabaseClient, conversationId: 
   if (!row) {
     throw new NotFoundError("Conversation not found.");
   }
-  return toConversation(row);
+  const [conversation] = await withCanSend([toConversation(row)]);
+  return conversation!;
 }
 
 // ---------------------------------------------------------------------------
