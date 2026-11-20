@@ -105,6 +105,46 @@ function errorText(error: unknown): string {
 
 const CHECK_TIMEOUT_MS = 5000;
 
+/** How to switch phone login on, shown while it is off. The SMS keys live in Supabase only. */
+export const PHONE_LOGIN_SETUP =
+  "Off. To switch it on: Supabase dashboard → Authentication → Sign In / Providers → Phone → enable, " +
+  "choose an SMS provider (Twilio Verify is quickest for India; MSG91 needs DLT registration) and paste its keys. " +
+  "Do it in both heken-staging and heken-production. The apps and website start offering it straight away.";
+
+interface AuthSettings {
+  external?: Record<string, boolean>;
+  sms_provider?: string;
+}
+
+/** What Supabase Auth's public settings say about phone login. */
+export function describePhoneLogin(settings: AuthSettings): { status: CheckStatus; detail: string } {
+  if (settings.external?.phone) {
+    const provider = settings.sms_provider ? ` through ${settings.sms_provider}` : "";
+    return { status: "ok", detail: `On: people can log in and verify their number by SMS code${provider}.` };
+  }
+  return { status: "disabled", detail: PHONE_LOGIN_SETUP };
+}
+
+/**
+ * Phone login status, read from Supabase Auth's public settings endpoint (the same one every
+ * client can read). Cheap, so it runs on every report rather than only on "Run checks".
+ */
+async function phoneLoginStatus(): Promise<IntegrationStatus> {
+  const base = { id: "phone-login", name: "Phone login (SMS)", purpose: "Log in and verify numbers with an SMS code", settings: [] };
+  const result = await timed(async () => {
+    const response = await withTimeout(
+      fetch(`${env.SUPABASE_URL.replace(/\/$/, "")}/auth/v1/settings`, { headers: { apikey: env.SUPABASE_ANON_KEY } }),
+      CHECK_TIMEOUT_MS
+    );
+    if (!response.ok) throw new Error(`Supabase answered ${response.status}`);
+    return (await response.json()) as AuthSettings;
+  });
+  if (result.error || !result.value) {
+    return { ...base, status: "warning", detail: `Couldn't read Supabase's login settings: ${errorText(result.error)}`, latency_ms: result.ms };
+  }
+  return { ...base, ...describePhoneLogin(result.value), latency_ms: result.ms };
+}
+
 export async function getIntegrationsReport(liveChecks: boolean): Promise<IntegrationsReport> {
   const integrations: IntegrationStatus[] = [];
 
@@ -279,6 +319,9 @@ export async function getIntegrationsReport(liveChecks: boolean): Promise<Integr
     }
     integrations.push({ id: "apns", name: "Apple Push (APNs)", purpose: "iOS push notifications", status, detail, latency_ms: null, settings });
   }
+
+  // -- Phone login (SMS) ------------------------------------------------------------------------
+  integrations.push(await phoneLoginStatus());
 
   // -- Platform rules -------------------------------------------------------------------------
   {
