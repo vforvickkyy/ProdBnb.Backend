@@ -211,7 +211,11 @@ this feed). Text search, geographic search, and filters (Phase 4) all live on th
 | `lat`, `lng` | Must be provided together. Annotates each result with `distance_km` and enables `sort=nearest`. |
 | `radius_km` | Optional add-on to `lat`/`lng` (≤500) — restricts results to within that radius; without it, `lat`/`lng` alone just annotates/sorts by distance with no cutoff. |
 | `north`, `south`, `east`, `west` | Map-viewport bounding box — all four required together or none. `north` must be `>` `south`, `east` must be `>` `west` (bounding boxes crossing the antimeridian aren't supported). |
-| `sort` | `newest` \| `relevant` (default) \| `nearest`. `relevant` behaves like `newest` when no `search` term is given (no other relevance signal exists yet). `nearest` requires `lat`+`lng`. |
+| `parking_min`, `area_min`, `restrooms_min`, `sets_min` | Non-negative integers — at least this many parking spaces, square feet, restrooms, or sets. A listing that hasn't filled the detail in never matches. |
+| `electricity_included` | `true`/`1` — only listings whose electricity is included in the price. |
+| `no_permission` | `true`/`1` — only listings where the host says no permission is needed to shoot. |
+| `has_props` | `true`/`1` — only listings that list at least one prop. |
+| `sort` | `newest` \| `relevant` (default) \| `nearest` \| `price_asc` \| `price_desc`. `relevant` behaves like `newest` when no `search` term is given. `nearest` requires `lat`+`lng`. `price_asc`/`price_desc` order by the lowest active price (listings with no price last). |
 | `page`, `pageSize` | Same convention as every other list endpoint — `pageSize` capped at 100 (`400` if exceeded, not silently capped). |
 
 **Response** — a compact card per result, intentionally smaller than the detail endpoint's
@@ -234,6 +238,13 @@ object (no `host_id`, `status`, address lines, or full media list):
       "use_cases": [{ "id": "...", "name": "Film" }],
       "primary_media_url": "https://media.prodbnb.com/locations/6e2c.../a1b2.../original",
       "created_at": "2026-09-03T12:00:00Z",
+      "area_sqft": 1800,
+      "set_count": 3,
+      "parking_spaces": 6,
+      "restroom_count": 2,
+      "electricity": "included",
+      "permission_needed": false,
+      "props_count": 4,
       "distance_km": 1.4
     }
   ],
@@ -242,7 +253,10 @@ object (no `host_id`, `status`, address lines, or full media list):
 ```
 
 `excerpt` is `description` truncated to 240 characters. `primary_media_url` is `null` if the
-location has no media yet. `distance_km` is only present when `lat`/`lng` were supplied.
+location has no media yet. `distance_km` is only present when `lat`/`lng` were supplied. The
+quick-facts fields (`area_sqft`, `set_count`, `parking_spaces`, `restroom_count`, `electricity`,
+`permission_needed`, `props_count`) are `null` (or `0` for `props_count`) when the host hasn't
+filled them in — show a fact only when it has a value. The listing ID is **never** on a card.
 
 **Examples**
 
@@ -254,11 +268,21 @@ GET /v1/locations?city=Mumbai&capacity_min=20
 GET /v1/locations?lat=19.0596&lng=72.8295&radius_km=10
 GET /v1/locations?north=19.2&south=18.9&east=73.0&west=72.7
 GET /v1/locations?lat=19.0596&lng=72.8295&sort=nearest
+GET /v1/locations?city=Mohali&parking_min=3&electricity_included=true&sort=price_asc
 ```
 
 - `400 VALIDATION_ERROR` for any out-of-range coordinate, an over-limit `radius_km`, a partial
   bounding box, `north <= south`/`east <= west`, `capacity_min > capacity_max`, `sort=nearest`
-  without coordinates, an invalid UUID in a tag filter, or an oversized `pageSize`.
+  without coordinates, an invalid UUID in a tag filter, a flag that isn't `true`/`1`/`false`/`0`,
+  or an oversized `pageSize`.
+- The `city` filter matches the part before the first comma, so `Mohali` and `Mohali, Punjab`
+  are the same city.
+
+### `GET /v1/cities`
+
+No authentication. The cities that have at least one published listing, for city landing pages
+and the home screen: `{ "data": [ { "city": "Mohali", "listing_count": 5, "shoots": [ { "id": "...", "name": "Film" } ] } ] }`.
+Cities are grouped by the part before the first comma, most listings first.
 
 Full location detail (host info, all media, full description) is still `GET
 /v1/locations/:id`, unchanged by this phase.
@@ -284,13 +308,28 @@ visible only to the owning host or an admin — otherwise `404` (existence isn't
     "latitude": 51.5285,
     "longitude": -0.0775,
     "capacity": 40,
+    "listing_code": null,
+    "area_sqft": 1800,
+    "set_count": 3,
+    "parking_spaces": 6,
+    "restroom_count": 2,
+    "electricity": "included",
+    "permission_needed": true,
+    "permission_details": "Society NOC, 3 days",
+    "custom_amenities": ["Rooftop tank"],
+    "custom_rules": ["No shoes inside"],
+    "props": [
+      { "name": "Sofa set", "kind": "included", "price_minor_units": null, "price_unit": null, "note": null },
+      { "name": "Fog machine", "kind": "addon", "price_minor_units": 150000, "price_unit": "per_hour", "note": null }
+    ],
     "timezone": "Europe/London",
     "instant_booking_enabled": false,
     "status": "published",
     "created_at": "2026-09-03T12:00:00Z",
     "updated_at": "2026-09-03T12:00:00Z",
     "categories": [{ "id": "...", "name": "Studio" }],
-    "amenities": [{ "id": "...", "name": "Parking" }],
+    "amenities": [{ "id": "...", "name": "Parking", "kind": "amenity", "group_name": "Access and parking", "position": 40 }],
+    "rules": [{ "id": "...", "name": "Smoking allowed", "kind": "rule", "group_name": "Allowed here", "position": 10 }],
     "use_cases": [{ "id": "...", "name": "Film" }],
     "media": [
       { "id": "...", "media_type": "photo", "url": "https://media.prodbnb.com/locations/6e2c.../a1b2.../original", "position": 0, "created_at": "...", "updated_at": "..." }
@@ -314,6 +353,25 @@ visible only to the owning host or an admin — otherwise `404` (existence isn't
 below; it can be empty if the host hasn't configured any pricing yet, in which case the location
 is visible but not yet bookable. A `half_day` option also carries `half_day_duration_hours` (how long
 the block is), so a client can offer start times that fit; `GET /v1/me/locations` rows do the same.
+
+**Listing details (November 2026).** `area_sqft`, `set_count`, `parking_spaces`, `restroom_count`
+(whole numbers, `null` = not filled in), `electricity` (`included` | `extra` | `not_available`),
+`permission_needed` (+ `permission_details`, ≤500 chars) describe the place. The ticked
+amenities come back in `amenities` and the ticked house rules in `rules` — both are rows of the
+same `amenities` table, told apart by `kind` (`amenity` | `rule`) and grouped by `group_name`
+(show them in `position` order). Hosts can also write their own: `custom_amenities` and
+`custom_rules` (up to 20 short lines each, 120 characters). `props` (up to 40) lists what
+comes with the place: each is `{ name, kind: "included" | "addon", price_minor_units?, price_unit?
+("per_booking" | "per_hour" | "per_day"), note? }`; price and unit are kept only for add-ons, and
+an add-on without a price means "ask the host".
+
+**`listing_code`** (e.g. `HKLS07`) is the internal listing ID. It is returned only to the owning
+host and to admins — it is `null` for everyone else, including on a published listing, and it is
+never searchable by bookers. An admin may change it with `PATCH` (`409` if another listing already
+has that ID; `403` for a host who tries). Admins choose the prefix, digit count and next number in
+Settings (`listing_id_prefix`, `listing_id_digits`, `listing_id_next`); new listings get the next
+free number automatically, and an admin creating a listing on a host's behalf may pass
+`listing_code` instead.
 
 ### `POST /v1/locations`
 
@@ -392,6 +450,9 @@ Query: `?page=1&pageSize=20&status=submitted` (`status` optional, one of the 8 l
 ### `GET /v1/categories`, `GET /v1/amenities`, `GET /v1/use-cases`
 
 No authentication. The full lookup list for each, `{ "data": [ { "id": "...", "name": "..." } ] }`.
+`/v1/amenities` rows also carry `kind` (`amenity` | `rule`), `group_name` and `position`, and are
+returned in that order — show the `rule` rows under "Allowed here"/"Location rules" and the
+`amenity` rows grouped by `group_name`.
 No write endpoint — see [`docs/DATABASE.md`](DATABASE.md#categories--amenities--use_cases).
 
 ## Place search (for the apps)
@@ -1216,7 +1277,7 @@ passwords/tokens), `POST /v1/admin/users/:id/suspend` (`{"reason": "..."}`, requ
 the host's currently-published locations only, see `docs/DATABASE.md`), `POST
 /v1/admin/users/:id/restore` (no body).
 
-**Locations** — `GET /v1/admin/locations` (existing endpoint, extended: `?host_id=&search=`), `GET
+**Locations** — `GET /v1/admin/locations` (existing endpoint, extended: `?host_id=&search=`; `search` also matches the listing ID, e.g. `HKLS07`), `GET
 /v1/admin/locations/:id`, `POST /v1/admin/locations/:id/approve` (no body; `submitted`/
 `under_review` → `published` directly), `POST /v1/admin/locations/:id/reject` (`{"reason"}`,
 required; `submitted`/`under_review` → `rejected`), `POST /v1/admin/locations/:id/suspend`

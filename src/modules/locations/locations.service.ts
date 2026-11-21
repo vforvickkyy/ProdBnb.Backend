@@ -7,6 +7,7 @@ import { CreateLocationInput, UpdateLocationInput } from "./locations.schema";
 import { requestableOptions } from "../bookings/pricing";
 
 const FOREIGN_KEY_VIOLATION = "23503";
+const UNIQUE_VIOLATION = "23505";
 
 // base_price_minor_units/currency (Phase 6) are deliberately not selected
 // here anymore — location_pricing (Phase 6A) is the sole pricing source now.
@@ -30,6 +31,8 @@ const LOCATION_COLUMNS = `
   address_line1, address_line2, city, region, country, postal_code, area,
   latitude, longitude, public_latitude, public_longitude, show_exact_location,
   capacity, timezone, instant_booking_enabled, price_on_request,
+  listing_code, area_sqft, set_count, parking_spaces, restroom_count, electricity,
+  permission_needed, permission_details, custom_amenities, custom_rules, props,
   status, moderation_reason, suspended_by_host_suspension, created_at, updated_at
 `;
 
@@ -39,7 +42,7 @@ export const APPROXIMATE_RADIUS_M = 2000;
 const LOCATION_DETAIL_SELECT = `
   ${LOCATION_COLUMNS},
   location_categories ( categories ( id, name ) ),
-  location_amenities ( amenities ( id, name ) ),
+  location_amenities ( amenities ( id, name, kind, group_name, position ) ),
   location_use_cases ( use_cases ( id, name ) ),
   location_media ( id, media_type, storage_key, position, metadata, created_at, updated_at ),
   location_pricing ( booking_type, amount_minor_units, currency, is_active, half_day_duration_hours )
@@ -85,6 +88,18 @@ export interface LocationSummary {
   /** Prices hidden; a booking is a request the host answers with a price. */
   price_on_request: boolean;
   capacity: number | null;
+  /** Internal listing ID (HKLS01). Only the host and the team get it; null for everyone else. */
+  listing_code: string | null;
+  area_sqft: number | null;
+  set_count: number | null;
+  parking_spaces: number | null;
+  restroom_count: number | null;
+  electricity: "included" | "extra" | "not_available" | null;
+  permission_needed: boolean | null;
+  permission_details: string | null;
+  custom_amenities: string[];
+  custom_rules: string[];
+  props: ListingProp[];
   timezone: string;
   instant_booking_enabled: boolean;
   status: string;
@@ -103,6 +118,21 @@ export interface LocationSummary {
 export interface CatalogRef {
   id: string;
   name: string;
+}
+
+/** An amenity or an "allowed here" rule: tick boxes, grouped and in a set order. */
+export interface AmenityRef extends CatalogRef {
+  group_name: string | null;
+  position: number;
+}
+
+/** A prop that comes with the listing, or that the host can provide for an extra price. */
+export interface ListingProp {
+  name: string;
+  kind: "included" | "addon";
+  price_minor_units: number | null;
+  price_unit: "per_booking" | "per_hour" | "per_day" | null;
+  note: string | null;
 }
 
 export interface HostPublicSummary {
@@ -168,7 +198,9 @@ interface RawLocationPricingRow {
 
 export interface LocationDetail extends LocationSummary {
   categories: CatalogRef[];
-  amenities: CatalogRef[];
+  amenities: AmenityRef[];
+  /** The "allowed here" rules the host ticked (outside catering, night shoots...). */
+  rules: AmenityRef[];
   use_cases: CatalogRef[];
   media: PublicMediaItem[];
   host: HostPublicSummary | null;
@@ -206,11 +238,17 @@ function seesEverything(location: Pick<LocationSummary, "host_id">, viewer: Loca
  * "show exact location". A price-on-request listing shows no prices to them.
  */
 export function forViewer<T extends LocationSummary>(location: T, viewer: LocationViewer): T {
-  if (seesEverything(location, viewer) || location.show_exact_location) {
+  if (seesEverything(location, viewer)) {
     return location;
   }
+  // The listing ID is internal: only the host and the team see it, even on a listing whose exact
+  // address is public.
+  const hidden = { ...location, listing_code: null };
+  if (location.show_exact_location) {
+    return hidden;
+  }
   return {
-    ...location,
+    ...hidden,
     address_line1: null,
     address_line2: null,
     postal_code: null,
@@ -226,10 +264,18 @@ function precisionFor(location: LocationSummary, viewer: LocationViewer): Pick<L
 
 interface RawLocationDetailRow extends LocationSummary {
   location_categories: { categories: CatalogRef }[];
-  location_amenities: { amenities: CatalogRef }[];
+  location_amenities: { amenities: AmenityRef & { kind: "amenity" | "rule" } }[];
   location_use_cases: { use_cases: CatalogRef }[];
   location_media: RawLocationMediaRow[];
   location_pricing: RawLocationPricingRow[];
+}
+
+function sortedAmenityRefs(rows: RawLocationDetailRow["location_amenities"], kind: "amenity" | "rule"): AmenityRef[] {
+  return rows
+    .map((r) => r.amenities)
+    .filter((a) => (a.kind ?? "amenity") === kind)
+    .map((a) => ({ id: a.id, name: a.name, group_name: a.group_name ?? null, position: a.position ?? 0 }))
+    .sort((a, b) => a.position - b.position || a.name.localeCompare(b.name));
 }
 
 function flattenDetail(row: RawLocationDetailRow, host: HostPublicSummary | null, viewer: LocationViewer): LocationDetail {
@@ -241,7 +287,8 @@ function flattenDetail(row: RawLocationDetailRow, host: HostPublicSummary | null
     ...forViewer(summary as LocationSummary, viewer),
     ...precisionFor(summary as LocationSummary, viewer),
     categories: location_categories.map((r) => r.categories),
-    amenities: location_amenities.map((r) => r.amenities),
+    amenities: sortedAmenityRefs(location_amenities, "amenity"),
+    rules: sortedAmenityRefs(location_amenities, "rule"),
     use_cases: location_use_cases.map((r) => r.use_cases),
     media: location_media.map(toPublicMediaItem).sort((a, b) => a.position - b.position),
     host,
@@ -399,7 +446,22 @@ async function listLocations(
     query = query.eq("host_id", filters.hostId);
   }
   if (filters.search) {
-    query = query.ilike("title", `%${filters.search}%`);
+    // The title, or the listing ID (HKLS07). The ID column is service-role only, so matching IDs are
+    // looked up with the service role first and fed to the caller's own query as plain ids.
+    const term = filters.search.replace(/[,()%*\\]/g, " ").trim();
+    const { data: byCode, error: codeError } = await adminClient
+      .from("locations")
+      .select("id")
+      .ilike("listing_code", `%${term}%`)
+      .limit(200);
+    if (codeError) {
+      throw codeError;
+    }
+    const codeIds = ((byCode ?? []) as { id: string }[]).map((r) => r.id);
+    query =
+      codeIds.length > 0
+        ? query.or(`title.ilike.%${term}%,id.in.(${codeIds.join(",")})`)
+        : query.ilike("title", `%${filters.search}%`);
   }
 
   const { data, error, count } = await query.order("created_at", { ascending: false }).range(from, to);
@@ -695,7 +757,9 @@ async function replaceTags(
 export async function createLocation(
   supabase: SupabaseClient,
   hostId: string,
-  input: CreateLocationInput
+  // `listing_code` is only ever passed by the team (with the service-role client); hosts get the next
+  // automatic ID from the database.
+  input: CreateLocationInput & { listing_code?: string }
 ): Promise<LocationDetail> {
   const { category_ids, amenity_ids, use_case_ids, ...fields } = input;
 
@@ -706,6 +770,9 @@ export async function createLocation(
     .single();
 
   if (error || !createdRow) {
+    if (error?.code === UNIQUE_VIOLATION) {
+      throw new ConflictError(`The ID ${input.listing_code ?? ""} is already used by another listing.`.replace("  ", " "));
+    }
     throw error ?? new Error("Failed to create location.");
   }
 
@@ -734,8 +801,20 @@ export async function updateLocation(
     throw new ForbiddenError("You do not have permission to modify this location.");
   }
 
-  const { category_ids, amenity_ids, use_case_ids, status, show_exact_location: showExact, ...fields } =
-    input as UpdateLocationInput & { show_exact_location?: boolean };
+  const {
+    category_ids,
+    amenity_ids,
+    use_case_ids,
+    status,
+    show_exact_location: showExact,
+    listing_code: listingCode,
+    ...fields
+  } = input as UpdateLocationInput & { show_exact_location?: boolean };
+
+  // The listing ID is the team's: a host can see it but never change it.
+  if (listingCode !== undefined && !isAdmin) {
+    throw new ForbiddenError("Only the team can change a listing's ID.");
+  }
 
   // Whether the full address and pin show before booking is the team's decision, never the host's.
   if (showExact !== undefined && !isAdmin) {
@@ -781,6 +860,16 @@ export async function updateLocation(
     }
   }
 
+  if (listingCode !== undefined && listingCode !== current.listing_code) {
+    const { error } = await adminClient.from("locations").update({ listing_code: listingCode }).eq("id", locationId);
+    if (error) {
+      if (error.code === UNIQUE_VIOLATION) {
+        throw new ConflictError(`The ID ${listingCode} is already used by another listing.`);
+      }
+      throw error;
+    }
+  }
+
   if (status !== undefined) {
     const { error } = await adminClient.from("locations").update({ status }).eq("id", locationId);
     if (error) {
@@ -816,6 +905,7 @@ export async function updateLocation(
   const changedFields = [
     ...Object.keys(fields),
     ...(showExact !== undefined && showExact !== current.show_exact_location ? ["show_exact_location"] : []),
+    ...(listingCode !== undefined && listingCode !== current.listing_code ? ["listing_code"] : []),
     ...(category_ids !== undefined ? ["category_ids"] : []),
     ...(amenity_ids !== undefined ? ["amenity_ids"] : []),
     ...(use_case_ids !== undefined ? ["use_case_ids"] : []),

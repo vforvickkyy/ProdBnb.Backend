@@ -113,7 +113,15 @@ export async function patchSettingsHandler(req: Request, res: Response): Promise
   const after = await updatePlatformSettings(req.user!.id, patch);
 
   const changes: Record<string, { from: unknown; to: unknown }> = {};
-  for (const key of ["platform_fee_bps", "tax_bps", "unpaid_hold_minutes", "availability_requires_login"] as const) {
+  for (const key of [
+    "platform_fee_bps",
+    "tax_bps",
+    "unpaid_hold_minutes",
+    "availability_requires_login",
+    "listing_id_prefix",
+    "listing_id_digits",
+    "listing_id_next",
+  ] as const) {
     if (patch[key] !== undefined && before[key] !== after[key]) {
       changes[key] = { from: before[key], to: after[key] };
     }
@@ -132,8 +140,15 @@ export async function getCatalogHandler(req: Request, res: Response): Promise<vo
 
 export async function postCatalogItemHandler(req: Request, res: Response): Promise<void> {
   const { kind } = req.valid!.params as CatalogKindParam;
-  const { name, description } = req.valid!.body as CatalogNameInput;
-  created(res, await createCatalogItem(req.user!.id, kind, name, description ?? null));
+  const { name, description, kind: amenityKind, group_name: groupName, position } = req.valid!.body as CatalogNameInput;
+  created(
+    res,
+    await createCatalogItem(req.user!.id, kind, name, description ?? null, {
+      ...(amenityKind !== undefined ? { kind: amenityKind } : {}),
+      ...(groupName !== undefined ? { group_name: groupName } : {}),
+      ...(position !== undefined ? { position } : {}),
+    })
+  );
 }
 
 export async function patchCatalogItemHandler(req: Request, res: Response): Promise<void> {

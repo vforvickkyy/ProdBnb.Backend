@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { createLocationSchema, updateLocationSchema } from "../locations/locations.schema";
+import { createLocationSchema, listingCodeSchema, updateLocationSchema } from "../locations/locations.schema";
 
 const uuid = z.string().uuid();
 
@@ -242,6 +242,15 @@ export const updateSettingsSchema = z
     tax_bps: z.number().int().min(0).max(5000).optional(),
     unpaid_hold_minutes: z.number().int().min(5).max(10080).nullable().optional(),
     availability_requires_login: z.boolean().optional(),
+    /** Listing IDs (HKLS01): capital letters or digits, up to 10. Only affects listings created afterwards. */
+    listing_id_prefix: z
+      .string()
+      .trim()
+      .toUpperCase()
+      .regex(/^[A-Z0-9]{1,10}$/, "Use 1 to 10 capital letters or numbers, for example HKLS.")
+      .optional(),
+    listing_id_digits: z.number().int().min(1).max(8).optional(),
+    listing_id_next: z.number().int().min(1).max(99_999_999).optional(),
     reason: z.string().trim().min(1).max(500).optional(),
   })
   .strict()
@@ -250,7 +259,10 @@ export const updateSettingsSchema = z
       d.platform_fee_bps !== undefined ||
       d.tax_bps !== undefined ||
       d.unpaid_hold_minutes !== undefined ||
-      d.availability_requires_login !== undefined,
+      d.availability_requires_login !== undefined ||
+      d.listing_id_prefix !== undefined ||
+      d.listing_id_digits !== undefined ||
+      d.listing_id_next !== undefined,
     {
       message: "Provide at least one setting to change.",
     }
@@ -266,15 +278,30 @@ export const catalogItemParamSchema = z.object({ kind: catalogKindSchema, itemId
 export type CatalogItemParam = z.infer<typeof catalogItemParamSchema>;
 const catalogDescription = z.string().trim().max(500).nullable();
 
+const amenityExtras = {
+  /** Amenities only: "amenity" (a tick box under Amenities) or "rule" (a tick box under "Allowed here"). */
+  kind: z.enum(["amenity", "rule"]).optional(),
+  group_name: z.string().trim().max(60).nullable().optional(),
+  position: z.number().int().min(0).max(10_000).optional(),
+};
+
 export const catalogNameSchema = z
-  .object({ name: z.string().trim().min(1).max(80), description: catalogDescription.optional() })
+  .object({ name: z.string().trim().min(1).max(80), description: catalogDescription.optional(), ...amenityExtras })
   .strict();
 export type CatalogNameInput = z.infer<typeof catalogNameSchema>;
 
 export const catalogUpdateSchema = z
-  .object({ name: z.string().trim().min(1).max(80).optional(), description: catalogDescription.optional() })
+  .object({ name: z.string().trim().min(1).max(80).optional(), description: catalogDescription.optional(), ...amenityExtras })
   .strict()
-  .refine((d) => d.name !== undefined || d.description !== undefined, { message: "Provide name and/or description." });
+  .refine(
+    (d) =>
+      d.name !== undefined ||
+      d.description !== undefined ||
+      d.kind !== undefined ||
+      d.group_name !== undefined ||
+      d.position !== undefined,
+    { message: "Provide something to change." }
+  );
 export type CatalogUpdateInput = z.infer<typeof catalogUpdateSchema>;
 
 // -- Cover images (catalog items + collections) ------------------------------------
@@ -429,6 +456,8 @@ export const adminCreateLocationSchema = createLocationSchema
     grant_host_role: z.boolean().default(false),
     status: z.enum(["draft", "published"]).default("draft"),
     show_exact_location: z.boolean().optional(),
+    /** Give the new listing a specific ID instead of the next automatic one. */
+    listing_code: listingCodeSchema.optional(),
   })
   .strict();
 export type AdminCreateLocationInput = z.infer<typeof adminCreateLocationSchema>;

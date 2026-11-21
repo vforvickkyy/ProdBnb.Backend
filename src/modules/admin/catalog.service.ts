@@ -30,9 +30,15 @@ export interface AdminCatalogItem {
   cover_url: string | null;
   created_at: string;
   usage_count: number;
+  /** Amenities only: a tick-box amenity, or an "allowed here" rule; and where it sits on the listing. */
+  kind?: "amenity" | "rule";
+  group_name?: string | null;
+  position?: number;
 }
 
-const ITEM_COLUMNS = "id, name, description, cover_storage_key, created_at";
+const BASE_COLUMNS = "id, name, description, cover_storage_key, created_at";
+/** Amenities carry a kind, a group and an order as well. */
+const columnsFor = (kind: CatalogKind): string => (kind === "amenities" ? `${BASE_COLUMNS}, kind, group_name, position` : BASE_COLUMNS);
 
 interface CatalogRow {
   id: string;
@@ -40,6 +46,16 @@ interface CatalogRow {
   description: string | null;
   cover_storage_key: string | null;
   created_at: string;
+  kind?: "amenity" | "rule";
+  group_name?: string | null;
+  position?: number;
+}
+
+/** The extra fields an amenity can be created or edited with. */
+export interface AmenityExtras {
+  kind?: "amenity" | "rule";
+  group_name?: string | null;
+  position?: number;
 }
 
 function toItem(row: CatalogRow, usage: number): AdminCatalogItem {
@@ -50,6 +66,7 @@ function toItem(row: CatalogRow, usage: number): AdminCatalogItem {
     cover_url: row.cover_storage_key ? publicUrlFor(row.cover_storage_key) : null,
     created_at: row.created_at,
     usage_count: usage,
+    ...(row.kind !== undefined ? { kind: row.kind, group_name: row.group_name ?? null, position: row.position ?? 0 } : {}),
   };
 }
 
@@ -67,7 +84,9 @@ async function usageCount(kind: CatalogKind, id: string): Promise<number> {
 export async function listCatalog(kind: CatalogKind): Promise<AdminCatalogItem[]> {
   const { table, join, fk } = TABLES[kind];
   const [{ data: items, error }, { data: links, error: linkError }] = await Promise.all([
-    adminClient.from(table).select(ITEM_COLUMNS).order("name"),
+    kind === "amenities"
+      ? adminClient.from(table).select(columnsFor(kind)).order("kind").order("position").order("name")
+      : adminClient.from(table).select(columnsFor(kind)).order("name"),
     adminClient.from(join).select(fk),
   ]);
   if (error) {
@@ -83,30 +102,31 @@ export async function listCatalog(kind: CatalogKind): Promise<AdminCatalogItem[]
       counts.set(id, (counts.get(id) ?? 0) + 1);
     }
   }
-  return ((items ?? []) as CatalogRow[]).map((item) => toItem(item, counts.get(item.id) ?? 0));
+  return ((items ?? []) as unknown as CatalogRow[]).map((item) => toItem(item, counts.get(item.id) ?? 0));
 }
 
 async function getItem(kind: CatalogKind, id: string): Promise<CatalogRow> {
-  const { data, error } = await adminClient.from(TABLES[kind].table).select(ITEM_COLUMNS).eq("id", id).maybeSingle();
+  const { data, error } = await adminClient.from(TABLES[kind].table).select(columnsFor(kind)).eq("id", id).maybeSingle();
   if (error) {
     throw error;
   }
   if (!data) {
     throw new NotFoundError("Catalog item not found.");
   }
-  return data as CatalogRow;
+  return data as unknown as CatalogRow;
 }
 
 export async function createCatalogItem(
   actorId: string,
   kind: CatalogKind,
   name: string,
-  description: string | null = null
+  description: string | null = null,
+  extras: AmenityExtras = {}
 ): Promise<AdminCatalogItem> {
   const { data, error } = await adminClient
     .from(TABLES[kind].table)
-    .insert({ name, description })
-    .select(ITEM_COLUMNS)
+    .insert({ name, description, ...(kind === "amenities" ? extras : {}) })
+    .select(columnsFor(kind))
     .single();
   if (error) {
     if (error.code === UNIQUE_VIOLATION) {
@@ -114,18 +134,22 @@ export async function createCatalogItem(
     }
     throw error;
   }
-  await writeAuditLog(actorId, "ADMIN_CREATED_CATALOG_ITEM", "catalog_item", data.id, null, { kind, name });
-  return toItem(data as CatalogRow, 0);
+  await writeAuditLog(actorId, "ADMIN_CREATED_CATALOG_ITEM", "catalog_item", (data as unknown as CatalogRow).id, null, { kind, name });
+  return toItem(data as unknown as CatalogRow, 0);
 }
 
 export async function renameCatalogItem(
   actorId: string,
   kind: CatalogKind,
   id: string,
-  patch: { name?: string; description?: string | null }
+  patch: { name?: string; description?: string | null } & AmenityExtras
 ): Promise<AdminCatalogItem> {
   const before = await getItem(kind, id);
-  const { data, error } = await adminClient.from(TABLES[kind].table).update(patch).eq("id", id).select(ITEM_COLUMNS).single();
+  // kind / group / position only exist on amenities.
+  const { kind: amenityKind, group_name: groupName, position, ...plain } = patch;
+  const update = kind === "amenities" ? patch : plain;
+  const { data, error } = await adminClient.from(TABLES[kind].table).update(update).eq("id", id).select(columnsFor(kind)).single();
+  void amenityKind; void groupName; void position;
   if (error) {
     if (error.code === UNIQUE_VIOLATION) {
       throw new ConflictError(`"${patch.name ?? before.name}" already exists.`);
@@ -138,7 +162,7 @@ export async function renameCatalogItem(
     new_name: patch.name ?? before.name,
     description_changed: patch.description !== undefined,
   });
-  return toItem(data as CatalogRow, await usageCount(kind, id));
+  return toItem(data as unknown as CatalogRow, await usageCount(kind, id));
 }
 
 export async function deleteCatalogItem(actorId: string, kind: CatalogKind, id: string): Promise<void> {
@@ -181,7 +205,7 @@ export async function setCatalogCover(actorId: string, kind: CatalogKind, id: st
     .from(TABLES[kind].table)
     .update({ cover_storage_key: storageKey })
     .eq("id", id)
-    .select(ITEM_COLUMNS)
+    .select(columnsFor(kind))
     .single();
   if (error) {
     throw error;
@@ -190,7 +214,7 @@ export async function setCatalogCover(actorId: string, kind: CatalogKind, id: st
     await discardCover(before.cover_storage_key);
   }
   await writeAuditLog(actorId, "ADMIN_UPDATED_CATALOG_COVER", "catalog_item", id, null, { kind, change: "set" });
-  return toItem(data as CatalogRow, await usageCount(kind, id));
+  return toItem(data as unknown as CatalogRow, await usageCount(kind, id));
 }
 
 export async function removeCatalogCover(actorId: string, kind: CatalogKind, id: string): Promise<AdminCatalogItem> {
@@ -199,14 +223,14 @@ export async function removeCatalogCover(actorId: string, kind: CatalogKind, id:
     .from(TABLES[kind].table)
     .update({ cover_storage_key: null })
     .eq("id", id)
-    .select(ITEM_COLUMNS)
+    .select(columnsFor(kind))
     .single();
   if (error) {
     throw error;
   }
   await discardCover(before.cover_storage_key);
   await writeAuditLog(actorId, "ADMIN_UPDATED_CATALOG_COVER", "catalog_item", id, null, { kind, change: "removed" });
-  return toItem(data as CatalogRow, await usageCount(kind, id));
+  return toItem(data as unknown as CatalogRow, await usageCount(kind, id));
 }
 
 // ============================================================================

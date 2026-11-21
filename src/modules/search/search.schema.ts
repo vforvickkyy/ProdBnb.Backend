@@ -8,7 +8,12 @@ const commaSeparatedUuids = (max: number) =>
     z.array(uuid).max(max)
   );
 
-export const sortSchema = z.enum(["newest", "relevant", "nearest"]);
+export const sortSchema = z.enum(["newest", "relevant", "nearest", "price_asc", "price_desc"]);
+
+/** "true" / "1" in a query string. Anything else (or leaving it out) means "don't filter". */
+const flag = z
+  .enum(["true", "1", "false", "0"])
+  .transform((v) => v === "true" || v === "1");
 
 export const searchLocationsQuerySchema = z
   .object({
@@ -34,6 +39,17 @@ export const searchLocationsQuerySchema = z
     south: z.coerce.number().min(-90).max(90).optional(),
     east: z.coerce.number().min(-180).max(180).optional(),
     west: z.coerce.number().min(-180).max(180).optional(),
+    /** Details: at least this many parking spaces / square feet / restrooms / sets. */
+    parking_min: z.coerce.number().int().min(0).max(1000).optional(),
+    area_min: z.coerce.number().int().min(1).max(10_000_000).optional(),
+    restrooms_min: z.coerce.number().int().min(0).max(100).optional(),
+    sets_min: z.coerce.number().int().min(0).max(200).optional(),
+    /** Only listings that say electricity is included in the price. */
+    electricity_included: flag.optional(),
+    /** Only listings that say no permission is needed. */
+    no_permission: flag.optional(),
+    /** Only listings that list props. */
+    has_props: flag.optional(),
     sort: sortSchema.optional(),
     page: z.coerce.number().int().min(1).default(1),
     pageSize: z.coerce.number().int().min(1).max(100).default(20),

@@ -19,11 +19,16 @@ export interface PlatformSettings {
   unpaid_hold_minutes: number | null;
   /** Console 3: availability is shown to signed-in people only (GET /v1/locations/:id/availability). */
   availability_requires_login: boolean;
+  /** Listing IDs: the letters in front (HKLS01), the minimum digits, and the number the next listing gets. */
+  listing_id_prefix: string;
+  listing_id_digits: number;
+  listing_id_next: number;
   updated_by: string | null;
   updated_at: string;
 }
 
-const SETTINGS_COLUMNS = "id, platform_fee_bps, tax_bps, unpaid_hold_minutes, availability_requires_login, updated_by, updated_at";
+const SETTINGS_COLUMNS =
+  "id, platform_fee_bps, tax_bps, unpaid_hold_minutes, availability_requires_login, listing_id_prefix, listing_id_digits, listing_id_next, updated_by, updated_at";
 const CACHE_TTL_MS = 30_000;
 
 let cached: { value: PlatformSettings; at: number } | null = null;
@@ -34,6 +39,9 @@ const DEFAULTS: Omit<PlatformSettings, "id" | "updated_at"> = {
   tax_bps: 0,
   unpaid_hold_minutes: null,
   availability_requires_login: true,
+  listing_id_prefix: "HKLS",
+  listing_id_digits: 2,
+  listing_id_next: 1,
   updated_by: null,
 };
 
@@ -61,6 +69,14 @@ export interface PlatformSettingsPatch {
   tax_bps?: number;
   unpaid_hold_minutes?: number | null;
   availability_requires_login?: boolean;
+  listing_id_prefix?: string;
+  listing_id_digits?: number;
+  listing_id_next?: number;
+}
+
+/** What a listing ID looks like for a given number, e.g. ("HKLS", 2, 7) -> "HKLS07". Mirrors next_listing_code() in the database. */
+export function formatListingCode(prefix: string, digits: number, n: number): string {
+  return `${prefix}${String(n).padStart(digits, "0")}`;
 }
 
 export async function updatePlatformSettings(actorId: string, patch: PlatformSettingsPatch): Promise<PlatformSettings> {

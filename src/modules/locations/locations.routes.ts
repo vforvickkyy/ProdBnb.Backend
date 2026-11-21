@@ -4,7 +4,7 @@ import { optionalAuth } from "../../middleware/optionalAuth";
 import { requireRole } from "../../middleware/requireRole";
 import { requirePermission } from "../admin/permissions";
 import { validate } from "../../middleware/validate";
-import { getSearchResults } from "../search/search.controller";
+import { getCityPages, getSearchResults } from "../search/search.controller";
 import { searchLocationsQuerySchema } from "../search/search.schema";
 import {
   deleteLocationHandler,
@@ -29,6 +29,10 @@ export const locationsRouter = Router();
 // anonymous client — a host's own drafts never leak into this just because
 // they happen to be signed in while browsing.
 locationsRouter.get("/locations", validate({ query: searchLocationsQuerySchema }), getSearchResults);
+
+// The cities (and the shoot types in each) that have published listings: what the website's city pages
+// are built from.
+locationsRouter.get("/cities", getCityPages);
 
 // A host's own listings, any status.
 locationsRouter.get("/me/locations", requireAuth, validate({ query: listLocationsQuerySchema }), getMyLocations);

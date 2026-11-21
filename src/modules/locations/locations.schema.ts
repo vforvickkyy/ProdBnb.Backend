@@ -33,6 +33,93 @@ const areaSchema = z
   .nullable()
   .optional();
 
+const blankToNull = (v: string | null | undefined): string | null => {
+  if (v === undefined || v === null) return null;
+  const trimmed = v.trim();
+  return trimmed === "" ? null : trimmed;
+};
+
+/** The internal listing ID (HKLS01): capital letters, numbers and hyphens, 2 to 20 characters. Team only. */
+export const listingCodeSchema = z
+  .string()
+  .trim()
+  .toUpperCase()
+  .regex(/^[A-Z0-9][A-Z0-9-]{1,19}$/, "Use 2 to 20 capital letters, numbers or hyphens, for example HKLS07.");
+
+export const propKindSchema = z.enum(["included", "addon"]);
+export const propPriceUnitSchema = z.enum(["per_booking", "per_hour", "per_day"]);
+
+/**
+ * A prop that comes with the listing ("included") or that the host can provide for an extra price
+ * ("addon"). An add-on may leave the price out ("ask the host"). Normalised so the stored JSON always
+ * has the same shape.
+ */
+export const propSchema = z
+  .object({
+    name: z.string().trim().min(1).max(80),
+    kind: propKindSchema,
+    price_minor_units: z.number().int().min(0).max(100_000_000).nullable().optional(),
+    price_unit: propPriceUnitSchema.nullable().optional(),
+    note: z.string().trim().max(200).nullable().optional(),
+  })
+  .strict()
+  .transform((p) => {
+    const hasPrice = p.kind === "addon" && p.price_minor_units !== null && p.price_minor_units !== undefined;
+    return {
+      name: p.name,
+      kind: p.kind,
+      price_minor_units: hasPrice ? (p.price_minor_units as number) : null,
+      price_unit: hasPrice ? (p.price_unit ?? "per_booking") : null,
+      note: blankToNull(p.note),
+    };
+  });
+export type PropInput = z.infer<typeof propSchema>;
+
+/** At most 40 props; the same name can't be listed twice. */
+export const propsSchema = z
+  .array(propSchema)
+  .max(40)
+  .refine((items) => new Set(items.map((p) => p.name.toLowerCase())).size === items.length, {
+    message: "Each prop can only be listed once.",
+  });
+
+/** Free-text points a host or the team adds next to the tick boxes (extra amenities, house rules). */
+export const customPointsSchema = z
+  .array(z.string().trim().min(1).max(120))
+  .max(20)
+  .transform((items) => {
+    const seen = new Set<string>();
+    return items.filter((item) => {
+      const key = item.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  });
+
+/**
+ * What a production crew asks about. Max crew size is `capacity`. Every field can be cleared with
+ * null; leaving it out leaves it as it is.
+ */
+export const listingDetailFields = {
+  area_sqft: z.number().int().min(1).max(10_000_000).nullable().optional(),
+  set_count: z.number().int().min(0).max(200).nullable().optional(),
+  parking_spaces: z.number().int().min(0).max(1000).nullable().optional(),
+  restroom_count: z.number().int().min(0).max(100).nullable().optional(),
+  electricity: z.enum(["included", "extra", "not_available"]).nullable().optional(),
+  permission_needed: z.boolean().nullable().optional(),
+  permission_details: z
+    .string()
+    .trim()
+    .max(500)
+    .nullable()
+    .optional()
+    .transform((v) => (v === undefined ? undefined : blankToNull(v))),
+  custom_amenities: customPointsSchema.optional(),
+  custom_rules: customPointsSchema.optional(),
+  props: propsSchema.optional(),
+};
+
 export const locationStatusSchema = z.enum([
   "draft",
   "submitted",
@@ -62,8 +149,9 @@ export const createLocationSchema = z
     area: areaSchema,
     /** Hide prices: bookings become requests the host answers with a price. */
     price_on_request: z.boolean().optional(),
+    ...listingDetailFields,
     category_ids: z.array(uuid).max(20).default([]),
-    amenity_ids: z.array(uuid).max(30).default([]),
+    amenity_ids: z.array(uuid).max(60).default([]),
     use_case_ids: z.array(uuid).max(10).default([]),
   })
   .strict();
@@ -87,8 +175,11 @@ export const updateLocationSchema = z
     instant_booking_enabled: z.boolean().optional(),
     area: areaSchema,
     price_on_request: z.boolean().optional(),
+    ...listingDetailFields,
+    /** Team only (403 for hosts). Must be unused by any other listing. */
+    listing_code: listingCodeSchema.optional(),
     category_ids: z.array(uuid).max(20).optional(),
-    amenity_ids: z.array(uuid).max(30).optional(),
+    amenity_ids: z.array(uuid).max(60).optional(),
     use_case_ids: z.array(uuid).max(10).optional(),
     status: locationStatusSchema.optional(),
   })

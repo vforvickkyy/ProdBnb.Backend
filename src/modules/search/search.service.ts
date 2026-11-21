@@ -39,6 +39,13 @@ interface SearchLocationRow {
   longitude: number | null;
   exact_location: boolean;
   capacity: number | null;
+  area_sqft: number | null;
+  set_count: number | null;
+  parking_spaces: number | null;
+  restroom_count: number | null;
+  electricity: "included" | "extra" | "not_available" | null;
+  permission_needed: boolean | null;
+  props_count: number | null;
   distance_km: number | null;
   categories: CatalogRef[];
   use_cases: CatalogRef[];
@@ -67,6 +74,14 @@ export interface SearchLocationCard {
   location_precision: "exact" | "approximate";
   approximate_radius_m: number | null;
   capacity: number | null;
+  /** Quick facts for the card. Each is null when the host hasn't said. */
+  area_sqft: number | null;
+  set_count: number | null;
+  parking_spaces: number | null;
+  restroom_count: number | null;
+  electricity: "included" | "extra" | "not_available" | null;
+  permission_needed: boolean | null;
+  props_count: number;
   categories: CatalogRef[];
   use_cases: CatalogRef[];
   primary_media_url: string | null;
@@ -96,6 +111,13 @@ function toCard(row: SearchLocationRow): SearchLocationCard {
     location_precision: row.exact_location ? "exact" : "approximate",
     approximate_radius_m: row.exact_location ? null : APPROXIMATE_RADIUS_M,
     capacity: row.capacity,
+    area_sqft: row.area_sqft ?? null,
+    set_count: row.set_count ?? null,
+    parking_spaces: row.parking_spaces ?? null,
+    restroom_count: row.restroom_count ?? null,
+    electricity: row.electricity ?? null,
+    permission_needed: row.permission_needed ?? null,
+    props_count: row.props_count ?? 0,
     categories: row.categories,
     use_cases: row.use_cases,
     primary_media_url: row.primary_media_key ? publicUrlFor(row.primary_media_key) : null,
@@ -106,6 +128,30 @@ function toCard(row: SearchLocationRow): SearchLocationCard {
     created_at: row.created_at,
     ...(row.distance_km !== null ? { distance_km: row.distance_km } : {}),
   };
+}
+
+/** A city that has published listings, with the shoot types available there. */
+export interface CityPage {
+  city: string;
+  listing_count: number;
+  shoots: { id: string; name: string; listing_count: number }[];
+}
+
+/**
+ * The cities (and the shoot types in each) that have published listings. The website builds its city
+ * pages from this, and only for places that have something to show. "Mohali" and "Mohali, Punjab" are
+ * one city (the database groups on the part before the first comma).
+ */
+export async function listCityPages(): Promise<CityPage[]> {
+  const { data, error } = await anonClient.rpc("published_city_pages");
+  if (error) {
+    throw error;
+  }
+  return ((data ?? []) as { city: string; listing_count: number | string; shoots: CityPage["shoots"] }[]).map((row) => ({
+    city: row.city,
+    listing_count: Number(row.listing_count),
+    shoots: (row.shoots ?? []).map((s) => ({ id: s.id, name: s.name, listing_count: Number(s.listing_count) })),
+  }));
 }
 
 export async function searchLocations(query: SearchLocationsQuery): Promise<SearchResult> {
@@ -133,6 +179,13 @@ export async function searchLocations(query: SearchLocationsQuery): Promise<Sear
     _page_size: query.pageSize,
     _price_min: query.price_min ?? null,
     _price_max: query.price_max ?? null,
+    _parking_min: query.parking_min ?? null,
+    _area_min: query.area_min ?? null,
+    _restrooms_min: query.restrooms_min ?? null,
+    _sets_min: query.sets_min ?? null,
+    _electricity_included: query.electricity_included ?? null,
+    _no_permission: query.no_permission ?? null,
+    _has_props: query.has_props ?? null,
   });
 
   if (error) {
