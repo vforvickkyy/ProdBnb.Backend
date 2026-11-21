@@ -444,6 +444,45 @@
           }
         ]
       },
+      "ListingProp": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "included",
+              "addon"
+            ]
+          },
+          "price_minor_units": {
+            "type": "integer",
+            "nullable": true
+          },
+          "price_unit": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "per_booking",
+              "per_hour",
+              "per_day"
+            ]
+          },
+          "note": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "name",
+          "kind",
+          "price_minor_units",
+          "price_unit",
+          "note"
+        ]
+      },
       "StartingPrice": {
         "type": "object",
         "nullable": true,
@@ -539,6 +578,61 @@
           "price_on_request": {
             "type": "boolean"
           },
+          "listing_code": {
+            "type": "string",
+            "nullable": true
+          },
+          "area_sqft": {
+            "type": "integer",
+            "nullable": true
+          },
+          "set_count": {
+            "type": "integer",
+            "nullable": true
+          },
+          "parking_spaces": {
+            "type": "integer",
+            "nullable": true
+          },
+          "restroom_count": {
+            "type": "integer",
+            "nullable": true
+          },
+          "electricity": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "included",
+              "extra",
+              "not_available"
+            ]
+          },
+          "permission_needed": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "permission_details": {
+            "type": "string",
+            "nullable": true
+          },
+          "custom_amenities": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "custom_rules": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "props": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ListingProp"
+            }
+          },
           "status": {
             "type": "string",
             "enum": [
@@ -622,6 +716,17 @@
           "public_longitude",
           "show_exact_location",
           "price_on_request",
+          "listing_code",
+          "area_sqft",
+          "set_count",
+          "parking_spaces",
+          "restroom_count",
+          "electricity",
+          "permission_needed",
+          "permission_details",
+          "custom_amenities",
+          "custom_rules",
+          "props",
           "status",
           "moderation_reason",
           "suspended_by_host_suspension",
@@ -647,6 +752,31 @@
         "required": [
           "id",
           "name"
+        ]
+      },
+      "AmenityRef": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "group_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "position": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "group_name",
+          "position"
         ]
       },
       "PublicMediaItem": {
@@ -810,6 +940,61 @@
           "price_on_request": {
             "type": "boolean"
           },
+          "listing_code": {
+            "type": "string",
+            "nullable": true
+          },
+          "area_sqft": {
+            "type": "integer",
+            "nullable": true
+          },
+          "set_count": {
+            "type": "integer",
+            "nullable": true
+          },
+          "parking_spaces": {
+            "type": "integer",
+            "nullable": true
+          },
+          "restroom_count": {
+            "type": "integer",
+            "nullable": true
+          },
+          "electricity": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "included",
+              "extra",
+              "not_available"
+            ]
+          },
+          "permission_needed": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "permission_details": {
+            "type": "string",
+            "nullable": true
+          },
+          "custom_amenities": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "custom_rules": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "props": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ListingProp"
+            }
+          },
           "status": {
             "type": "string",
             "enum": [
@@ -847,7 +1032,13 @@
           "amenities": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/CatalogRef"
+              "$ref": "#/components/schemas/AmenityRef"
+            }
+          },
+          "rules": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AmenityRef"
             }
           },
           "use_cases": {
@@ -922,6 +1113,17 @@
           "public_longitude",
           "show_exact_location",
           "price_on_request",
+          "listing_code",
+          "area_sqft",
+          "set_count",
+          "parking_spaces",
+          "restroom_count",
+          "electricity",
+          "permission_needed",
+          "permission_details",
+          "custom_amenities",
+          "custom_rules",
+          "props",
           "status",
           "moderation_reason",
           "suspended_by_host_suspension",
@@ -929,6 +1131,7 @@
           "updated_at",
           "categories",
           "amenities",
+          "rules",
           "use_cases",
           "media",
           "host",
@@ -1832,6 +2035,15 @@
           "availability_requires_login": {
             "type": "boolean"
           },
+          "listing_id_prefix": {
+            "type": "string"
+          },
+          "listing_id_digits": {
+            "type": "integer"
+          },
+          "listing_id_next": {
+            "type": "integer"
+          },
           "updated_by": {
             "type": "string",
             "nullable": true,
@@ -1848,6 +2060,9 @@
           "tax_bps",
           "unpaid_hold_minutes",
           "availability_requires_login",
+          "listing_id_prefix",
+          "listing_id_digits",
+          "listing_id_next",
           "updated_by",
           "updated_at"
         ]
@@ -2290,6 +2505,20 @@
             "format": "date-time"
           },
           "usage_count": {
+            "type": "integer"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "amenity",
+              "rule"
+            ]
+          },
+          "group_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "position": {
             "type": "integer"
           }
         },
@@ -6368,6 +6597,112 @@
                   "price_on_request": {
                     "type": "boolean"
                   },
+                  "area_sqft": {
+                    "type": "integer",
+                    "nullable": true,
+                    "minimum": 1,
+                    "maximum": 10000000
+                  },
+                  "set_count": {
+                    "type": "integer",
+                    "nullable": true,
+                    "minimum": 0,
+                    "maximum": 200
+                  },
+                  "parking_spaces": {
+                    "type": "integer",
+                    "nullable": true,
+                    "minimum": 0,
+                    "maximum": 1000
+                  },
+                  "restroom_count": {
+                    "type": "integer",
+                    "nullable": true,
+                    "minimum": 0,
+                    "maximum": 100
+                  },
+                  "electricity": {
+                    "type": "string",
+                    "nullable": true,
+                    "enum": [
+                      "included",
+                      "extra",
+                      "not_available"
+                    ]
+                  },
+                  "permission_needed": {
+                    "type": "boolean",
+                    "nullable": true
+                  },
+                  "permission_details": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 500
+                  },
+                  "custom_amenities": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 120
+                    },
+                    "maxItems": 20
+                  },
+                  "custom_rules": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 120
+                    },
+                    "maxItems": 20
+                  },
+                  "props": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 80
+                        },
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "included",
+                            "addon"
+                          ]
+                        },
+                        "price_minor_units": {
+                          "type": "integer",
+                          "nullable": true,
+                          "minimum": 0,
+                          "maximum": 100000000
+                        },
+                        "price_unit": {
+                          "type": "string",
+                          "nullable": true,
+                          "enum": [
+                            "per_booking",
+                            "per_hour",
+                            "per_day"
+                          ]
+                        },
+                        "note": {
+                          "type": "string",
+                          "nullable": true,
+                          "maxLength": 200
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "kind"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "maxItems": 40
+                  },
                   "category_ids": {
                     "type": "array",
                     "items": {
@@ -6383,7 +6718,7 @@
                       "type": "string",
                       "format": "uuid"
                     },
-                    "maxItems": 30,
+                    "maxItems": 60,
                     "default": []
                   },
                   "use_case_ids": {
@@ -6413,6 +6748,10 @@
                   },
                   "show_exact_location": {
                     "type": "boolean"
+                  },
+                  "listing_code": {
+                    "type": "string",
+                    "pattern": "^[A-Z0-9][A-Z0-9-]{1,19}$"
                   }
                 },
                 "required": [
@@ -6616,6 +6955,116 @@
                   "price_on_request": {
                     "type": "boolean"
                   },
+                  "area_sqft": {
+                    "type": "integer",
+                    "nullable": true,
+                    "minimum": 1,
+                    "maximum": 10000000
+                  },
+                  "set_count": {
+                    "type": "integer",
+                    "nullable": true,
+                    "minimum": 0,
+                    "maximum": 200
+                  },
+                  "parking_spaces": {
+                    "type": "integer",
+                    "nullable": true,
+                    "minimum": 0,
+                    "maximum": 1000
+                  },
+                  "restroom_count": {
+                    "type": "integer",
+                    "nullable": true,
+                    "minimum": 0,
+                    "maximum": 100
+                  },
+                  "electricity": {
+                    "type": "string",
+                    "nullable": true,
+                    "enum": [
+                      "included",
+                      "extra",
+                      "not_available"
+                    ]
+                  },
+                  "permission_needed": {
+                    "type": "boolean",
+                    "nullable": true
+                  },
+                  "permission_details": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 500
+                  },
+                  "custom_amenities": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 120
+                    },
+                    "maxItems": 20
+                  },
+                  "custom_rules": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 120
+                    },
+                    "maxItems": 20
+                  },
+                  "props": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "minLength": 1,
+                          "maxLength": 80
+                        },
+                        "kind": {
+                          "type": "string",
+                          "enum": [
+                            "included",
+                            "addon"
+                          ]
+                        },
+                        "price_minor_units": {
+                          "type": "integer",
+                          "nullable": true,
+                          "minimum": 0,
+                          "maximum": 100000000
+                        },
+                        "price_unit": {
+                          "type": "string",
+                          "nullable": true,
+                          "enum": [
+                            "per_booking",
+                            "per_hour",
+                            "per_day"
+                          ]
+                        },
+                        "note": {
+                          "type": "string",
+                          "nullable": true,
+                          "maxLength": 200
+                        }
+                      },
+                      "required": [
+                        "name",
+                        "kind"
+                      ],
+                      "additionalProperties": false
+                    },
+                    "maxItems": 40
+                  },
+                  "listing_code": {
+                    "type": "string",
+                    "pattern": "^[A-Z0-9][A-Z0-9-]{1,19}$"
+                  },
                   "category_ids": {
                     "type": "array",
                     "items": {
@@ -6630,7 +7079,7 @@
                       "type": "string",
                       "format": "uuid"
                     },
-                    "maxItems": 30
+                    "maxItems": 60
                   },
                   "use_case_ids": {
                     "type": "array",
@@ -8501,6 +8950,20 @@
                   "availability_requires_login": {
                     "type": "boolean"
                   },
+                  "listing_id_prefix": {
+                    "type": "string",
+                    "pattern": "^[A-Z0-9]{1,10}$"
+                  },
+                  "listing_id_digits": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 8
+                  },
+                  "listing_id_next": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 99999999
+                  },
                   "reason": {
                     "type": "string",
                     "minLength": 1,
@@ -9180,6 +9643,23 @@
                     "type": "string",
                     "nullable": true,
                     "maxLength": 500
+                  },
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "amenity",
+                      "rule"
+                    ]
+                  },
+                  "group_name": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 60
+                  },
+                  "position": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 10000
                   }
                 },
                 "required": [
@@ -9276,6 +9756,23 @@
                     "type": "string",
                     "nullable": true,
                     "maxLength": 500
+                  },
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "amenity",
+                      "rule"
+                    ]
+                  },
+                  "group_name": {
+                    "type": "string",
+                    "nullable": true,
+                    "maxLength": 60
+                  },
+                  "position": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 10000
                   }
                 },
                 "additionalProperties": false

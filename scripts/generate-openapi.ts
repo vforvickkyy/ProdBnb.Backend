@@ -200,6 +200,36 @@ const nameRefSchema = z
 
 const catalogRefSchema = z.object({ id: z.string().uuid(), name: z.string() }).openapi("CatalogRef");
 
+const amenityRefSchema = z
+  .object({ id: z.string().uuid(), name: z.string(), group_name: z.string().nullable(), position: z.number().int() })
+  .openapi("AmenityRef");
+
+const listingPropSchema = z
+  .object({
+    name: z.string(),
+    kind: z.enum(["included", "addon"]),
+    price_minor_units: z.number().int().nullable(),
+    price_unit: z.enum(["per_booking", "per_hour", "per_day"]).nullable(),
+    note: z.string().nullable(),
+  })
+  .openapi("ListingProp");
+
+/** The structured details a host or the team fills in (November 2026). */
+const listingDetailShape = {
+  /** The internal listing ID (HKLS01): only the host and the team get it. */
+  listing_code: z.string().nullable(),
+  area_sqft: z.number().int().nullable(),
+  set_count: z.number().int().nullable(),
+  parking_spaces: z.number().int().nullable(),
+  restroom_count: z.number().int().nullable(),
+  electricity: z.enum(["included", "extra", "not_available"]).nullable(),
+  permission_needed: z.boolean().nullable(),
+  permission_details: z.string().nullable(),
+  custom_amenities: z.array(z.string()),
+  custom_rules: z.array(z.string()),
+  props: z.array(listingPropSchema),
+};
+
 const publicMediaItemSchema = z
   .object({
     id: z.string().uuid(),
@@ -394,13 +424,15 @@ const locationDetailSchema = z
     public_longitude: z.number().nullable(),
     show_exact_location: z.boolean(),
     price_on_request: z.boolean(),
+    ...listingDetailShape,
     status: z.enum(["draft", "submitted", "under_review", "approved", "published", "rejected", "suspended", "archived"]),
     moderation_reason: z.string().nullable(),
     suspended_by_host_suspension: z.boolean(),
     created_at: z.string().datetime(),
     updated_at: z.string().datetime(),
     categories: z.array(catalogRefSchema),
-    amenities: z.array(catalogRefSchema),
+    amenities: z.array(amenityRefSchema),
+    rules: z.array(amenityRefSchema),
     use_cases: z.array(catalogRefSchema),
     media: z.array(publicMediaItemSchema),
     host: hostPublicSummarySchema,
@@ -438,6 +470,7 @@ const adminLocationListItemSchema = z
     public_longitude: z.number().nullable(),
     show_exact_location: z.boolean(),
     price_on_request: z.boolean(),
+    ...listingDetailShape,
     status: z.enum(["draft", "submitted", "under_review", "approved", "published", "rejected", "suspended", "archived"]),
     moderation_reason: z.string().nullable(),
     suspended_by_host_suspension: z.boolean(),
@@ -841,6 +874,10 @@ const platformSettingsSchema = z
     tax_bps: z.number().int(),
     unpaid_hold_minutes: z.number().int().nullable(),
     availability_requires_login: z.boolean(),
+    /** Listing IDs: prefix (HKLS), digits (2 -> 01) and the number the next new listing gets. */
+    listing_id_prefix: z.string(),
+    listing_id_digits: z.number().int(),
+    listing_id_next: z.number().int(),
     updated_by: z.string().uuid().nullable(),
     updated_at: z.string().datetime(),
   })
@@ -1059,6 +1096,10 @@ const adminCatalogItemSchema = z
     cover_url: z.string().nullable(),
     created_at: z.string().datetime(),
     usage_count: z.number().int(),
+    /** Amenities only: a tick-box feature or a house rule, its group heading and its order. */
+    kind: z.enum(["amenity", "rule"]).optional(),
+    group_name: z.string().nullable().optional(),
+    position: z.number().int().optional(),
   })
   .openapi("AdminCatalogItem");
 

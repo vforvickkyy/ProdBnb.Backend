@@ -328,8 +328,8 @@ visible only to the owning host or an admin — otherwise `404` (existence isn't
     "created_at": "2026-09-03T12:00:00Z",
     "updated_at": "2026-09-03T12:00:00Z",
     "categories": [{ "id": "...", "name": "Studio" }],
-    "amenities": [{ "id": "...", "name": "Parking", "kind": "amenity", "group_name": "Access and parking", "position": 40 }],
-    "rules": [{ "id": "...", "name": "Smoking allowed", "kind": "rule", "group_name": "Allowed here", "position": 10 }],
+    "amenities": [{ "id": "...", "name": "Parking", "group_name": "Access and parking", "position": 40 }],
+    "rules": [{ "id": "...", "name": "Smoking allowed", "group_name": "Allowed here", "position": 10 }],
     "use_cases": [{ "id": "...", "name": "Film" }],
     "media": [
       { "id": "...", "media_type": "photo", "url": "https://media.prodbnb.com/locations/6e2c.../a1b2.../original", "position": 0, "created_at": "...", "updated_at": "..." }
@@ -358,8 +358,8 @@ the block is), so a client can offer start times that fit; `GET /v1/me/locations
 (whole numbers, `null` = not filled in), `electricity` (`included` | `extra` | `not_available`),
 `permission_needed` (+ `permission_details`, ≤500 chars) describe the place. The ticked
 amenities come back in `amenities` and the ticked house rules in `rules` — both are rows of the
-same `amenities` table, told apart by `kind` (`amenity` | `rule`) and grouped by `group_name`
-(show them in `position` order). Hosts can also write their own: `custom_amenities` and
+same `amenities` table (`GET /v1/amenities` tells them apart by `kind`), each with a
+`group_name` to group by and a `position` to sort by. Hosts can also write their own: `custom_amenities` and
 `custom_rules` (up to 20 short lines each, 120 characters). `props` (up to 40) lists what
 comes with the place: each is `{ name, kind: "included" | "addon", price_minor_units?, price_unit?
 ("per_booking" | "per_hour" | "per_day"), note? }`; price and unit are kept only for add-ons, and
