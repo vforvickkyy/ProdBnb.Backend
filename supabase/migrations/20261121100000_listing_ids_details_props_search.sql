@@ -74,7 +74,9 @@ begin
       _n := (select count(*) from public.locations)::integer + _attempt;
     end if;
 
-    _code := _prefix || lpad(_n::text, _digits, '0');
+    -- lpad() truncates longer text (lpad('100', 2, '0') = '10'), so only pad shorter numbers.
+    -- Corrected here before this reached production; 20261123150000 applies it where it already ran.
+    _code := _prefix || case when length(_n::text) < _digits then lpad(_n::text, _digits, '0') else _n::text end;
     exit when not exists (select 1 from public.locations where upper(listing_code) = upper(_code));
   end loop;
   return _code;
