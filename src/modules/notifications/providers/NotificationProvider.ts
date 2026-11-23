@@ -35,6 +35,19 @@ export interface SendPushInput {
    * grouping key at all.
    */
   threadId?: string | null;
+  /**
+   * iPhone only: which action buttons the notification offers, as the app registered them
+   * (`PRODBNB_MESSAGE` = Reply / View conversation, `PRODBNB_BOOKING` = View booking). APNs
+   * `aps.category`. Providers without the concept ignore it.
+   */
+  category?: string | null;
+  /** iPhone only: the number on the app icon, i.e. the person's unread notifications. APNs `aps.badge`. */
+  badge?: number | null;
+  /**
+   * iPhone only: how urgently iOS may show it. `time-sensitive` breaks through a Focus (a new booking
+   * request a host should answer); without the matching app capability iOS treats it as `active`.
+   */
+  interruptionLevel?: "active" | "time-sensitive" | null;
   /** Web Push only: the subscription's public keys (the endpoint is `deviceToken`). */
   webPushKeys?: { p256dh: string; auth: string } | null;
 }

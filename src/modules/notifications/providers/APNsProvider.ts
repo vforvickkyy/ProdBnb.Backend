@@ -146,16 +146,7 @@ export class APNsProvider implements NotificationProvider {
   }
 
   async send(input: SendPushInput): Promise<SendPushResult> {
-    const payload = JSON.stringify({
-      aps: {
-        alert: { title: input.title, body: input.body },
-        sound: "default",
-        // Only emitted when the caller supplied one, so a booking or payment
-        // push carries a byte-identical `aps` object to before Phase 27-8.
-        ...(input.threadId ? { "thread-id": input.threadId } : {}),
-      },
-      ...input.data,
-    });
+    const payload = JSON.stringify(buildApnsPayload(input));
 
     const session = http2.connect(this.hostFor(input.environment));
     try {
@@ -220,3 +211,27 @@ export function checkApnsSigning(credentials?: ApnsCredentials): { ok: boolean; 
     return { ok: false, detail: error instanceof Error ? error.message.slice(0, 200) : "Signing failed." };
   }
 }
+
+/**
+ * The JSON body APNs receives. Optional parts are only emitted when the caller supplied them, so a
+ * push that sets none of them carries the same `aps` object as before.
+ *
+ *  - `thread-id` groups a conversation (or a booking) into one stack in the notification centre.
+ *  - `category` makes iOS show the app's action buttons (Reply, View booking).
+ *  - `badge` sets the number on the app icon to the unread count (0 clears it).
+ *  - `interruption-level` lets a new booking request through a Focus.
+ */
+export function buildApnsPayload(input: SendPushInput): Record<string, unknown> {
+  return {
+    aps: {
+      alert: { title: input.title, body: input.body },
+      sound: "default",
+      ...(input.threadId ? { "thread-id": input.threadId } : {}),
+      ...(input.category ? { category: input.category } : {}),
+      ...(typeof input.badge === "number" && input.badge >= 0 ? { badge: Math.floor(input.badge) } : {}),
+      ...(input.interruptionLevel ? { "interruption-level": input.interruptionLevel } : {}),
+    },
+    ...input.data,
+  };
+}
+

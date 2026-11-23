@@ -280,3 +280,29 @@ describe("APNsProvider: thread-id (Phase 27-8)", () => {
     expect(payload.aps).not.toHaveProperty("thread-id");
   });
 });
+
+describe("APNs payload: buttons, badge, grouping, urgency", () => {
+  it("adds category, badge, thread and interruption level only when given", async () => {
+    const { buildApnsPayload } = await import("../src/modules/notifications/providers/APNsProvider");
+    const base = { deviceToken: "t", environment: null, title: "T", body: "B", data: { prodbnb_type: "new_message" } };
+    expect(buildApnsPayload(base)).toEqual({ aps: { alert: { title: "T", body: "B" }, sound: "default" }, prodbnb_type: "new_message" });
+
+    const full = buildApnsPayload({ ...base, threadId: "conv-1", category: "PRODBNB_MESSAGE", badge: 3, interruptionLevel: "time-sensitive" });
+    expect(full.aps).toEqual({
+      alert: { title: "T", body: "B" },
+      sound: "default",
+      "thread-id": "conv-1",
+      category: "PRODBNB_MESSAGE",
+      badge: 3,
+      "interruption-level": "time-sensitive",
+    });
+  });
+
+  it("sends a zero badge (clears the icon) but never a negative one", async () => {
+    const { buildApnsPayload } = await import("../src/modules/notifications/providers/APNsProvider");
+    const base = { deviceToken: "t", environment: null, title: "T", body: "B", data: {} };
+    expect((buildApnsPayload({ ...base, badge: 0 }).aps as Record<string, unknown>).badge).toBe(0);
+    expect((buildApnsPayload({ ...base, badge: -1 }).aps as Record<string, unknown>).badge).toBeUndefined();
+    expect((buildApnsPayload({ ...base, badge: null }).aps as Record<string, unknown>).badge).toBeUndefined();
+  });
+});

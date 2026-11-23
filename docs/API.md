@@ -1223,7 +1223,9 @@ string:
   "aps": {
     "alert": { "title": "Priya Sharma", "body": "Sent you a message." },
     "sound": "default",
-    "thread-id": "<conversation_id>"
+    "thread-id": "<conversation_id>",
+    "category": "PRODBNB_MESSAGE",
+    "badge": 3
   },
   "prodbnb_type":            "new_message",
   "prodbnb_entity_type":     "conversation",
@@ -1248,7 +1250,17 @@ hides the banner when the user is looking at that conversation. Read state (Phas
 suppress pushes — a push describes a message that is by definition newer than the recipient's
 cursor.
 
-**No badge count** is sent in V1, and there is still no total-unread endpoint.
+**Buttons, badge and grouping (November 2026).** Every iPhone push now also carries:
+
+- `category` — `PRODBNB_MESSAGE` (Reply / View conversation) for messages, `PRODBNB_BOOKING` (View
+  booking) for booking and payment updates; announcements have none. These are the categories the
+  iPhone app registers, so iOS shows those buttons on the lock screen.
+- `badge` — the person's unread, not-deleted notifications (including this one), so the app icon shows
+  the right number. Left out when it can't be counted.
+- `thread-id` — the conversation id for messages, `booking-<booking_id>` for booking updates, so each
+  chat and each booking is one stack in the notification centre.
+- `interruption-level: "time-sensitive"` on a new booking request, so a host in a Focus still sees it
+  (iOS treats it as a normal notification until the app has the Time Sensitive capability).
 
 ## Admin (Phase 11)
 

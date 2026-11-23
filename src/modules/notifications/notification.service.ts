@@ -199,10 +199,10 @@ export async function deliverPush(
   }
 
   const data = pushDataFor(notification);
-  // Messaging groups by conversation so a busy thread is one notification-centre
-  // entry rather than thirty banners. Null for every other type, which keeps
-  // their `aps` object byte-identical to Phase 8.
-  const threadId = notification.entity_type === "conversation" ? notification.entity_id : null;
+  // Grouping, action buttons and urgency (see pushPresentationFor), and the app-icon badge: the
+  // person's unread count, which already includes this notification.
+  const { threadId, category: pushCategory, interruptionLevel } = pushPresentationFor(notification);
+  const badge = await unreadBadgeFor(notification.user_id);
   let sent = 0;
   let failed = 0;
 
@@ -224,6 +224,9 @@ export async function deliverPush(
         body: notification.body,
         data,
         threadId,
+        category: pushCategory,
+        badge,
+        interruptionLevel,
         webPushKeys: (device.web_push_keys as { p256dh: string; auth: string } | null) ?? null,
       });
       if (result.status === "sent") {
@@ -279,6 +282,47 @@ export async function deliverPush(
  * booking and payment push that has already shipped. Only `message_id` is
  * lifted out, and only for a conversation.
  */
+/**
+ * How a push is presented on a phone (November 2026):
+ *  - messages stack per conversation and offer Reply / View conversation (`PRODBNB_MESSAGE`);
+ *  - booking updates stack per booking and offer View booking (`PRODBNB_BOOKING`);
+ *  - a new booking request is time-sensitive, so a host in a Focus still sees it;
+ *  - announcements are plain.
+ * The category names are the ones the iPhone app registers.
+ */
+export function pushPresentationFor(notification: Pick<NotificationDetail, "type" | "entity_type" | "entity_id">): {
+  threadId: string | null;
+  category: string | null;
+  interruptionLevel: "active" | "time-sensitive" | null;
+} {
+  if (notification.entity_type === "conversation") {
+    return { threadId: notification.entity_id, category: "PRODBNB_MESSAGE", interruptionLevel: null };
+  }
+  if (notification.entity_type === "booking") {
+    return {
+      threadId: `booking-${notification.entity_id}`,
+      category: "PRODBNB_BOOKING",
+      interruptionLevel: notification.type === "booking_request_received" ? "time-sensitive" : null,
+    };
+  }
+  return { threadId: null, category: null, interruptionLevel: null };
+}
+
+/** The person's unread notifications (the number on the app icon). Null when it can't be read: no badge is sent. */
+async function unreadBadgeFor(userId: string): Promise<number | null> {
+  const { count, error } = await adminClient
+    .from("notifications")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", userId)
+    .is("read_at", null)
+    .is("deleted_at", null);
+  if (error) {
+    console.error("Unread count for the badge failed:", error.message);
+    return null;
+  }
+  return count ?? null;
+}
+
 function pushDataFor(notification: NotificationDetail): Record<string, string> {
   const data: Record<string, string> = {
     prodbnb_type: notification.type,
