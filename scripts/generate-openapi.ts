@@ -54,6 +54,13 @@ import {
   idParamSchema as accountIdParamSchema,
   refundRequestStatusSchema,
 } from "../src/modules/account/account.schema";
+import {
+  adminHostRequestsQuerySchema,
+  HOST_REQUEST_BEST_TIMES,
+  HOST_REQUEST_STATUSES,
+  hostRequestIdParamSchema,
+  updateHostRequestSchema,
+} from "../src/modules/hostRequests/hostRequests.schema";
 import { earningStateSchema, hostIdParamSchema, listPayoutsQuerySchema, recordPayoutSchema } from "../src/modules/payouts/payouts.schema";
 import { revealSchema } from "../src/modules/payouts/payouts.routes";
 import { adminCreateCouponSchema, couponIdParamSchema, listCouponsQuerySchema, updateCouponSchema } from "../src/modules/coupons/coupons.schema";
@@ -2387,6 +2394,63 @@ registry.registerPath({
   security,
   request: { params: accountIdParamSchema, body: jsonBody(declineSchema) },
   responses: { "200": okResponse(adminDeletionRequestSchema.omit({ user: true, email: true, blockers: true })), ...errorResponses },
+});
+
+// -- Host callback requests ("Request a callback" from would-be hosts) -----------------------------
+
+const adminHostRequestSchema = z
+  .object({
+    id: z.string().uuid(),
+    user_id: z.string().uuid(),
+    location_id: z.string().uuid().nullable(),
+    name: z.string(),
+    phone: z.string(),
+    email: z.string().nullable(),
+    city: z.string().nullable(),
+    space_type: z.string().nullable(),
+    best_time: z.enum(HOST_REQUEST_BEST_TIMES),
+    note: z.string().nullable(),
+    source: z.enum(["ios", "android", "web"]),
+    status: z.enum(HOST_REQUEST_STATUSES),
+    contacted_at: z.string().nullable(),
+    closed_at: z.string().nullable(),
+    created_at: z.string(),
+    updated_at: z.string(),
+    admin_notes: z.string().nullable(),
+    handled_by: z.string().uuid().nullable(),
+    user: z.object({ id: z.string().uuid(), first_name: z.string().nullable(), last_name: z.string().nullable(), status: z.string() }).nullable(),
+    listing: z
+      .object({ id: z.string().uuid(), title: z.string(), status: z.string(), listing_code: z.string().nullable(), city: z.string().nullable() })
+      .nullable(),
+    handler: z.object({ id: z.string().uuid(), first_name: z.string().nullable(), last_name: z.string().nullable() }).nullable(),
+  })
+  .openapi("AdminHostRequest");
+
+registry.registerPath({
+  method: "get",
+  path: "/host-requests",
+  tags: ["Admin", "Users"],
+  summary: "Callback requests from people who want to list a place (host_requests.manage). Waiting ones oldest first",
+  security,
+  request: { query: adminHostRequestsQuerySchema },
+  responses: { "200": paginatedResponse(adminHostRequestSchema), ...errorResponses },
+});
+registry.registerPath({
+  method: "get",
+  path: "/host-requests/summary",
+  tags: ["Admin", "Users"],
+  summary: "How many callback requests are new and contacted (host_requests.manage)",
+  security,
+  responses: { "200": okResponse(z.object({ new: z.number().int(), contacted: z.number().int() })), ...errorResponses },
+});
+registry.registerPath({
+  method: "patch",
+  path: "/host-requests/{id}",
+  tags: ["Admin", "Users"],
+  summary: "Move a callback request along (New, Contacted, Done, Closed) and keep the team's notes (host_requests.manage)",
+  security,
+  request: { params: hostRequestIdParamSchema, body: jsonBody(updateHostRequestSchema) },
+  responses: { "200": okResponse(adminHostRequestSchema), "409": { description: "Withdrawn by the person, or they have another open request" }, ...errorResponses },
 });
 
 // -- Host payouts ---------------------------------------------------------------------------------

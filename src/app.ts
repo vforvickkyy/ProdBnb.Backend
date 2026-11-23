@@ -14,6 +14,7 @@ import { publicSiteRouter } from "./modules/site/site.routes";
 import { placesRouter } from "./modules/places/places.routes";
 import { publicContentRouter } from "./modules/content/content.routes";
 import { accountRouter } from "./modules/account/account.routes";
+import { hostRequestsRouter } from "./modules/hostRequests/hostRequests.routes";
 import { hostPayoutsRouter } from "./modules/payouts/payouts.routes";
 import { contactsRouter } from "./modules/bookings/contacts.routes";
 import { hostCouponsRouter, publicOffersRouter } from "./modules/coupons/coupons.routes";
@@ -158,6 +159,7 @@ export function createApp(): Express {
   app.use("/v1", placesRouter);
   app.use("/v1", publicContentRouter);
   app.use("/v1", accountRouter);
+  app.use("/v1", hostRequestsRouter);
   app.use("/v1", hostPayoutsRouter);
   app.use("/v1", contactsRouter);
   app.use("/v1", publicOffersRouter);

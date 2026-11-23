@@ -15,7 +15,7 @@ import { z } from "zod";
  * no E.164 normalisation, no stripping of spaces or dashes, so what a user
  * reads back is what they entered.
  */
-const profilePhoneSchema = z
+export const profilePhoneSchema = z
   .string()
   .trim()
   .min(5, "Enter a valid phone number.")

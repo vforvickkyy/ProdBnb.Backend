@@ -60,3 +60,12 @@ export const updatePreferencesSchema = z
   .strict()
   .refine((data) => Object.keys(data).length > 0, { message: "Provide at least one preference to update." });
 export type UpdatePreferencesInput = z.infer<typeof updatePreferencesSchema>;
+
+/** `DELETE /v1/notifications`: clear the inbox. `before` keeps anything that arrived after the
+ * person last looked (the newest notification they saw), so a clear never removes one unseen. */
+export const clearNotificationsQuerySchema = z
+  .object({
+    before: z.string().datetime({ offset: true }).optional(),
+  })
+  .strict();
+export type ClearNotificationsQuery = z.infer<typeof clearNotificationsQuerySchema>;

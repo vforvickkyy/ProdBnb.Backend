@@ -211,10 +211,17 @@ describe("booker account", () => {
     await pay(booker, b);
     await request(app).post(`/v1/bookings/${b}/cancel`).set(auth(host)).send({ reason: "Venue flooded" });
 
-    const list = await request(app).get("/v1/admin/refund-requests?status=pending").set(auth(finance));
-    expect(list.status).toBe(200);
-    const reqA = list.body.data.find((r: { booking_id: string }) => r.booking_id === a);
-    const reqB = list.body.data.find((r: { booking_id: string }) => r.booking_id === b);
+    // Pending requests are listed oldest first, and earlier runs can leave some behind locally:
+    // read every page rather than assume ours are on the first.
+    const pending: { booking_id: string }[] = [];
+    for (let page = 1; page <= 50; page += 1) {
+      const list = await request(app).get(`/v1/admin/refund-requests?status=pending&pageSize=100&page=${page}`).set(auth(finance));
+      expect(list.status).toBe(200);
+      pending.push(...list.body.data);
+      if (pending.length >= list.body.meta.total || list.body.data.length === 0) break;
+    }
+    const reqA = pending.find((r) => r.booking_id === a);
+    const reqB = pending.find((r) => r.booking_id === b);
     expect(reqA).toMatchObject({ remaining_minor_units: 150000, payment: { method: "upi" }, booking: { location: { title: "Account test studio" } } });
     // The host cancelled B: the booker didn't open it themselves.
     expect(reqB).toMatchObject({ source: "cancellation", reason: "Venue flooded" });

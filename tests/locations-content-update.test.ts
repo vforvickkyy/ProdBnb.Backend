@@ -274,7 +274,8 @@ describe("Phase 29.18-L: content updates on a published listing", () => {
     const tooMany = (n: number) => Array.from({ length: n }, () => studio!);
 
     expect((await patchLocation(host, id, { category_ids: tooMany(21) })).status).toBe(400);
-    expect((await patchLocation(host, id, { amenity_ids: tooMany(31) })).status).toBe(400);
+    // 60: amenities and location rules share one list since the listing-details round.
+    expect((await patchLocation(host, id, { amenity_ids: tooMany(61) })).status).toBe(400);
     expect((await patchLocation(host, id, { use_case_ids: tooMany(11) })).status).toBe(400);
   });
 

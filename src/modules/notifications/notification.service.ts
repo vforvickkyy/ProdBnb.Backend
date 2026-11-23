@@ -699,6 +699,35 @@ export async function markAllNotificationsRead(supabase: SupabaseClient, userId:
 }
 
 /**
+ * "Clear all": soft-deletes every notification in the caller's inbox (see deleteNotification for
+ * why it is an UPDATE). Only what the caller's client lists is cleared -- announcements stay for a
+ * client that cannot show them -- and, with `before`, only notifications created at or before it.
+ * RLS (`notifications_update_own`) keeps this to the caller's own rows.
+ */
+export async function clearAllNotifications(
+  supabase: SupabaseClient,
+  userId: string,
+  options: { before?: string; includeAnnouncements?: boolean } = {}
+): Promise<number> {
+  let request = supabase
+    .from("notifications")
+    .update({ deleted_at: new Date().toISOString() })
+    .eq("user_id", userId)
+    .is("deleted_at", null);
+  if (options.before) {
+    request = request.lte("created_at", options.before);
+  }
+  if (!options.includeAnnouncements) {
+    request = request.neq("type", "announcement");
+  }
+  const { data, error } = await request.select("id");
+  if (error) {
+    throw error;
+  }
+  return (data ?? []).length;
+}
+
+/**
  * Removes a notification from the caller's inbox -- a SOFT delete.
  *
  * Deliberately an UPDATE, not a DELETE. The full reasoning lives in the Phase

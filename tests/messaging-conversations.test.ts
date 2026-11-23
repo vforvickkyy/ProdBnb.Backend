@@ -439,6 +439,8 @@ describe("Phase 27-3: conversation APIs", () => {
       expect(Object.keys(body).sort()).toEqual(
         [
           "booking_id",
+          // Whether the viewer may still send (false once the booking is cancelled).
+          "can_send",
           "counterparty",
           "created_at",
           "id",

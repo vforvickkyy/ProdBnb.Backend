@@ -1,8 +1,9 @@
 import { Request, Response } from "express";
 import { clientInfo } from "../../lib/clientInfo";
 import { ok } from "../../utils/respond";
-import { ListNotificationsQuery, NotificationIdParam, UpdatePreferencesInput } from "./notification.schema";
+import { ClearNotificationsQuery, ListNotificationsQuery, NotificationIdParam, UpdatePreferencesInput } from "./notification.schema";
 import {
+  clearAllNotifications,
   deleteNotification,
   getNotification,
   listNotifications,
@@ -46,6 +47,15 @@ export async function deleteNotificationHandler(req: Request, res: Response): Pr
   const { id } = req.valid!.params as NotificationIdParam;
   await deleteNotification(req.supabase!, id);
   ok(res, { id, deleted: true });
+}
+
+export async function deleteAllNotificationsHandler(req: Request, res: Response): Promise<void> {
+  const query = req.valid!.query as ClearNotificationsQuery;
+  const count = await clearAllNotifications(req.supabase!, req.user!.id, {
+    before: query.before,
+    includeAnnouncements: clientInfo(req).capabilities.has("announcements"),
+  });
+  ok(res, { cleared: count });
 }
 
 export async function postMarkAllRead(req: Request, res: Response): Promise<void> {

@@ -50,6 +50,9 @@ export const ADMIN_PERMISSIONS = [
   "coupons.manage",
   // Invoices: template, numbering, sending and resending.
   "invoices.manage",
+  // "Request a callback" from people who want to list a place: see their contact details, call
+  // them and track it.
+  "host_requests.manage",
 ] as const;
 export type AdminPermission = (typeof ADMIN_PERMISSIONS)[number];
 
@@ -61,9 +64,9 @@ export type AdminPermission = (typeof ADMIN_PERMISSIONS)[number];
  *
  *  - moderator  -- listings and people: approve/reject/suspend, create listings for hosts,
  *                  photos/sections/pricing/timings, catalog + collections, user roles, website
- *                  pages and SEO, coupons
+ *                  pages and SEO, coupons, callback requests from would-be hosts
  *  - support    -- bookings and disputes: booking actions, re-checking payments, private messages,
- *                  announcements and direct notifications, incidents
+ *                  announcements and direct notifications, incidents, callback requests
  *  - finance    -- money: payments, refunds, analytics, coupons, invoices
  *  - super_admin -- everything, plus the team, platform settings, integrations, sending-channel
  *                  credentials and platform release control
@@ -90,6 +93,7 @@ export const ROLE_PERMISSIONS: Record<TeamRole, readonly AdminPermission[]> = {
     "campaigns.view",
     "content.manage",
     "coupons.manage",
+    "host_requests.manage",
   ],
   support: [
     ...BASE,
@@ -101,6 +105,7 @@ export const ROLE_PERMISSIONS: Record<TeamRole, readonly AdminPermission[]> = {
     "campaigns.view",
     "campaigns.send",
     "incidents.manage",
+    "host_requests.manage",
   ],
   finance: [...BASE, "analytics.view", "payments.view", "payments.verify", "payments.refund", "coupons.manage", "invoices.manage"],
 };

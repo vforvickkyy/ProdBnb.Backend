@@ -1186,6 +1186,16 @@ Requires authentication. Marks every one of the caller's unread notifications re
 
 Response (`200`): `{ "data": { "marked_read": 3 } }`
 
+### `DELETE /v1/notifications`
+
+Requires authentication. "Clear all": removes every notification from the caller's inbox (a soft
+delete, like `DELETE /v1/notifications/:id`). Optional `?before=<ISO date-time>` clears only
+notifications created at or before it -- pass the newest one on screen so a notification that
+arrived meanwhile is never cleared unseen. Announcements are only cleared for a client that lists
+them (`X-ProdBnb-Capabilities: announcements`).
+
+Response (`200`): `{ "data": { "cleared": 12 } }`. A bad `before` is `400`.
+
 ### `GET /v1/notification-preferences`
 
 Requires authentication. Always returns every category, defaulting any missing row to `true`:
@@ -1774,6 +1784,45 @@ The image itself as the request body, `Content-Type: image/jpeg | image/png | im
 domain, a configured browser origin, or the API itself); anything else is `400`.
 `GET /v1/site-config` includes `payments: { provider: "cashfree", mode: "sandbox" | "production" }`
 for loading the right checkout.
+
+## Host callback requests ("Request a callback")
+
+Someone who wants to list a place asks the team to call and help them get listed. Signed-in people
+only; one open request (`new` or `contacted`) per person -- asking again updates it.
+
+### `GET /v1/me/host-request`
+
+The caller's open request, or else their latest one (`done` / `closed`), or `null`. Never includes
+the team's notes.
+
+### `POST /v1/me/host-request`
+
+```json
+{ "name": "Asha Rao", "phone": "+91 98765 43210", "city": "Pune", "space_type": "Bungalow",
+  "best_time": "evening", "note": "Have a garden too", "location_id": "<their draft listing>" }
+```
+
+`name` and `phone` are required; `best_time` is `morning` / `afternoon` / `evening` / `anytime`
+(default); blank optional text counts as not given. `location_id` must be one of the caller's own
+listings (`400` otherwise). `201` with the new request, or `200` when an open one was updated (its
+listing is kept unless another is named). `source` (`ios` / `android` / `web`) comes from
+`X-ProdBnb-Platform`.
+
+### `DELETE /v1/me/host-request`
+
+Withdraws the open request (`status: "withdrawn"`); `404` when there is none.
+
+### Admin (`host_requests.manage`: moderators, support, super admins)
+
+- `GET /v1/admin/host-requests?status=open|new|contacted|done|closed|withdrawn&search=&page=&pageSize=`
+  -- with `user`, the linked `listing` (`id, title, status, listing_code, city`), `handler` and
+  `admin_notes`. Waiting requests oldest first; others newest first. `search` matches name, phone,
+  email and city.
+- `GET /v1/admin/host-requests/summary` -- `{ "new": 3, "contacted": 1 }` for the sidebar count.
+- `PATCH /v1/admin/host-requests/:id` -- `{ "status": "contacted", "admin_notes": "..." }` (either
+  or both). Records who handled it, `contacted_at` the first time it is contacted, `closed_at` when
+  done or closed. `409` for a request the person withdrew, or when reopening would give them two
+  open requests.
 
 ## Host payouts
 
