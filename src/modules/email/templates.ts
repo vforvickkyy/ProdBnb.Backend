@@ -20,6 +20,7 @@ export const EMAIL_TEMPLATES = [
   "payment_success",
   "payment_failed",
   "refund_processed",
+  "booking_reminder",
   // Host
   "host_booking_request",
   "host_quote_request",
@@ -31,6 +32,7 @@ export const EMAIL_TEMPLATES = [
   "listing_suspended",
   "listing_restored",
   "payout_sent",
+  "host_booking_reminder",
 ] as const;
 export type EmailTemplate = (typeof EMAIL_TEMPLATES)[number];
 
@@ -362,6 +364,35 @@ async function payoutSent(data: Data): Promise<BuiltEmail | null> {
   ]);
 }
 
+/** The day before the shoot: where to go and who to call, for the booker. */
+async function bookingReminder(data: Data): Promise<BuiltEmail | null> {
+  const b = await booking(data);
+  if (!b || b.status !== "confirmed" || new Date(b.start_at).getTime() < Date.now()) return null;
+  const contact: [string, string][] = [["Host", b.host.name]];
+  if (b.host.phone) contact.push(["Host phone", b.host.phone]);
+  return page(`Tomorrow: ${b.location.title}`, `Your shoot is coming up. Address and host contact inside.`, [
+    { kind: "heading", text: "Your shoot is tomorrow" },
+    { kind: "text", text: `Hi ${b.booker.first_name}, a quick reminder with everything you need for the day.` },
+    { kind: "details", rows: [...bookingRows(b, { exact: true }), ...contact] },
+    { kind: "button", label: "View booking", url: bookerBooking(b) },
+    { kind: "text", muted: true, text: "Running late or need something? Message your host from the booking page." },
+  ]);
+}
+
+/** The day before the shoot, for the host: who is coming and how many. */
+async function hostBookingReminder(data: Data): Promise<BuiltEmail | null> {
+  const b = await booking(data);
+  if (!b || b.status !== "confirmed" || new Date(b.start_at).getTime() < Date.now()) return null;
+  const contact: [string, string][] = [["Booked by", b.booker.name]];
+  if (b.booker.phone) contact.push(["Booker phone", b.booker.phone]);
+  return page(`Tomorrow: shoot at ${b.location.title}`, `A shoot is coming up at your place.`, [
+    { kind: "heading", text: "You have a shoot tomorrow" },
+    { kind: "text", text: `Hi ${b.host.first_name}, here are the details so your place is ready.` },
+    { kind: "details", rows: [...bookingRows(b, { exact: true, forHost: true }), ...contact] },
+    { kind: "button", label: "View booking", url: hostBooking(b) },
+  ]);
+}
+
 /** Renders a template for its recipient. Null means "don't send" (the moment has passed). */
 export async function buildEmail(template: EmailTemplate, data: Data, recipientId: string): Promise<BuiltEmail | null> {
   switch (template) {
@@ -397,5 +428,9 @@ export async function buildEmail(template: EmailTemplate, data: Data, recipientI
       return listingEmail(template, data);
     case "payout_sent":
       return payoutSent(data);
+    case "booking_reminder":
+      return bookingReminder(data);
+    case "host_booking_reminder":
+      return hostBookingReminder(data);
   }
 }

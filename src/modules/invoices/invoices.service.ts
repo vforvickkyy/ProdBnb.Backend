@@ -1,6 +1,6 @@
 import { NotFoundError, ValidationError } from "../../errors/AppError";
+import { renderLayout } from "../email/layout";
 import { adminClient } from "../../lib/supabase";
-import { escapeHtml } from "./text";
 import { sendEmail } from "../outreach/email";
 import { smtpCredentials } from "../outreach/channels.service";
 import { amountInWords, renderPdf, type PdfDocInput } from "./pdf";
@@ -415,6 +415,31 @@ export async function emailReady(): Promise<boolean> {
   return Boolean(await smtpCredentials().catch(() => null));
 }
 
+function invoiceEmail(name: string, listing: string, when: string, number: string, total: string, seller: string): { html: string; text: string } {
+  const e = renderLayout({
+    subject: `Invoice ${number}`,
+    preheader: `Your tax invoice for ${listing} is attached.`,
+    blocks: [
+      { kind: "heading", text: "Your invoice" },
+      { kind: "text", text: `Hi ${name.split(" ")[0] || "there"}, thanks for booking ${listing}. Your tax invoice is attached as a PDF.` },
+      { kind: "details", rows: [["Invoice", number], ["Booking", when], ["Total", total], ["Issued by", seller]] },
+    ],
+  });
+  return { html: e.html, text: e.text };
+}
+
+function receiptEmail(name: string): { html: string; text: string } {
+  const e = renderLayout({
+    subject: "Your payment receipt",
+    preheader: "Your payment receipt is attached.",
+    blocks: [
+      { kind: "heading", text: "Your payment receipt" },
+      { kind: "text", text: `Hi ${name.split(" ")[0] || "there"}, your payment receipt is attached as a PDF.` },
+    ],
+  });
+  return { html: e.html, text: e.text };
+}
+
 /** Emails the invoice PDF. `via: "auto"` on issue; "manual" when someone on the team sends it. */
 export async function sendInvoice(id: string, opts: { via: "auto" | "manual"; to?: string | null; actorId?: string }): Promise<Invoice> {
   const invoice = await getInvoice(id);
@@ -431,8 +456,7 @@ export async function sendInvoice(id: string, opts: { via: "auto" | "manual"; to
     await sendEmail({
       to,
       subject: `Invoice ${invoice.number} from ${sellerName}`,
-      text: `Hi ${invoice.billed_to.name},\n\nThanks for your booking at ${invoice.details.listing} (${invoice.details.when}). Your invoice ${invoice.number} for ${total} is attached.\n\n${sellerName}`,
-      html: `<p>Hi ${escapeHtml(invoice.billed_to.name)},</p><p>Thanks for your booking at <strong>${escapeHtml(invoice.details.listing)}</strong> (${escapeHtml(invoice.details.when)}). Your invoice <strong>${escapeHtml(invoice.number)}</strong> for ${escapeHtml(total)} is attached.</p><p>${escapeHtml(sellerName)}</p>`,
+      ...invoiceEmail(invoice.billed_to.name, invoice.details.listing, invoice.details.when, invoice.number, total, sellerName),
       attachments: [{ filename: `${invoice.number.replace(/\//g, "-")}.pdf`, content: pdf, contentType: "application/pdf" }],
     });
   } catch (error) {
@@ -663,8 +687,7 @@ export async function sendReceipt(paymentId: string, opts: { to?: string | null;
   await sendEmail({
     to,
     subject: "Your payment receipt",
-    text: `Hi ${r.name},\n\nYour payment receipt is attached.`,
-    html: `<p>Hi ${escapeHtml(r.name)},</p><p>Your payment receipt is attached.</p>`,
+    ...receiptEmail(r.name),
     attachments: [{ filename: r.filename, content: Buffer.from(r.pdf), contentType: "application/pdf" }],
   });
   await adminClient.from("invoice_events").insert({ payment_id: paymentId, kind: "receipt_sent", to_email: to, actor_id: opts.actorId });

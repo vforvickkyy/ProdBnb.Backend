@@ -5048,6 +5048,7 @@
               "payment_success",
               "payment_failed",
               "refund_processed",
+              "booking_reminder",
               "host_booking_request",
               "host_quote_request",
               "host_booking_confirmed",
@@ -5057,7 +5058,8 @@
               "listing_rejected",
               "listing_suspended",
               "listing_restored",
-              "payout_sent"
+              "payout_sent",
+              "host_booking_reminder"
             ]
           },
           "stream": {
@@ -5132,6 +5134,36 @@
           "sent_at",
           "created_at",
           "updated_at"
+        ]
+      },
+      "AdminEmailSuppression": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "unsubscribed",
+              "bounced",
+              "admin"
+            ]
+          },
+          "user_id": {
+            "type": "string",
+            "nullable": true,
+            "format": "uuid"
+          },
+          "created_at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "email",
+          "reason",
+          "user_id",
+          "created_at"
         ]
       },
       "PayoutAccount": {
@@ -12622,6 +12654,11 @@
                         "nullable": true,
                         "format": "email"
                       },
+                      "marketing_from_email": {
+                        "type": "string",
+                        "nullable": true,
+                        "format": "email"
+                      },
                       "max_per_minute": {
                         "type": "integer",
                         "minimum": 1,
@@ -18279,6 +18316,7 @@
                 "payment_success",
                 "payment_failed",
                 "refund_processed",
+                "booking_reminder",
                 "host_booking_request",
                 "host_quote_request",
                 "host_booking_confirmed",
@@ -18288,7 +18326,8 @@
                 "listing_rejected",
                 "listing_suspended",
                 "listing_restored",
-                "payout_sent"
+                "payout_sent",
+                "host_booking_reminder"
               ]
             },
             "required": false,
@@ -18478,6 +18517,184 @@
                   "properties": {
                     "data": {
                       "$ref": "#/components/schemas/AdminEmail"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/emails/suppressions": {
+      "get": {
+        "tags": [
+          "Admin",
+          "Messaging"
+        ],
+        "summary": "Addresses we don't email: bounced (nothing is sent) or unsubscribed from news and offers (campaigns.view)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "unsubscribed",
+                "bounced",
+                "admin"
+              ]
+            },
+            "required": false,
+            "name": "reason",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "search",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            },
+            "required": false,
+            "name": "page",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 25
+            },
+            "required": false,
+            "name": "pageSize",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/AdminEmailSuppression"
+                      }
+                    },
+                    "meta": {
+                      "type": "object",
+                      "properties": {
+                        "page": {
+                          "type": "integer"
+                        },
+                        "pageSize": {
+                          "type": "integer"
+                        },
+                        "total": {
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "page",
+                        "pageSize",
+                        "total"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "meta"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/emails/suppressions/{email}": {
+      "delete": {
+        "tags": [
+          "Admin",
+          "Messaging"
+        ],
+        "summary": "Unblock an address (campaigns.send)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "email"
+            },
+            "required": true,
+            "name": "email",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "removed": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "removed"
+                      ]
                     }
                   },
                   "required": [

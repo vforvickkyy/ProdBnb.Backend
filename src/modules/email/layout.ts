@@ -16,7 +16,9 @@ export type Block =
   | { kind: "button"; label: string; url: string; secondary?: boolean }
   | { kind: "buttons"; items: { label: string; url: string; secondary?: boolean }[] }
   | { kind: "note"; text: string }
-  | { kind: "divider" };
+  | { kind: "divider" }
+  /** Already-safe HTML (e.g. an admin's message rendered by renderEmailBody) with its text version. */
+  | { kind: "html"; html: string; text: string };
 
 export interface RenderedEmail {
   subject: string;
@@ -58,6 +60,8 @@ function blockHtml(block: Block): string {
       return `<p style="margin:8px 0 16px">${block.items.map((b) => buttonHtml(b.label, b.url, b.secondary)).join("")}</p>`;
     case "divider":
       return `<hr style="border:none;border-top:1px solid #f4f4f5;margin:20px 0">`;
+    case "html":
+      return `<div style="font-size:15px;line-height:1.6;color:#27272a">${block.html}</div>`;
   }
 }
 
@@ -76,15 +80,31 @@ function blockText(block: Block): string {
       return block.items.map((b) => `${b.label}: ${b.url}`).join("\n");
     case "divider":
       return "---";
+    case "html":
+      return block.text;
   }
 }
 
-export function renderLayout(params: { subject: string; preheader: string; blocks: Block[]; footerNote?: string }): RenderedEmail {
+export function renderLayout(params: {
+  subject: string;
+  preheader: string;
+  blocks: Block[];
+  footerNote?: string;
+  /** Marketing emails: the one-click unsubscribe link shown in the footer. */
+  unsubscribeUrl?: string | null;
+}): RenderedEmail {
   const brand = escapeHtml(env.BRAND_NAME);
   const site = env.WEBSITE_URL.replace(/\/$/, "");
-  const footer =
+  const note =
     params.footerNote ??
     `You're getting this email because of activity on your ${env.BRAND_NAME} account. Account and booking emails can't be switched off.`;
+  const help = `Questions? Reply to this email or write to ${env.SUPPORT_EMAIL}.`;
+  const company = `${env.BRAND_NAME} is run by ${env.COMPANY_LEGAL_NAME}.`;
+  const unsubscribe = params.unsubscribeUrl
+    ? `<br><a href="${escapeHtml(params.unsubscribeUrl)}" style="color:#71717a">Unsubscribe from news and offers</a>`
+    : "";
+  const footerHtml = `${escapeHtml(note)}<br>${escapeHtml(help)}<br>${escapeHtml(company)}${unsubscribe}`;
+  const footer = [note, help, company, params.unsubscribeUrl ? `Unsubscribe from news and offers: ${params.unsubscribeUrl}` : ""].filter(Boolean).join("\n");
   const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>${escapeHtml(params.subject)}</title></head>
 <body style="margin:0;padding:0;background:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#18181b">
 <div style="display:none;max-height:0;overflow:hidden;opacity:0">${escapeHtml(params.preheader)}&#8199;&#65279;&#847;&#8199;&#65279;&#847;</div>
@@ -92,7 +112,7 @@ export function renderLayout(params: { subject: string; preheader: string; block
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px">
 <tr><td style="padding:0 8px 16px;font-size:24px;font-weight:800;letter-spacing:-0.5px;color:${BRAND_RED}">${brand.toLowerCase()}</td></tr>
 <tr><td style="background:#ffffff;border-radius:16px;padding:28px 24px">${params.blocks.map(blockHtml).join("")}</td></tr>
-<tr><td style="padding:16px 8px 0;font-size:12px;line-height:1.5;color:#a1a1aa">${escapeHtml(footer)}<br><a href="${escapeHtml(site)}" style="color:#a1a1aa">${escapeHtml(site.replace(/^https?:\/\//, ""))}</a></td></tr>
+<tr><td style="padding:16px 8px 0;font-size:12px;line-height:1.5;color:#a1a1aa">${footerHtml}<br><a href="${escapeHtml(site)}" style="color:#a1a1aa">${escapeHtml(site.replace(/^https?:\/\//, ""))}</a></td></tr>
 </table></td></tr></table></body></html>`;
   const text = [...params.blocks.map(blockText), "", footer, site].join("\n\n");
   return { subject: params.subject, html, text };

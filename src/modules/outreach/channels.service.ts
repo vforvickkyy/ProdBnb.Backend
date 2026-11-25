@@ -31,6 +31,8 @@ export interface SmtpConfig {
   from_email: string;
   from_name: string;
   reply_to: string | null;
+  /** Optional sender for news and offers (e.g. news@news.example.com); booking emails keep from_email. */
+  marketing_from_email?: string | null;
   max_per_minute: number;
 }
 
@@ -248,6 +250,7 @@ function prepare(input: SaveChannelInput, existing: ChannelRow | null): { config
         from_email: input.from_email,
         from_name: input.from_name,
         reply_to: input.reply_to ?? null,
+        marketing_from_email: input.marketing_from_email ?? null,
         max_per_minute: input.max_per_minute,
       };
       return { config: { ...config }, secret: input.password !== undefined ? JSON.stringify({ password: input.password }) : null };

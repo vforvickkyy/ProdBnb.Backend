@@ -58,7 +58,20 @@ export interface QueueEmailInput {
 export async function queueEmail(input: QueueEmailInput): Promise<void> {
   try {
     const to = await emailOf(input.userId);
-    if (!to) return; // no email address on the account (phone-only sign-in)
+    if (!to) {
+      // Phone-only sign-in: nothing to send, but log it once so the team can see why (and the job
+      // runner knows this reminder is dealt with).
+      await adminClient.from("email_outbox").insert({
+        user_id: input.userId,
+        to_email: "(no email)",
+        template: input.template,
+        idempotency_key: input.key,
+        data: input.data,
+        status: "skipped",
+        last_error: "This account has no email address.",
+      });
+      return;
+    }
     const { data, error } = await adminClient
       .from("email_outbox")
       .insert({ user_id: input.userId, to_email: to, template: input.template, idempotency_key: input.key, data: input.data })
@@ -72,6 +85,12 @@ export async function queueEmail(input: QueueEmailInput): Promise<void> {
   } catch (error) {
     console.error(`Email ${input.template} (${input.key}) not queued:`, error);
   }
+}
+
+/** An address the mail provider reported as undeliverable (or a spam complaint). */
+async function hasBounced(email: string): Promise<boolean> {
+  const { data } = await adminClient.from("email_suppressions").select("reason").eq("email", email.toLowerCase()).maybeSingle();
+  return data?.reason === "bounced";
 }
 
 /** Claims a queued row (so two workers never send the same email) and sends it. */
@@ -89,6 +108,13 @@ async function deliver(row: OutboxRow): Promise<OutboxRow["status"]> {
   try {
     if (sender === sendEmail && !(await smtpCredentials().catch(() => null))) {
       throw new Error("Email isn't connected yet (Messaging → Email in the admin).");
+    }
+    if (await hasBounced(row.to_email)) {
+      await adminClient
+        .from("email_outbox")
+        .update({ status: "skipped", attempts, locked_until: null, last_error: "This address bounced before, so nothing more is sent to it (remove it under Email log -> Blocked addresses)." })
+        .eq("id", row.id);
+      return "skipped";
     }
     const built = await buildEmail(row.template, row.data, row.user_id ?? "");
     if (!built) {
@@ -152,6 +178,30 @@ export async function processEmailOutbox(deadline: number): Promise<{ sent: numb
   return summary;
 }
 
+/**
+ * The day-before reminders: confirmed bookings that start in 20-28 hours get one email to the
+ * booker and one to the host. The outbox key makes each one go out once, however often this runs.
+ */
+export async function queueBookingReminders(now = Date.now()): Promise<number> {
+  const { data, error } = await adminClient
+    .from("bookings")
+    .select("id, booker_id, location:locations(host_id)")
+    .eq("status", "confirmed")
+    .gte("start_at", new Date(now + 20 * 3600_000).toISOString())
+    .lte("start_at", new Date(now + 28 * 3600_000).toISOString())
+    .limit(200);
+  if (error) throw error;
+  let queued = 0;
+  for (const b of (data ?? []) as unknown as { id: string; booker_id: string; location: { host_id: string } | null }[]) {
+    await queueEmail({ userId: b.booker_id, template: "booking_reminder", key: `reminder:${b.id}:booker`, data: { bookingId: b.id } });
+    if (b.location?.host_id) {
+      await queueEmail({ userId: b.location.host_id, template: "host_booking_reminder", key: `reminder:${b.id}:host`, data: { bookingId: b.id } });
+    }
+    queued++;
+  }
+  return queued;
+}
+
 // -- Admin -------------------------------------------------------------------------------------
 
 export interface AdminEmailQuery {
@@ -199,6 +249,33 @@ export async function resendEmail(id: string): Promise<OutboxRow> {
   await deliver({ ...r, status: "queued", attempts: 0 });
   const { data: after } = await adminClient.from("email_outbox").select(COLUMNS).eq("id", id).single();
   return after as OutboxRow;
+}
+
+export interface Suppression {
+  email: string;
+  reason: "unsubscribed" | "bounced" | "admin";
+  user_id: string | null;
+  created_at: string;
+}
+
+/** Addresses we don't email: bounced (nothing is sent), unsubscribed (no news and offers). */
+export async function listSuppressions(query: { reason?: Suppression["reason"]; search?: string; page: number; pageSize: number }): Promise<{ data: Suppression[]; total: number }> {
+  const from = (query.page - 1) * query.pageSize;
+  let q = adminClient.from("email_suppressions").select("email, reason, user_id, created_at", { count: "exact" }).order("created_at", { ascending: false }).range(from, from + query.pageSize - 1);
+  if (query.reason) q = q.eq("reason", query.reason);
+  if (query.search) {
+    const term = query.search.replace(/[,()*%\\]/g, " ").trim().toLowerCase();
+    if (term) q = q.ilike("email", `%${term}%`);
+  }
+  const { data, error, count } = await q;
+  if (error) throw error;
+  return { data: (data ?? []) as Suppression[], total: count ?? 0 };
+}
+
+export async function removeSuppression(email: string): Promise<void> {
+  const { data, error } = await adminClient.from("email_suppressions").delete().eq("email", email.toLowerCase()).select("email");
+  if (error) throw error;
+  if (!data?.length) throw new NotFoundError("That address isn't blocked.");
 }
 
 export function isEmailTemplate(value: string): value is EmailTemplate {

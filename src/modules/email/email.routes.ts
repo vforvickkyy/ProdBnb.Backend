@@ -9,7 +9,9 @@ import { confirmBooking, rejectBooking } from "../bookings/bookings.service";
 import { verifyEmailAction } from "./actions";
 import { loadBooking } from "./context";
 import { money, whenLabel } from "./layout";
-import { emailSummary, listEmails, resendEmail } from "./outbox.service";
+import { emailSummary, listEmails, listSuppressions, removeSuppression, resendEmail } from "./outbox.service";
+import { getEmailPreferences, updateEmailPreferences } from "./preferences.service";
+import { requireAuth } from "../../middleware/auth";
 import { EMAIL_TEMPLATES } from "./templates";
 
 /**
@@ -65,6 +67,18 @@ emailActionsRouter.post(
   }
 );
 
+// -- The signed-in person's email settings ---------------------------------------------------------
+
+const preferencesBody = z.object({ news_and_offers: z.boolean() }).strict();
+
+emailActionsRouter.get("/me/email-preferences", requireAuth, async (req: Request, res: Response) => {
+  ok(res, await getEmailPreferences(req.user!.id));
+});
+
+emailActionsRouter.patch("/me/email-preferences", requireAuth, validate({ body: preferencesBody }), async (req: Request, res: Response) => {
+  ok(res, await updateEmailPreferences(req.user!.id, req.valid!.body as z.infer<typeof preferencesBody>));
+});
+
 /** Admin: the email log (Messaging -> Email log). Mounted inside the admin router. */
 export const adminEmailsRouter = Router();
 
@@ -92,4 +106,25 @@ adminEmailsRouter.get("/emails/summary", can("campaigns.view"), async (_req: Req
 
 adminEmailsRouter.post("/emails/:id/resend", can("campaigns.send"), validate({ params: idParams }), async (req: Request, res: Response) => {
   ok(res, await resendEmail((req.valid!.params as { id: string }).id));
+});
+
+const suppressionQuery = z
+  .object({
+    reason: z.enum(["unsubscribed", "bounced", "admin"]).optional(),
+    search: z.string().trim().min(1).max(100).optional(),
+    page: z.coerce.number().int().min(1).default(1),
+    pageSize: z.coerce.number().int().min(1).max(100).default(25),
+  })
+  .strict();
+const suppressionParams = z.object({ email: z.string().trim().email().max(320) });
+
+adminEmailsRouter.get("/emails/suppressions", can("campaigns.view"), validate({ query: suppressionQuery }), async (req: Request, res: Response) => {
+  const query = req.valid!.query as z.infer<typeof suppressionQuery>;
+  const { data, total } = await listSuppressions(query);
+  ok(res, data, 200, { page: query.page, pageSize: query.pageSize, total });
+});
+
+adminEmailsRouter.delete("/emails/suppressions/:email", can("campaigns.send"), validate({ params: suppressionParams }), async (req: Request, res: Response) => {
+  await removeSuppression((req.valid!.params as z.infer<typeof suppressionParams>).email);
+  ok(res, { removed: true });
 });

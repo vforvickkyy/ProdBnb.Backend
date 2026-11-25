@@ -444,6 +444,7 @@ async function processRecipient(campaign: CampaignRow, r: RecipientRow, content:
           headers: unsubscribeUrl
             ? { "List-Unsubscribe": `<${unsubscribeUrl}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" }
             : undefined,
+          stream: campaign.kind === "announcement" ? "marketing" : "transactional",
         });
         update.email_status = "sent";
       } catch (error) {

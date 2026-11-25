@@ -2513,6 +2513,41 @@ registry.registerPath({
   responses: { "200": okResponse(adminEmailSchema), ...errorResponses },
 });
 
+const emailSuppressionSchema = z
+  .object({
+    email: z.string(),
+    reason: z.enum(["unsubscribed", "bounced", "admin"]),
+    user_id: z.string().uuid().nullable(),
+    created_at: z.string(),
+  })
+  .openapi("AdminEmailSuppression");
+
+registry.registerPath({
+  method: "get",
+  path: "/emails/suppressions",
+  tags: ["Admin", "Messaging"],
+  summary: "Addresses we don't email: bounced (nothing is sent) or unsubscribed from news and offers (campaigns.view)",
+  security,
+  request: {
+    query: z.object({
+      reason: z.enum(["unsubscribed", "bounced", "admin"]).optional(),
+      search: z.string().optional(),
+      page: z.coerce.number().int().min(1).default(1),
+      pageSize: z.coerce.number().int().min(1).max(100).default(25),
+    }),
+  },
+  responses: { "200": paginatedResponse(emailSuppressionSchema), ...errorResponses },
+});
+registry.registerPath({
+  method: "delete",
+  path: "/emails/suppressions/{email}",
+  tags: ["Admin", "Messaging"],
+  summary: "Unblock an address (campaigns.send)",
+  security,
+  request: { params: z.object({ email: z.string().email() }) },
+  responses: { "200": okResponse(z.object({ removed: z.boolean() })), ...errorResponses },
+});
+
 // -- Host payouts ---------------------------------------------------------------------------------
 
 const payoutAccountSchema = z

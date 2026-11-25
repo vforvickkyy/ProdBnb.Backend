@@ -26,6 +26,7 @@ const smtpSchema = z
     from_email: z.string().trim().email(),
     from_name: z.string().trim().min(1).max(120),
     reply_to: z.string().trim().email().nullable().optional(),
+    marketing_from_email: z.string().trim().email().nullable().optional(),
     max_per_minute: z.number().int().min(1).max(1000).default(60),
   })
   .strict();

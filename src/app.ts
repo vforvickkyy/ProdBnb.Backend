@@ -1,5 +1,6 @@
 import { websiteRevalidate } from "./middleware/websiteRevalidate";
 import cors from "cors";
+import { postResendWebhook } from "./modules/email/resendWebhook";
 import express, { Express } from "express";
 import helmet from "helmet";
 import { env } from "./config/env";
@@ -96,6 +97,8 @@ export function createApp(): Express {
   // rate-limited payment webhook is a worse failure mode than an
   // unrate-limited one -- payment reconciliation depends on it arriving.
   app.post("/v1/payments/webhooks/cashfree", express.raw({ type: "application/json" }), postCashfreeWebhook);
+  // Resend bounces/complaints: signed over the raw body too (Svix), so also before express.json().
+  app.post("/v1/webhooks/resend", express.raw({ type: "application/json", limit: "256kb" }), postResendWebhook);
 
   app.use(generalLimiter);
   app.use(express.json());

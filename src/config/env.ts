@@ -132,8 +132,14 @@ const baseEnvSchema = z.object({
   // The public website, for links in emails (booking pages, "Accept" confirm pages). Set per
   // environment: https://staging.heken.co on staging.
   WEBSITE_URL: z.string().url().default("https://heken.co"),
-  // Where people can write back to (Reply-To on transactional emails). Optional.
-  EMAIL_REPLY_TO: z.string().email().optional(),
+  // Where people write back to: the Reply-To of every email (unless the admin's SMTP settings set
+  // one) and the help address in email footers.
+  SUPPORT_EMAIL: z.string().email().default("support@heken.co"),
+  // The company that runs the marketplace, named in email footers.
+  COMPANY_LEGAL_NAME: z.string().trim().min(1).default("Eastape Tech"),
+  // Signing secret of the Resend webhook (Resend -> Webhooks; starts with "whsec_"). When set,
+  // bounces and spam complaints reported by Resend stop further emails to that address.
+  RESEND_WEBHOOK_SECRET: z.string().startsWith("whsec_").optional(),
   WEBSITE_REVALIDATE_SECRET: z.string().min(16).optional(),
 
   // Which PaymentProvider implementation is active (see

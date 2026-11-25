@@ -1,4 +1,4 @@
-import { processEmailOutbox } from "../email/outbox.service";
+import { processEmailOutbox, queueBookingReminders } from "../email/outbox.service";
 import { timingSafeEqual } from "crypto";
 import { Request, Response } from "express";
 import { UnauthenticatedError, ValidationError } from "../../errors/AppError";
@@ -280,7 +280,7 @@ function page(title: string, body: string): string {
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title>
 <style>body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f4f4f5;color:#18181b;margin:0;display:flex;min-height:100vh;align-items:center;justify-content:center;padding:16px}
 main{background:#fff;border-radius:12px;padding:32px;max-width:420px;width:100%;box-shadow:0 1px 3px rgba(0,0,0,.08)}h1{font-size:20px;margin:0 0 12px}p{line-height:1.6;color:#3f3f46}
-button{background:#C28014;color:#fff;border:0;border-radius:8px;padding:12px 18px;font-size:15px;font-weight:600;cursor:pointer}</style></head><body><main>${body}</main></body></html>`;
+button{background:#7B0113;color:#fff;border:0;border-radius:8px;padding:12px 18px;font-size:15px;font-weight:600;cursor:pointer}</style></head><body><main>${body}</main></body></html>`;
 }
 
 /** GET shows a confirmation button -- mail scanners prefetch GET links, so GET never unsubscribes. */
@@ -338,10 +338,12 @@ export async function postDispatchJobsHandler(req: Request, res: Response): Prom
 
   const startedAt = new Date().toISOString();
   try {
-    const campaigns = await runCampaignDispatch(Date.now() + 18_000);
-    // Transactional emails that couldn't go straight away (retries), in the time left.
+    const campaigns = await runCampaignDispatch(Date.now() + 15_000);
+    // Day-before reminders (queued and sent straight away), then transactional emails that
+    // couldn't go the first time (retries), in the time left.
+    const reminders = await queueBookingReminders().catch((e) => ({ error: e instanceof Error ? e.message.slice(0, 200) : "failed" }));
     const emails = await processEmailOutbox(Date.now() + 7_000).catch((e) => ({ error: e instanceof Error ? e.message.slice(0, 200) : "failed" }));
-    const summary = { ...campaigns, emails };
+    const summary = { ...campaigns, reminders, emails };
     await adminClient
       .from("background_jobs_config")
       .update({ last_run_at: startedAt, last_run_ok: true, last_run_summary: summary })

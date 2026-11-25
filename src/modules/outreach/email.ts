@@ -5,6 +5,7 @@ import { adminClient } from "../../lib/supabase";
 import { smtpCredentials } from "./channels.service";
 import { env } from "../../config/env";
 import { escapeHtml } from "../../utils/html";
+import { Block, BRAND_RED, renderLayout } from "../email/layout";
 
 /**
  * Admin Console 2: outbound email over the SMTP server an admin connected in the dashboard.
@@ -22,6 +23,9 @@ export interface OutgoingEmail {
   headers?: Record<string, string>;
   /** Files to attach (e.g. an invoice PDF). */
   attachments?: { filename: string; content: Buffer; contentType: string }[];
+  /** "marketing" sends from the news address when one is set (Messaging -> Email), so news
+   * and offers never share a sender -- and a reputation -- with booking emails. */
+  stream?: "transactional" | "marketing";
 }
 
 let transport: { version: string; transporter: Transporter } | null = null;
@@ -33,15 +37,17 @@ export function setEmailTransportForTesting(t: Transporter | null): void {
   transport = null;
 }
 
-async function getTransport(): Promise<{ transporter: Transporter; from: string; replyTo: string | null }> {
+async function getTransport(): Promise<{ transporter: Transporter; from: string; marketingFrom: string; replyTo: string | null }> {
   const creds = await smtpCredentials();
   if (!creds) {
     throw new ValidationError("Email is not connected. Connect an SMTP server under Messaging -> Email first.");
   }
   const { config, password, version } = creds;
-  const from = `"${config.from_name.replace(/"/g, "'")}" <${config.from_email}>`;
+  const name = config.from_name.replace(/"/g, "'");
+  const from = `"${name}" <${config.from_email}>`;
+  const marketingFrom = config.marketing_from_email ? `"${name}" <${config.marketing_from_email}>` : from;
   if (testTransport) {
-    return { transporter: testTransport, from, replyTo: config.reply_to };
+    return { transporter: testTransport, from, marketingFrom, replyTo: config.reply_to };
   }
   if (!transport || transport.version !== version) {
     transport = {
@@ -57,15 +63,15 @@ async function getTransport(): Promise<{ transporter: Transporter; from: string;
       }),
     };
   }
-  return { transporter: transport.transporter, from, replyTo: config.reply_to };
+  return { transporter: transport.transporter, from, marketingFrom, replyTo: config.reply_to };
 }
 
 export async function sendEmail(message: OutgoingEmail): Promise<string | null> {
-  const { transporter, from, replyTo } = await getTransport();
+  const { transporter, from, marketingFrom, replyTo } = await getTransport();
   const info = await transporter.sendMail({
-    from,
+    from: message.stream === "marketing" ? marketingFrom : from,
     to: message.to,
-    replyTo: replyTo ?? undefined,
+    replyTo: replyTo ?? env.SUPPORT_EMAIL,
     subject: message.subject,
     html: message.html,
     text: message.text,
@@ -95,7 +101,7 @@ function inline(text: string): string {
   let out = escapeHtml(text);
   out = out.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
   out = out.replace(/\[([^\]]{1,200})\]\((https:\/\/[^\s)]{1,500})\)/g, (_m, label: string, url: string) => {
-    return `<a href="${url}" style="color:#C28014;text-decoration:underline">${label}</a>`;
+    return `<a href="${url}" style="color:${BRAND_RED};text-decoration:underline">${label}</a>`;
   });
   return out.replace(/\n/g, "<br>");
 }
@@ -109,29 +115,23 @@ export function renderEmailBody(body: string): { html: string; text: string } {
   return { html, text };
 }
 
-export function wrapEmail(params: { subject: string; bodyHtml: string; bodyText: string; ctaUrl?: string | null; unsubscribeUrl?: string | null }): {
+/** An admin-written message (announcement, direct message, test) in the branded email shell. */
+export function wrapEmail(params: { subject: string; bodyHtml: string; bodyText: string; ctaUrl?: string | null; ctaLabel?: string; unsubscribeUrl?: string | null }): {
   html: string;
   text: string;
 } {
-  const cta =
-    params.ctaUrl && params.ctaUrl.startsWith("https://")
-      ? `<p style="margin:24px 0"><a href="${escapeHtml(params.ctaUrl)}" style="background:#C28014;color:#ffffff;padding:12px 20px;border-radius:8px;text-decoration:none;font-weight:600;display:inline-block">Open</a></p>`
-      : "";
-  const footer = params.unsubscribeUrl
-    ? `<p style="margin:24px 0 0;font-size:12px;color:#6b7280">You are receiving this because you have a ${escapeHtml(env.BRAND_NAME)} account. <a href="${escapeHtml(params.unsubscribeUrl)}" style="color:#6b7280">Unsubscribe from announcements</a>.</p>`
-    : "";
-  const html = `<!doctype html><html><body style="margin:0;background:#f4f4f5;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#18181b">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:32px 16px"><tr><td align="center">
-<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:12px;padding:32px">
-<tr><td style="font-size:18px;font-weight:700;padding-bottom:24px">Prod<span style="color:#C28014">.</span>Bnb</td></tr>
-<tr><td style="font-size:15px">${params.bodyHtml}${cta}${footer}</td></tr>
-</table></td></tr></table></body></html>`;
-  const text = [
-    params.bodyText,
-    params.ctaUrl ? `\nOpen: ${params.ctaUrl}` : "",
-    params.unsubscribeUrl ? `\n\nUnsubscribe from announcements: ${params.unsubscribeUrl}` : "",
-  ].join("");
-  return { html, text };
+  const blocks: Block[] = [{ kind: "html", html: params.bodyHtml, text: params.bodyText }];
+  if (params.ctaUrl && params.ctaUrl.startsWith("https://")) {
+    blocks.push({ kind: "button", label: params.ctaLabel ?? "Open", url: params.ctaUrl });
+  }
+  const email = renderLayout({
+    subject: params.subject,
+    preheader: params.bodyText.replace(/\s+/g, " ").slice(0, 120),
+    blocks,
+    footerNote: params.unsubscribeUrl ? `You're getting this because you have a ${env.BRAND_NAME} account.` : undefined,
+    unsubscribeUrl: params.unsubscribeUrl,
+  });
+  return { html: email.html, text: email.text };
 }
 
 // ---------------------------------------------------------------------------------------------------
