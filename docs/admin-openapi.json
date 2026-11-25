@@ -5022,6 +5022,118 @@
           "handler"
         ]
       },
+      "AdminEmail": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "user_id": {
+            "type": "string",
+            "nullable": true,
+            "format": "uuid"
+          },
+          "to_email": {
+            "type": "string"
+          },
+          "template": {
+            "type": "string",
+            "enum": [
+              "quote_request_sent",
+              "quote_ready",
+              "booking_confirmed",
+              "booking_declined",
+              "booking_cancelled",
+              "payment_success",
+              "payment_failed",
+              "refund_processed",
+              "host_booking_request",
+              "host_quote_request",
+              "host_booking_confirmed",
+              "host_booking_cancelled",
+              "listing_submitted",
+              "listing_approved",
+              "listing_rejected",
+              "listing_suspended",
+              "listing_restored",
+              "payout_sent"
+            ]
+          },
+          "stream": {
+            "type": "string",
+            "enum": [
+              "transactional",
+              "marketing"
+            ]
+          },
+          "idempotency_key": {
+            "type": "string"
+          },
+          "data": {
+            "type": "object",
+            "additionalProperties": {
+              "nullable": true
+            }
+          },
+          "subject": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "sending",
+              "sent",
+              "failed",
+              "skipped"
+            ]
+          },
+          "attempts": {
+            "type": "integer"
+          },
+          "last_error": {
+            "type": "string",
+            "nullable": true
+          },
+          "provider_message_id": {
+            "type": "string",
+            "nullable": true
+          },
+          "send_after": {
+            "type": "string"
+          },
+          "sent_at": {
+            "type": "string",
+            "nullable": true
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "user_id",
+          "to_email",
+          "template",
+          "stream",
+          "idempotency_key",
+          "data",
+          "subject",
+          "status",
+          "attempts",
+          "last_error",
+          "provider_message_id",
+          "send_after",
+          "sent_at",
+          "created_at",
+          "updated_at"
+        ]
+      },
       "PayoutAccount": {
         "type": "object",
         "nullable": true,
@@ -18123,6 +18235,269 @@
           },
           "409": {
             "description": "Withdrawn by the person, or they have another open request"
+          }
+        }
+      }
+    },
+    "/emails": {
+      "get": {
+        "tags": [
+          "Admin",
+          "Messaging"
+        ],
+        "summary": "Transactional emails sent or waiting (campaigns.view), newest first",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "queued",
+                "sending",
+                "sent",
+                "failed",
+                "skipped"
+              ]
+            },
+            "required": false,
+            "name": "status",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "quote_request_sent",
+                "quote_ready",
+                "booking_confirmed",
+                "booking_declined",
+                "booking_cancelled",
+                "payment_success",
+                "payment_failed",
+                "refund_processed",
+                "host_booking_request",
+                "host_quote_request",
+                "host_booking_confirmed",
+                "host_booking_cancelled",
+                "listing_submitted",
+                "listing_approved",
+                "listing_rejected",
+                "listing_suspended",
+                "listing_restored",
+                "payout_sent"
+              ]
+            },
+            "required": false,
+            "name": "template",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string"
+            },
+            "required": false,
+            "name": "search",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            },
+            "required": false,
+            "name": "page",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 25
+            },
+            "required": false,
+            "name": "pageSize",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/AdminEmail"
+                      }
+                    },
+                    "meta": {
+                      "type": "object",
+                      "properties": {
+                        "page": {
+                          "type": "integer"
+                        },
+                        "pageSize": {
+                          "type": "integer"
+                        },
+                        "total": {
+                          "type": "integer"
+                        }
+                      },
+                      "required": [
+                        "page",
+                        "pageSize",
+                        "total"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "meta"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/emails/summary": {
+      "get": {
+        "tags": [
+          "Admin",
+          "Messaging"
+        ],
+        "summary": "How many emails are in each state over the last 7 days (campaigns.view)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "queued": {
+                          "type": "integer"
+                        },
+                        "sending": {
+                          "type": "integer"
+                        },
+                        "sent": {
+                          "type": "integer"
+                        },
+                        "failed": {
+                          "type": "integer"
+                        },
+                        "skipped": {
+                          "type": "integer"
+                        }
+                      }
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/emails/{id}/resend": {
+      "post": {
+        "tags": [
+          "Admin",
+          "Messaging"
+        ],
+        "summary": "Send an email again (campaigns.send)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/AdminEmail"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
           }
         }
       }

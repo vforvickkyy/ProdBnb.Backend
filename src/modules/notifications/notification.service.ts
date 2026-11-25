@@ -1,3 +1,5 @@
+import { queueEmail } from "../email/outbox.service";
+import type { EmailTemplate } from "../email/templates";
 import { SupabaseClient } from "@supabase/supabase-js";
 import { NotFoundError } from "../../errors/AppError";
 import { adminClient } from "../../lib/supabase";
@@ -64,6 +66,8 @@ interface NotifyParams {
   entityType: NotificationEntityType;
   entityId: string;
   data?: Record<string, unknown>;
+  /** The email that goes with this notification, if any (queued once per event, see email/outbox). */
+  email?: { template: EmailTemplate; data: Record<string, unknown> };
   /**
    * Idempotency key, unique per (user_id, source_event_id).
    *
@@ -360,6 +364,15 @@ async function safeNotify(params: NotifyParams): Promise<void> {
       err
     );
   }
+  // The email is independent of the in-app row: queued once per event (same key), never throws.
+  if (params.email) {
+    await queueEmail({
+      userId: params.userId,
+      template: params.email.template,
+      key: `${params.sourceEventId}:${params.email.template}`,
+      data: params.email.data,
+    });
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -379,11 +392,20 @@ export function notifyBookingRequestReceived(hostId: string, bookingId: string):
     entityType: "booking",
     entityId: bookingId,
     sourceEventId: `booking:${bookingId}:booking_request_received`,
+    email: { template: "host_booking_request", data: { bookingId } },
   });
 }
 
 /** A request on a price-on-request listing: the host prices it (or declines). Nothing paid yet. */
-export function notifyQuoteRequested(hostId: string, bookingId: string): Promise<void> {
+export async function notifyQuoteRequested(hostId: string, bookingId: string): Promise<void> {
+  await notifyQuoteRequestedHost(hostId, bookingId);
+  const { data } = await adminClient.from("bookings").select("booker_id").eq("id", bookingId).maybeSingle();
+  if (data?.booker_id) {
+    await queueEmail({ userId: data.booker_id as string, template: "quote_request_sent", key: `booking:${bookingId}:quote_request_sent`, data: { bookingId } });
+  }
+}
+
+function notifyQuoteRequestedHost(hostId: string, bookingId: string): Promise<void> {
   return safeNotify({
     userId: hostId,
     type: "booking_request_received",
@@ -393,6 +415,7 @@ export function notifyQuoteRequested(hostId: string, bookingId: string): Promise
     entityId: bookingId,
     // Distinct from the paid-request event, so the "booking paid" notice later still arrives.
     sourceEventId: `booking:${bookingId}:quote_requested`,
+    email: { template: "host_quote_request", data: { bookingId } },
   });
 }
 
@@ -406,10 +429,21 @@ export function notifyQuoteReady(bookerId: string, bookingId: string): Promise<v
     entityType: "booking",
     entityId: bookingId,
     sourceEventId: `booking:${bookingId}:quote_ready`,
+    email: { template: "quote_ready", data: { bookingId } },
   });
 }
 
-export function notifyBookingConfirmed(bookerId: string, bookingId: string): Promise<void> {
+export async function notifyBookingConfirmed(bookerId: string, bookingId: string): Promise<void> {
+  await notifyBookingConfirmedBooker(bookerId, bookingId);
+  // Instant bookings: the host hears about it too (the template skips bookings the host accepted).
+  const { data } = await adminClient.from("bookings").select("location:locations(host_id)").eq("id", bookingId).maybeSingle();
+  const hostId = (data as { location?: { host_id?: string } } | null)?.location?.host_id;
+  if (hostId) {
+    await queueEmail({ userId: hostId, template: "host_booking_confirmed", key: `booking:${bookingId}:host_booking_confirmed`, data: { bookingId } });
+  }
+}
+
+function notifyBookingConfirmedBooker(bookerId: string, bookingId: string): Promise<void> {
   return safeNotify({
     userId: bookerId,
     type: "booking_confirmed",
@@ -418,6 +452,7 @@ export function notifyBookingConfirmed(bookerId: string, bookingId: string): Pro
     entityType: "booking",
     entityId: bookingId,
     sourceEventId: `booking:${bookingId}:booking_confirmed`,
+    email: { template: "booking_confirmed", data: { bookingId } },
   });
 }
 
@@ -430,10 +465,11 @@ export function notifyBookingDeclined(bookerId: string, bookingId: string): Prom
     entityType: "booking",
     entityId: bookingId,
     sourceEventId: `booking:${bookingId}:booking_declined`,
+    email: { template: "booking_declined", data: { bookingId } },
   });
 }
 
-export function notifyBookingCancelled(recipientId: string, bookingId: string): Promise<void> {
+export function notifyBookingCancelled(recipientId: string, bookingId: string, role: "booker" | "host" = "booker"): Promise<void> {
   return safeNotify({
     userId: recipientId,
     type: "booking_cancelled",
@@ -442,6 +478,7 @@ export function notifyBookingCancelled(recipientId: string, bookingId: string): 
     entityType: "booking",
     entityId: bookingId,
     sourceEventId: `booking:${bookingId}:booking_cancelled`,
+    email: { template: role === "host" ? "host_booking_cancelled" : "booking_cancelled", data: { bookingId } },
   });
 }
 
@@ -455,6 +492,7 @@ export function notifyPaymentSuccess(bookerId: string, bookingId: string, paymen
     entityId: bookingId,
     data: { payment_id: paymentId },
     sourceEventId: `payment:${paymentId}:payment_success`,
+    email: { template: "payment_success", data: { bookingId, paymentId } },
   });
 }
 
@@ -468,6 +506,7 @@ export function notifyPaymentFailed(bookerId: string, bookingId: string, payment
     entityId: bookingId,
     data: { payment_id: paymentId },
     sourceEventId: `payment:${paymentId}:payment_failed`,
+    email: { template: "payment_failed", data: { bookingId, paymentId } },
   });
 }
 
@@ -481,6 +520,7 @@ export function notifyRefundProcessed(bookerId: string, bookingId: string, payme
     entityId: bookingId,
     data: { payment_id: paymentId },
     sourceEventId: `payment:${paymentId}:refund_processed`,
+    email: { template: "refund_processed", data: { bookingId, paymentId } },
   });
 }
 

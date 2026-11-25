@@ -129,6 +129,11 @@ const baseEnvSchema = z.object({
   // after the page cache runs out (src/middleware/websiteRevalidate.ts). Optional: unset, nothing
   // is sent and pages refresh on their own timer.
   WEBSITE_REVALIDATE_URL: z.string().url().optional(),
+  // The public website, for links in emails (booking pages, "Accept" confirm pages). Set per
+  // environment: https://staging.heken.co on staging.
+  WEBSITE_URL: z.string().url().default("https://heken.co"),
+  // Where people can write back to (Reply-To on transactional emails). Optional.
+  EMAIL_REPLY_TO: z.string().email().optional(),
   WEBSITE_REVALIDATE_SECRET: z.string().min(16).optional(),
 
   // Which PaymentProvider implementation is active (see

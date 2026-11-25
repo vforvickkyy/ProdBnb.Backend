@@ -1,3 +1,4 @@
+import { queueEmail } from "../email/outbox.service";
 import { ConflictError, NotFoundError, ValidationError } from "../../errors/AppError";
 import { adminClient } from "../../lib/supabase";
 import { writeAuditLog } from "../admin/audit.service";
@@ -186,6 +187,7 @@ export async function recordPayout(adminId: string, hostId: string, input: Recor
     reference: input.reference,
     booking_ids: unique,
   });
+  await queueEmail({ userId: hostId, template: "payout_sent", key: `payout:${payout.id}:payout_sent`, data: { payoutId: payout.id } });
   const { data: saved, error: readError } = await adminClient.from("host_payouts").select(PAYOUT_COLUMNS).eq("id", payout.id).single();
   if (readError) throw readError;
   return toPayout(saved as unknown as Parameters<typeof toPayout>[0]);

@@ -173,7 +173,8 @@ describe("invoices and receipts", () => {
     const inv = await invoiceFor(early.id);
     expect(inv).toMatchObject({ delivery_status: "pending", sent_via: null, total_minor_units: early.total });
     expect(inv!.number).toMatch(/^INV\/\d{2}-\d{2}\/\d{4}$/);
-    expect(mock.sent).toHaveLength(0);
+    // (Booking and payment emails may go out; no invoice email does.)
+    expect(mock.sent.filter((m) => m.subject.startsWith("Invoice "))).toHaveLength(0);
     const send = await request(app).post(`/v1/admin/invoices/${inv!.id}/send`).set(auth(finance)).send({});
     expect(send.body.data).toMatchObject({ delivery_status: "sent", sent_via: "manual", sent_to: booker.email });
     expect(mock.sent.some((m) => m.subject.includes(inv!.number) && m.attachments?.[0].filename.endsWith(".pdf"))).toBe(true);
@@ -187,7 +188,7 @@ describe("invoices and receipts", () => {
     expect(ib!.sequence).toBe(ia!.sequence + 1);
     expect(ia!.seller).toMatchObject({ name: "TestCo", gstin: "27AABCT1234F1Z5", state: "Maharashtra" });
     expect(ia!.billed_to).toMatchObject({ name: "Riya Menon", email: booker.email, state: "Karnataka" });
-    expect(mock.sent.filter((m) => m.to === booker.email)).toHaveLength(2);
+    expect(mock.sent.filter((m) => m.to === booker.email && m.subject.startsWith("Invoice "))).toHaveLength(2);
 
     // Verifying again doesn't issue or send a second one.
     await request(app).post(`/v1/payments/${a.paymentId}/verify`).set(auth(booker));

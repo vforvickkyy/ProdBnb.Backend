@@ -1304,7 +1304,7 @@ export async function cancelBooking(
   if (isBooker) {
     const location = await getVisibleLocationOrNull(supabase, row.location_id);
     if (location) {
-      await notifyBookingCancelled(location.host_id, booking.id);
+      await notifyBookingCancelled(location.host_id, booking.id, "host");
     }
   } else {
     await notifyBookingCancelled(booking.booker_id, booking.id);

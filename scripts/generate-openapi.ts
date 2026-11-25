@@ -63,6 +63,7 @@ import {
 } from "../src/modules/hostRequests/hostRequests.schema";
 import { earningStateSchema, hostIdParamSchema, listPayoutsQuerySchema, recordPayoutSchema } from "../src/modules/payouts/payouts.schema";
 import { revealSchema } from "../src/modules/payouts/payouts.routes";
+import { EMAIL_TEMPLATES } from "../src/modules/email/templates";
 import { adminCreateCouponSchema, couponIdParamSchema, listCouponsQuerySchema, updateCouponSchema } from "../src/modules/coupons/coupons.schema";
 import {
   invoiceIdParamSchema,
@@ -2451,6 +2452,65 @@ registry.registerPath({
   security,
   request: { params: hostRequestIdParamSchema, body: jsonBody(updateHostRequestSchema) },
   responses: { "200": okResponse(adminHostRequestSchema), "409": { description: "Withdrawn by the person, or they have another open request" }, ...errorResponses },
+});
+
+// -- Email log (transactional emails) -------------------------------------------------------------
+
+const emailStatusSchema = z.enum(["queued", "sending", "sent", "failed", "skipped"]);
+const adminEmailSchema = z
+  .object({
+    id: z.string().uuid(),
+    user_id: z.string().uuid().nullable(),
+    to_email: z.string(),
+    template: z.enum(EMAIL_TEMPLATES),
+    stream: z.enum(["transactional", "marketing"]),
+    idempotency_key: z.string(),
+    data: z.record(z.unknown()),
+    subject: z.string().nullable(),
+    status: emailStatusSchema,
+    attempts: z.number().int(),
+    last_error: z.string().nullable(),
+    provider_message_id: z.string().nullable(),
+    send_after: z.string(),
+    sent_at: z.string().nullable(),
+    created_at: z.string(),
+    updated_at: z.string(),
+  })
+  .openapi("AdminEmail");
+
+registry.registerPath({
+  method: "get",
+  path: "/emails",
+  tags: ["Admin", "Messaging"],
+  summary: "Transactional emails sent or waiting (campaigns.view), newest first",
+  security,
+  request: {
+    query: z.object({
+      status: emailStatusSchema.optional(),
+      template: z.enum(EMAIL_TEMPLATES).optional(),
+      search: z.string().optional(),
+      page: z.coerce.number().int().min(1).default(1),
+      pageSize: z.coerce.number().int().min(1).max(100).default(25),
+    }),
+  },
+  responses: { "200": paginatedResponse(adminEmailSchema), ...errorResponses },
+});
+registry.registerPath({
+  method: "get",
+  path: "/emails/summary",
+  tags: ["Admin", "Messaging"],
+  summary: "How many emails are in each state over the last 7 days (campaigns.view)",
+  security,
+  responses: { "200": okResponse(z.record(emailStatusSchema, z.number().int())), ...errorResponses },
+});
+registry.registerPath({
+  method: "post",
+  path: "/emails/{id}/resend",
+  tags: ["Admin", "Messaging"],
+  summary: "Send an email again (campaigns.send)",
+  security,
+  request: { params: z.object({ id: z.string().uuid() }) },
+  responses: { "200": okResponse(adminEmailSchema), ...errorResponses },
 });
 
 // -- Host payouts ---------------------------------------------------------------------------------

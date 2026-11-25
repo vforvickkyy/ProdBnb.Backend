@@ -1,3 +1,4 @@
+import { queueEmail } from "../email/outbox.service";
 import { SupabaseClient } from "@supabase/supabase-js";
 import { NotFoundError, ValidationError } from "../../errors/AppError";
 import { adminClient } from "../../lib/supabase";
@@ -45,6 +46,7 @@ export async function approveLocation(supabase: SupabaseClient, adminId: string,
 
   await updateLocationRow(locationId, { status: "published", moderation_reason: null });
   await writeAuditLog(adminId, "ADMIN_APPROVED_LOCATION", "location", locationId, null, { previous_status: location.status });
+  await queueEmail({ userId: location.host_id, template: "listing_approved", key: `location:${locationId}:listing_approved:${Date.now()}`, data: { locationId } });
   return getLocation(supabase, locationId, { userId: adminId, isAdmin: true });
 }
 
@@ -64,6 +66,7 @@ export async function rejectLocation(
 
   await updateLocationRow(locationId, { status: "rejected", moderation_reason: reason });
   await writeAuditLog(adminId, "ADMIN_REJECTED_LOCATION", "location", locationId, reason, { previous_status: location.status });
+  await queueEmail({ userId: location.host_id, template: "listing_rejected", key: `location:${locationId}:listing_rejected:${Date.now()}`, data: { locationId } });
   return getLocation(supabase, locationId, { userId: adminId, isAdmin: true });
 }
 
@@ -88,6 +91,7 @@ export async function suspendLocation(
     suspended_by_host_suspension: false,
   });
   await writeAuditLog(adminId, "ADMIN_SUSPENDED_LOCATION", "location", locationId, reason, { previous_status: "published" });
+  await queueEmail({ userId: location.host_id, template: "listing_suspended", key: `location:${locationId}:listing_suspended:${Date.now()}`, data: { locationId } });
   return getLocation(supabase, locationId, { userId: adminId, isAdmin: true });
 }
 
@@ -107,5 +111,6 @@ export async function restoreLocation(supabase: SupabaseClient, adminId: string,
     suspended_by_host_suspension: false,
   });
   await writeAuditLog(adminId, "ADMIN_RESTORED_LOCATION", "location", locationId, null, {});
+  await queueEmail({ userId: location.host_id, template: "listing_restored", key: `location:${locationId}:listing_restored:${Date.now()}`, data: { locationId } });
   return getLocation(supabase, locationId, { userId: adminId, isAdmin: true });
 }

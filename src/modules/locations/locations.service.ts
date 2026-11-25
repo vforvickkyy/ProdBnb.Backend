@@ -1,3 +1,4 @@
+import { queueEmail } from "../email/outbox.service";
 import { SupabaseClient } from "@supabase/supabase-js";
 import { ConflictError, ForbiddenError, NotFoundError, ValidationError } from "../../errors/AppError";
 import { adminClient } from "../../lib/supabase";
@@ -910,6 +911,10 @@ export async function updateLocation(
     ...(amenity_ids !== undefined ? ["amenity_ids"] : []),
     ...(use_case_ids !== undefined ? ["use_case_ids"] : []),
   ];
+  // The host sent it for review: confirm by email (the team's decision follows in another).
+  if (status === "submitted" && !isAdmin && current.status !== "submitted") {
+    await queueEmail({ userId: current.host_id, template: "listing_submitted", key: `location:${locationId}:listing_submitted:${Date.now()}`, data: { locationId } });
+  }
   if (isAdmin && current.host_id !== callerId && changedFields.length > 0) {
     await writeAuditLog(callerId, "ADMIN_UPDATED_LOCATION", "location", locationId, auditReason, { fields: changedFields });
   }
