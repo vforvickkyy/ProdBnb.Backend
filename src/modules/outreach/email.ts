@@ -26,6 +26,8 @@ export interface OutgoingEmail {
   /** "marketing" sends from the news address when one is set (Messaging -> Email), so news
    * and offers never share a sender -- and a reputation -- with booking emails. */
   stream?: "transactional" | "marketing";
+  /** Labels the provider echoes back in delivery/open/click events (Resend only). */
+  tags?: Record<string, string>;
 }
 
 let transport: { version: string; transporter: Transporter } | null = null;
@@ -37,7 +39,7 @@ export function setEmailTransportForTesting(t: Transporter | null): void {
   transport = null;
 }
 
-async function getTransport(): Promise<{ transporter: Transporter; from: string; marketingFrom: string; replyTo: string | null }> {
+async function getTransport(): Promise<{ transporter: Transporter; from: string; marketingFrom: string; replyTo: string | null; resendKey: string | null }> {
   const creds = await smtpCredentials();
   if (!creds) {
     throw new ValidationError("Email is not connected. Connect an SMTP server under Messaging -> Email first.");
@@ -47,7 +49,7 @@ async function getTransport(): Promise<{ transporter: Transporter; from: string;
   const from = `"${name}" <${config.from_email}>`;
   const marketingFrom = config.marketing_from_email ? `"${name}" <${config.marketing_from_email}>` : from;
   if (testTransport) {
-    return { transporter: testTransport, from, marketingFrom, replyTo: config.reply_to };
+    return { transporter: testTransport, from, marketingFrom, replyTo: config.reply_to, resendKey: null };
   }
   if (!transport || transport.version !== version) {
     transport = {
@@ -63,11 +65,50 @@ async function getTransport(): Promise<{ transporter: Transporter; from: string;
       }),
     };
   }
-  return { transporter: transport.transporter, from, marketingFrom, replyTo: config.reply_to };
+  // Resend's SMTP password is a Resend API key: send through its API instead, which returns the
+  // email's id (and carries tags), so delivery, opens and clicks can be matched back to it.
+  const resendKey = config.host.trim().toLowerCase() === "smtp.resend.com" && password ? password : null;
+  return { transporter: transport.transporter, from, marketingFrom, replyTo: config.reply_to, resendKey };
+}
+
+let resendFetch: typeof fetch = (...args) => fetch(...args);
+/** Tests only: answer Resend API calls without the network. */
+export function setResendFetchForTesting(fn: typeof fetch | null): void {
+  resendFetch = fn ?? ((...args) => fetch(...args));
+}
+
+async function sendViaResend(key: string, from: string, replyTo: string, message: OutgoingEmail): Promise<string | null> {
+  const tags = Object.entries(message.tags ?? {})
+    .filter(([, v]) => v)
+    .map(([name, value]) => ({ name: name.replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 256), value: String(value).replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 256) }));
+  const res = await resendFetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      from,
+      to: [message.to],
+      reply_to: replyTo,
+      subject: message.subject,
+      html: message.html,
+      text: message.text,
+      headers: message.headers,
+      tags: tags.length ? tags : undefined,
+      attachments: message.attachments?.map((a) => ({ filename: a.filename, content: a.content.toString("base64"), content_type: a.contentType })),
+    }),
+    signal: AbortSignal.timeout(20_000),
+  });
+  const body = (await res.json().catch(() => ({}))) as { id?: string; message?: string };
+  if (!res.ok) {
+    throw new Error(`Resend refused the email (${res.status}): ${body.message ?? res.statusText}`.slice(0, 300));
+  }
+  return body.id ?? null;
 }
 
 export async function sendEmail(message: OutgoingEmail): Promise<string | null> {
-  const { transporter, from, marketingFrom, replyTo } = await getTransport();
+  const { transporter, from, marketingFrom, replyTo, resendKey } = await getTransport();
+  if (resendKey) {
+    return sendViaResend(resendKey, message.stream === "marketing" ? marketingFrom : from, replyTo ?? env.SUPPORT_EMAIL, message);
+  }
   const info = await transporter.sendMail({
     from: message.stream === "marketing" ? marketingFrom : from,
     to: message.to,

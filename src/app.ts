@@ -1,6 +1,7 @@
 import { websiteRevalidate } from "./middleware/websiteRevalidate";
 import cors from "cors";
 import { postResendWebhook } from "./modules/email/resendWebhook";
+import { postAuthEmailHook } from "./modules/email/authEmailHook";
 import express, { Express } from "express";
 import helmet from "helmet";
 import { env } from "./config/env";
@@ -99,6 +100,8 @@ export function createApp(): Express {
   app.post("/v1/payments/webhooks/cashfree", express.raw({ type: "application/json" }), postCashfreeWebhook);
   // Resend bounces/complaints: signed over the raw body too (Svix), so also before express.json().
   app.post("/v1/webhooks/resend", express.raw({ type: "application/json", limit: "256kb" }), postResendWebhook);
+  // Supabase auth "Send Email" hook: signed over the raw body (Standard Webhooks).
+  app.post("/v1/auth/email-hook", express.raw({ type: "application/json", limit: "64kb" }), postAuthEmailHook);
 
   app.use(generalLimiter);
   app.use(express.json());

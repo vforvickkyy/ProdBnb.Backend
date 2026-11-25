@@ -4,8 +4,8 @@ import { env } from "../../config/env";
 import { adminClient } from "../../lib/supabase";
 
 /**
- * Resend -> us: bounces and spam complaints (Resend dashboard -> Webhooks, events
- * `email.bounced` and `email.complained`, URL <api>/v1/webhooks/resend).
+ * Resend -> us (Resend dashboard -> Webhooks, URL <api>/v1/webhooks/resend), events
+ * `email.delivered`, `email.opened`, `email.clicked`, `email.bounced` and `email.complained`.
  *
  * A hard bounce blocks the address for every email (it doesn't exist, so more sends only hurt
  * our sender reputation); a complaint ("mark as spam") unsubscribes it from news and offers.
@@ -34,7 +34,53 @@ export function verifySvixSignature(secret: string, headers: { id?: string; time
 
 interface ResendEvent {
   type?: string;
-  data?: { to?: string[] | string; bounce?: { type?: string } };
+  created_at?: string;
+  data?: { email_id?: string; to?: string[] | string; bounce?: { type?: string } };
+}
+
+/**
+ * Delivery, opens and clicks, recorded on the email they belong to (matched by Resend's email id):
+ * a campaign recipient (marketing: all five) or an outbox row (booking emails: delivered/bounced).
+ * First time of each is kept; opens and clicks are also counted.
+ */
+async function recordEvent(event: ResendEvent): Promise<void> {
+  const id = event.data?.email_id;
+  if (!id) return;
+  const at = event.created_at && !Number.isNaN(Date.parse(event.created_at)) ? new Date(event.created_at).toISOString() : new Date().toISOString();
+  const column: Record<string, string> = {
+    "email.delivered": "email_delivered_at",
+    "email.opened": "email_opened_at",
+    "email.clicked": "email_clicked_at",
+    "email.bounced": "email_bounced_at",
+    "email.complained": "email_complained_at",
+  };
+  const col = event.type ? column[event.type] : undefined;
+  if (!col) return;
+  const { data: rows } = await adminClient
+    .from("campaign_recipients")
+    .select("campaign_id, user_id, email_opened_at, email_clicked_at, email_delivered_at, email_bounced_at, email_complained_at, email_open_count, email_click_count")
+    .eq("email_message_id", id)
+    .limit(1);
+  const r = (rows ?? [])[0] as Record<string, unknown> | undefined;
+  if (r) {
+    const update: Record<string, unknown> = {};
+    if (!r[col]) update[col] = at;
+    if (event.type === "email.opened") update.email_open_count = Number(r.email_open_count ?? 0) + 1;
+    if (event.type === "email.clicked") {
+      update.email_click_count = Number(r.email_click_count ?? 0) + 1;
+      // A click means it was opened, even when the open pixel was blocked.
+      if (!r.email_opened_at) update.email_opened_at = at;
+    }
+    if (Object.keys(update).length) {
+      await adminClient.from("campaign_recipients").update(update).eq("campaign_id", r.campaign_id as string).eq("user_id", r.user_id as string);
+    }
+    return;
+  }
+  if (event.type === "email.delivered") {
+    await adminClient.from("email_outbox").update({ delivered_at: at }).eq("provider_message_id", id).is("delivered_at", null);
+  } else if (event.type === "email.bounced") {
+    await adminClient.from("email_outbox").update({ bounced_at: at }).eq("provider_message_id", id).is("bounced_at", null);
+  }
 }
 
 let secretOverride: string | null | undefined;
@@ -73,6 +119,8 @@ export async function postResendWebhook(req: Request, res: Response): Promise<vo
   let reason: "bounced" | "unsubscribed" | null = null;
   if (event.type === "email.bounced" && (event.data?.bounce?.type ?? "Permanent").toLowerCase() !== "transient") reason = "bounced";
   if (event.type === "email.complained") reason = "unsubscribed";
+
+  await recordEvent(event).catch((error) => console.error("Resend event not recorded:", error));
 
   if (reason && to.length > 0) {
     for (const email of to) {

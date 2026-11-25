@@ -33,6 +33,15 @@ export const EMAIL_TEMPLATES = [
   "listing_restored",
   "payout_sent",
   "host_booking_reminder",
+  // Account
+  "welcome",
+  // Sign-in emails (sent straight away by the auth hook; never re-sent: they carry one-time links)
+  "auth_signup",
+  "auth_recovery",
+  "auth_magiclink",
+  "auth_invite",
+  "auth_email_change",
+  "auth_reauthentication",
 ] as const;
 export type EmailTemplate = (typeof EMAIL_TEMPLATES)[number];
 
@@ -393,6 +402,29 @@ async function hostBookingReminder(data: Data): Promise<BuiltEmail | null> {
   ]);
 }
 
+/** After onboarding: what to do first. Hosts (people who own a place) get the hosting version. */
+async function welcome(recipientId: string): Promise<BuiltEmail | null> {
+  const person = await personOf(recipientId);
+  const { data: prefs } = await adminClient.from("user_preferences").select("professions, cities").eq("user_id", recipientId).maybeSingle();
+  const owner = ((prefs?.professions as string[] | undefined) ?? []).includes("location_owner");
+  const city = ((prefs?.cities as string[] | undefined) ?? [])[0];
+  if (owner) {
+    return page(`Welcome to ${brand()}, ${person.first_name}`, "List your place and start getting shoot bookings.", [
+      { kind: "heading", text: `Welcome to ${brand()}, ${person.first_name}` },
+      { kind: "text", text: `${brand()} is where film crews, photographers and creators find places to shoot. Here's how hosting works:` },
+      { kind: "details", rows: [["1. List your place", "Photos, what's there, your prices and times."], ["2. We review it", "Usually within a couple of days."], ["3. Get bookings", "Accept requests, get paid after the shoot."]] },
+      { kind: "button", label: "List your place", url: siteUrl("/host") },
+      { kind: "text", muted: true, text: "Prefer a hand with it? Ask for a callback from the hosting page and our team will call you." },
+    ]);
+  }
+  return page(`Welcome to ${brand()}, ${person.first_name}`, "Find a place for your next shoot.", [
+    { kind: "heading", text: `Welcome to ${brand()}, ${person.first_name}` },
+    { kind: "text", text: "Homes, studios, rooftops and more, ready for your next shoot." },
+    { kind: "details", rows: [["Search", city ? `Start with places in ${city}, or anywhere you shoot.` : "By city, area or shoot type."], ["Ask", "Message hosts before you book."], ["Book", "Pay securely; the address comes with your confirmation."]] },
+    { kind: "button", label: "Find a place", url: siteUrl(city ? `/search?city=${encodeURIComponent(city)}` : "/search") },
+  ]);
+}
+
 /** Renders a template for its recipient. Null means "don't send" (the moment has passed). */
 export async function buildEmail(template: EmailTemplate, data: Data, recipientId: string): Promise<BuiltEmail | null> {
   switch (template) {
@@ -432,5 +464,10 @@ export async function buildEmail(template: EmailTemplate, data: Data, recipientI
       return bookingReminder(data);
     case "host_booking_reminder":
       return hostBookingReminder(data);
+    case "welcome":
+      return welcome(recipientId);
+    default:
+      // Sign-in emails are built and sent by the auth hook only.
+      return null;
   }
 }

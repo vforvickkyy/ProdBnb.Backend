@@ -125,6 +125,17 @@ export const audienceSchema = z.discriminatedUnion("type", [
 ]);
 export type Audience = z.infer<typeof audienceSchema>;
 
+/** How the email looks (marketing designs): see src/modules/email/marketing.ts. */
+export const emailDesignSchema = z.enum(["plain", "spotlight", "collection", "offer", "news"]);
+const emailDesignFields = {
+  email_design: emailDesignSchema.optional(),
+  email_heading: z.string().trim().min(1).max(200).nullable().optional(),
+  email_image_url: z.string().trim().max(1000).regex(/^https:\/\/\S+$/, "Use an https:// picture link.").nullable().optional(),
+  email_button_label: z.string().trim().min(1).max(40).nullable().optional(),
+  /** The listings of a "collection" email, in order (2-6). */
+  email_location_ids: z.array(uuid).max(6).optional(),
+};
+
 const campaignFields = {
   name: z.string().trim().min(1).max(120),
   kind: z.enum(["announcement", "direct"]).default("announcement"),
@@ -146,6 +157,7 @@ const campaignFields = {
   location_id: uuid.nullable().optional(),
   coupon_id: uuid.nullable().optional(),
   template_id: uuid.nullable().optional(),
+  ...emailDesignFields,
 };
 
 function emailFieldsPresent(d: { channels?: string[]; email_subject?: string | null; email_body?: string | null }): boolean {
@@ -173,6 +185,7 @@ export const updateCampaignSchema = z
     location_id: campaignFields.location_id,
     coupon_id: campaignFields.coupon_id,
     template_id: campaignFields.template_id,
+    ...emailDesignFields,
   })
   .strict()
   .refine((d) => Object.keys(d).length > 0, { message: "Provide at least one field to update." });
@@ -193,6 +206,8 @@ export type SendCampaignInput = z.infer<typeof sendCampaignSchema>;
 export const listCampaignsQuerySchema = z.object({
   page,
   pageSize,
+  /** Marketing pages: campaigns that use this channel ("push" covers in-app too). */
+  channel: z.enum(["email", "push"]).optional(),
   status: z.enum(["draft", "scheduled", "sending", "sent", "cancelled", "failed"]).optional(),
   kind: z.enum(["announcement", "direct"]).optional(),
 });
@@ -201,7 +216,7 @@ export type ListCampaignsQuery = z.infer<typeof listCampaignsQuerySchema>;
 export const campaignRecipientsQuerySchema = z.object({
   page,
   pageSize,
-  filter: z.enum(["all", "failed", "pending"]).default("all"),
+  filter: z.enum(["all", "failed", "pending", "opened", "clicked", "not_opened"]).default("all"),
 });
 export type CampaignRecipientsQuery = z.infer<typeof campaignRecipientsQuerySchema>;
 
@@ -224,6 +239,7 @@ export const testCampaignSchema = z
     email_body: campaignFields.email_body,
     location_id: campaignFields.location_id,
     coupon_id: campaignFields.coupon_id,
+    ...emailDesignFields,
   })
   .strict()
   .refine(emailFieldsPresent, { message: "Email needs a subject and a body.", path: ["email_subject"] });
@@ -240,6 +256,7 @@ export const renderPreviewSchema = z
     location_id: uuid.nullable().optional(),
     coupon_id: uuid.nullable().optional(),
     user_id: uuid.optional(),
+    ...emailDesignFields,
   })
   .strict();
 export type RenderPreviewInput = z.infer<typeof renderPreviewSchema>;
@@ -258,6 +275,10 @@ const templateFields = {
   email_subject: z.string().trim().min(1).max(200).nullable().optional(),
   email_body: z.string().trim().min(1).max(50_000).nullable().optional(),
   channels: z.array(campaignChannelSchema).min(1).max(3).default(["in_app", "push"]),
+  email_design: emailDesignSchema.optional(),
+  email_heading: emailDesignFields.email_heading,
+  email_image_url: emailDesignFields.email_image_url,
+  email_button_label: emailDesignFields.email_button_label,
 };
 
 export const createTemplateSchema = z.object(templateFields).strict().refine(emailFieldsPresent, { message: "Email needs a subject and a body.", path: ["email_subject"] });
@@ -274,6 +295,10 @@ export const updateTemplateSchema = z
     email_subject: templateFields.email_subject,
     email_body: templateFields.email_body,
     channels: z.array(campaignChannelSchema).min(1).max(3).optional(),
+    email_design: emailDesignSchema.optional(),
+    email_heading: templateFields.email_heading,
+    email_image_url: templateFields.email_image_url,
+    email_button_label: templateFields.email_button_label,
   })
   .strict()
   .refine((d) => Object.keys(d).length > 0, { message: "Provide at least one field to update." });

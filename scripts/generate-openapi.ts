@@ -127,6 +127,7 @@ import {
   campaignChannelSchema,
   campaignIdParamSchema,
   campaignRecipientsQuerySchema,
+  emailDesignSchema,
   channelEnabledSchema,
   channelNameSchema,
   channelParamSchema,
@@ -1648,6 +1649,11 @@ const campaignStatsSchema = z
     email_failed: z.number().int(),
     email_unsubscribed: z.number().int(),
     email_missing: z.number().int(),
+    email_delivered: z.number().int(),
+    email_opened: z.number().int(),
+    email_clicked: z.number().int(),
+    email_bounced: z.number().int(),
+    email_complained: z.number().int(),
   })
   .openapi("CampaignStats");
 
@@ -1667,6 +1673,11 @@ const campaignSchema = z
     location_id: z.string().uuid().nullable(),
     coupon_id: z.string().uuid().nullable(),
     template_id: z.string().uuid().nullable(),
+    email_design: emailDesignSchema,
+    email_heading: z.string().nullable(),
+    email_image_url: z.string().nullable(),
+    email_button_label: z.string().nullable(),
+    email_location_ids: z.array(z.string().uuid()),
     status: z.enum(["draft", "scheduled", "sending", "sent", "cancelled", "failed"]),
     scheduled_at: z.string().datetime().nullable(),
     started_at: z.string().datetime().nullable(),
@@ -1712,6 +1723,12 @@ registry.registerPath({
         .object({
           users: z.number().int(),
           with_email: z.number().int(),
+          email: z.object({
+            will_receive: z.number().int(),
+            unsubscribed: z.number().int(),
+            bounced: z.number().int(),
+            no_email: z.number().int(),
+          }),
           devices: z.object({ ios: z.number().int(), android: z.number().int(), web: z.number().int() }),
         })
         .openapi("AudiencePreview")
@@ -1812,6 +1829,13 @@ registry.registerPath({
           push_failed: z.number().int(),
           error: z.string().nullable(),
           processed_at: z.string().datetime().nullable(),
+          email_delivered_at: z.string().nullable(),
+          email_opened_at: z.string().nullable(),
+          email_clicked_at: z.string().nullable(),
+          email_open_count: z.number().int(),
+          email_click_count: z.number().int(),
+          email_bounced_at: z.string().nullable(),
+          email_complained_at: z.string().nullable(),
         })
         .openapi("CampaignRecipient")
     ),
@@ -2548,6 +2572,57 @@ registry.registerPath({
   responses: { "200": okResponse(z.object({ removed: z.boolean() })), ...errorResponses },
 });
 
+const emailSubscriberSchema = z
+  .object({
+    user_id: z.string().uuid(),
+    name: z.string().nullable(),
+    email: z.string().nullable(),
+    roles: z.array(z.string()),
+    status: z.enum(["subscribed", "unsubscribed", "bounced", "no_email"]),
+    status_since: z.string().nullable(),
+    joined_at: z.string(),
+  })
+  .openapi("EmailSubscriber");
+
+registry.registerPath({
+  method: "get",
+  path: "/email-subscribers",
+  tags: ["Admin", "Messaging"],
+  summary: "Everyone, with whether news and offers reach them by email (campaigns.view)",
+  security,
+  request: {
+    query: z.object({
+      status: z.enum(["subscribed", "unsubscribed", "bounced", "no_email"]).optional(),
+      role: z.enum(["booker", "host"]).optional(),
+      search: z.string().optional(),
+      page: z.coerce.number().int().min(1).default(1),
+      pageSize: z.coerce.number().int().min(1).max(100).default(25),
+    }),
+  },
+  responses: { "200": paginatedResponse(emailSubscriberSchema), ...errorResponses },
+});
+registry.registerPath({
+  method: "get",
+  path: "/email-subscribers/summary",
+  tags: ["Admin", "Messaging"],
+  summary: "How many people get news and offers by email (campaigns.view)",
+  security,
+  responses: {
+    "200": okResponse(
+      z.object({
+        people: z.number().int(),
+        subscribed: z.number().int(),
+        unsubscribed: z.number().int(),
+        bounced: z.number().int(),
+        no_email: z.number().int(),
+        hosts_subscribed: z.number().int(),
+        bookers_subscribed: z.number().int(),
+      })
+    ),
+    ...errorResponses,
+  },
+});
+
 // -- Host payouts ---------------------------------------------------------------------------------
 
 const payoutAccountSchema = z
@@ -3012,6 +3087,10 @@ const notificationTemplateSchema = z
     email_subject: z.string().nullable(),
     email_body: z.string().nullable(),
     channels: z.array(campaignChannelSchema),
+    email_design: emailDesignSchema,
+    email_heading: z.string().nullable(),
+    email_image_url: z.string().nullable(),
+    email_button_label: z.string().nullable(),
     is_builtin: z.boolean(),
     created_at: z.string(),
     updated_at: z.string(),
@@ -3092,6 +3171,11 @@ registry.registerPath({
         email_body: z.string().nullable(),
         user_id: z.string().uuid(),
         missing: z.array(z.string()).openapi({ description: "Person variables that person hasn't filled in (the fallback was used)" }),
+        email_heading: z.string().nullable().optional(),
+        email_button_label: z.string().nullable().optional(),
+        email_html: z.string().nullable().openapi({ description: "The whole email as it will arrive (null when there's no email)" }),
+        email_text: z.string().nullable(),
+        email_problem: z.string().nullable().openapi({ description: "Why the email can't be built yet (e.g. the listing isn't published)" }),
       })
     ),
     ...errorResponses,

@@ -140,6 +140,9 @@ const baseEnvSchema = z.object({
   // Signing secret of the Resend webhook (Resend -> Webhooks; starts with "whsec_"). When set,
   // bounces and spam complaints reported by Resend stop further emails to that address.
   RESEND_WEBHOOK_SECRET: z.string().startsWith("whsec_").optional(),
+  // Supabase "Send Email" hook secret (Authentication -> Hooks; looks like "v1,whsec_..."). When
+  // set, sign-up / reset / sign-in emails are sent by us in the brand design.
+  AUTH_EMAIL_HOOK_SECRET: z.string().regex(/^(v1,)?whsec_/).optional(),
   WEBSITE_REVALIDATE_SECRET: z.string().min(16).optional(),
 
   // Which PaymentProvider implementation is active (see

@@ -11,6 +11,7 @@ import { loadBooking } from "./context";
 import { money, whenLabel } from "./layout";
 import { emailSummary, listEmails, listSuppressions, removeSuppression, resendEmail } from "./outbox.service";
 import { getEmailPreferences, updateEmailPreferences } from "./preferences.service";
+import { listSubscribers, subscriberSummary } from "./subscribers.service";
 import { requireAuth } from "../../middleware/auth";
 import { EMAIL_TEMPLATES } from "./templates";
 
@@ -127,4 +128,24 @@ adminEmailsRouter.get("/emails/suppressions", can("campaigns.view"), validate({ 
 adminEmailsRouter.delete("/emails/suppressions/:email", can("campaigns.send"), validate({ params: suppressionParams }), async (req: Request, res: Response) => {
   await removeSuppression((req.valid!.params as z.infer<typeof suppressionParams>).email);
   ok(res, { removed: true });
+});
+
+const subscriberQuery = z
+  .object({
+    status: z.enum(["subscribed", "unsubscribed", "bounced", "no_email"]).optional(),
+    role: z.enum(["booker", "host"]).optional(),
+    search: z.string().trim().min(1).max(100).optional(),
+    page: z.coerce.number().int().min(1).default(1),
+    pageSize: z.coerce.number().int().min(1).max(100).default(25),
+  })
+  .strict();
+
+adminEmailsRouter.get("/email-subscribers", can("campaigns.view"), validate({ query: subscriberQuery }), async (req: Request, res: Response) => {
+  const query = req.valid!.query as z.infer<typeof subscriberQuery>;
+  const { data, total } = await listSubscribers(query);
+  ok(res, data, 200, { page: query.page, pageSize: query.pageSize, total });
+});
+
+adminEmailsRouter.get("/email-subscribers/summary", can("campaigns.view"), async (_req: Request, res: Response) => {
+  ok(res, await subscriberSummary());
 });

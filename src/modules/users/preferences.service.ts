@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { ValidationError } from "../../errors/AppError";
+import { queueEmail } from "../email/outbox.service";
 import { adminClient } from "../../lib/supabase";
 import { professionSchema } from "../outreach/outreach.schema";
 
@@ -110,5 +111,9 @@ export async function savePreferences(userId: string, input: PreferencesInput): 
 
   const { error } = await adminClient.from("user_preferences").upsert({ user_id: userId, ...next }, { onConflict: "user_id" });
   if (error) throw error;
+  if (complete && !current.onboarding_completed_at) {
+    // Once, the first time someone finishes onboarding (the key makes a second time a no-op).
+    void queueEmail({ userId, template: "welcome", key: `welcome:${userId}`, data: { userId } });
+  }
   return myOnboarding(userId);
 }

@@ -3,7 +3,8 @@ import { adminClient } from "../../lib/supabase";
 import { writeAuditLog } from "../admin/audit.service";
 import { createAnnouncementNotification, deliverPush, NotificationDetail } from "../notifications/notification.service";
 import { listChannels } from "./channels.service";
-import { renderEmailBody, sendEmail, unsubscribeToken, wrapEmail } from "./email";
+import { renderEmailBody, sendEmail, unsubscribeToken } from "./email";
+import { buildMarketingEmail, EmailDesign, loadMarketingAssets, MarketingAssets } from "../email/marketing";
 import { checkVariables, loadContext, personVars, renderFor, VARIABLES, type CampaignContext, type RenderableContent } from "./templating";
 import {
   Audience,
@@ -33,6 +34,7 @@ import {
 
 const COLUMNS =
   "id, name, kind, channels, platforms, audience, title, body, link_url, email_subject, email_body, location_id, coupon_id, template_id, status, " +
+  "email_design, email_heading, email_image_url, email_button_label, email_location_ids, " +
   "scheduled_at, started_at, completed_at, recipient_count, last_error, created_by, sent_by, created_at, updated_at";
 
 export type CampaignStatus = "draft" | "scheduled" | "sending" | "sent" | "cancelled" | "failed";
@@ -52,6 +54,11 @@ export interface CampaignRow {
   location_id: string | null;
   coupon_id: string | null;
   template_id: string | null;
+  email_design: EmailDesign;
+  email_heading: string | null;
+  email_image_url: string | null;
+  email_button_label: string | null;
+  email_location_ids: string[];
   status: CampaignStatus;
   scheduled_at: string | null;
   started_at: string | null;
@@ -76,6 +83,11 @@ export interface CampaignStats {
   email_failed: number;
   email_unsubscribed: number;
   email_missing: number;
+  email_delivered: number;
+  email_opened: number;
+  email_clicked: number;
+  email_bounced: number;
+  email_complained: number;
 }
 
 export interface CampaignView extends CampaignRow {
@@ -94,6 +106,11 @@ const EMPTY_STATS: CampaignStats = {
   email_failed: 0,
   email_unsubscribed: 0,
   email_missing: 0,
+  email_delivered: 0,
+  email_opened: 0,
+  email_clicked: 0,
+  email_bounced: 0,
+  email_complained: 0,
 };
 
 function normalizeChannels(channels: CampaignRow["channels"]): CampaignRow["channels"] {
@@ -149,6 +166,11 @@ export async function listCampaigns(query: ListCampaignsQuery): Promise<{ data: 
   if (query.kind) {
     request = request.eq("kind", query.kind);
   }
+  if (query.channel === "email") {
+    request = request.contains("channels", ["email"]);
+  } else if (query.channel === "push") {
+    request = request.overlaps("channels", ["push", "in_app"]);
+  }
   const { data, error, count } = await request.order("created_at", { ascending: false }).range(from, from + query.pageSize - 1);
   if (error) {
     throw error;
@@ -159,9 +181,23 @@ export async function listCampaigns(query: ListCampaignsQuery): Promise<{ data: 
 }
 
 /** Unknown variables, or listing/offer variables with nothing picked, are refused up front. */
-async function checkContent(c: { title: string; body: string; email_subject?: string | null; email_body?: string | null; location_id?: string | null; coupon_id?: string | null }) {
-  checkVariables([c.title, c.body, c.email_subject, c.email_body], { listing: Boolean(c.location_id), offer: Boolean(c.coupon_id) });
+async function checkContent(c: {
+  title: string;
+  body: string;
+  channels?: string[];
+  email_subject?: string | null;
+  email_body?: string | null;
+  email_heading?: string | null;
+  email_button_label?: string | null;
+  email_design?: EmailDesign;
+  email_location_ids?: string[] | null;
+  location_id?: string | null;
+  coupon_id?: string | null;
+}) {
+  checkVariables([c.title, c.body, c.email_subject, c.email_body, c.email_heading, c.email_button_label], { listing: Boolean(c.location_id), offer: Boolean(c.coupon_id) });
   if (c.location_id || c.coupon_id) await loadContext(c);
+  // The design's listings / offer must exist (and be published) before anyone can send it.
+  if (c.channels?.includes("email") && c.email_design && c.email_design !== "plain") await loadMarketingAssets({ ...c, email_design: c.email_design });
 }
 
 export async function createCampaign(actorId: string, input: CreateCampaignInput): Promise<CampaignView> {
@@ -177,6 +213,11 @@ export async function createCampaign(actorId: string, input: CreateCampaignInput
       location_id: input.location_id ?? null,
       coupon_id: input.coupon_id ?? null,
       template_id: input.template_id ?? null,
+      email_design: input.email_design ?? "plain",
+      email_heading: input.email_heading ?? null,
+      email_image_url: input.email_image_url ?? null,
+      email_button_label: input.email_button_label ?? null,
+      email_location_ids: input.email_location_ids ?? [],
       created_by: actorId,
     })
     .select("id")
@@ -228,7 +269,14 @@ export async function previewAudience(input: AudiencePreviewInput) {
   const row = data as Record<string, number | string>;
   return {
     users: Number(row.users),
+    /** Will get the email: has an address, hasn't unsubscribed, hasn't bounced. */
     with_email: Number(row.with_email),
+    email: {
+      will_receive: Number(row.with_email),
+      unsubscribed: Number(row.email_unsubscribed ?? 0),
+      bounced: Number(row.email_bounced ?? 0),
+      no_email: Number(row.email_missing ?? 0),
+    },
     devices: { ios: Number(row.ios_devices), android: Number(row.android_devices), web: Number(row.web_devices) },
   };
 }
@@ -368,7 +416,7 @@ async function isSuppressed(email: string): Promise<boolean> {
   return Boolean(data);
 }
 
-async function processRecipient(campaign: CampaignRow, r: RecipientRow, content: RenderableContent) {
+async function processRecipient(campaign: CampaignRow, r: RecipientRow, content: RenderableContent, assets: MarketingAssets) {
   const rendered = campaign.channels.includes("email") && content.email_body ? renderEmailBody(content.email_body) : null;
   const update: Record<string, unknown> = {};
   const errors: string[] = [];
@@ -429,14 +477,19 @@ async function processRecipient(campaign: CampaignRow, r: RecipientRow, content:
           campaign.kind === "announcement"
             ? `${apiBaseUrl()}/v1/email/unsubscribe?token=${encodeURIComponent(await unsubscribeToken(r.email))}`
             : null;
-        const email = wrapEmail({
+        const email = buildMarketingEmail({
+          design: campaign.email_design,
           subject: content.email_subject!,
+          heading: content.email_heading,
           bodyHtml: rendered.html,
           bodyText: rendered.text,
-          ctaUrl: content.link_url,
+          imageUrl: campaign.email_image_url,
+          buttonLabel: content.email_button_label,
+          linkUrl: content.link_url,
+          assets,
           unsubscribeUrl,
         });
-        await sendEmail({
+        const messageId = await sendEmail({
           to: r.email,
           subject: content.email_subject!,
           html: email.html,
@@ -445,8 +498,10 @@ async function processRecipient(campaign: CampaignRow, r: RecipientRow, content:
             ? { "List-Unsubscribe": `<${unsubscribeUrl}>`, "List-Unsubscribe-Post": "List-Unsubscribe=One-Click" }
             : undefined,
           stream: campaign.kind === "announcement" ? "marketing" : "transactional",
+          tags: { campaign_id: campaign.id, kind: campaign.kind },
         });
         update.email_status = "sent";
+        update.email_message_id = messageId;
       } catch (error) {
         update.email_status = "failed";
         errors.push(`email: ${error instanceof Error ? error.message : "failed"}`);
@@ -490,8 +545,16 @@ export async function processCampaign(id: string, deadline: number): Promise<{ p
       .eq("id", id);
     throw error;
   }
+  let assets: MarketingAssets = { listings: [], offer: null };
   let emailBudget = Infinity;
   if (sendsEmail) {
+    assets = await loadMarketingAssets(campaign).catch(async (error: unknown) => {
+      await adminClient
+        .from("notification_campaigns")
+        .update({ status: "failed", last_error: error instanceof Error ? error.message.slice(0, 500) : "Email content missing." })
+        .eq("id", id);
+      throw error;
+    });
     const smtp = (await listChannels()).find((c) => c.channel === "smtp");
     emailBudget = Number((smtp?.config as { max_per_minute?: number } | undefined)?.max_per_minute ?? 60);
   }
@@ -513,7 +576,7 @@ export async function processCampaign(id: string, deadline: number): Promise<{ p
     const people = await personVars(batch.map((r) => r.user_id));
     for (const recipient of batch) {
       try {
-        await processRecipient(campaign, recipient, renderFor(campaign, context, people.get(recipient.user_id)));
+        await processRecipient(campaign, recipient, renderFor(campaign, context, people.get(recipient.user_id)), assets);
       } catch (err) {
         console.error(`Campaign ${id}: recipient ${recipient.user_id} failed:`, err);
         await adminClient
@@ -595,7 +658,9 @@ export async function listCampaignRecipients(id: string, query: CampaignRecipien
   const from = (query.page - 1) * query.pageSize;
   let request = adminClient
     .from("campaign_recipients")
-    .select("user_id, email, in_app_status, push_status, email_status, push_sent, push_failed, error, processed_at", {
+    .select(
+      "user_id, email, in_app_status, push_status, email_status, push_sent, push_failed, error, processed_at, email_delivered_at, email_opened_at, email_clicked_at, email_open_count, email_click_count, email_bounced_at, email_complained_at",
+      {
       count: "exact",
     })
     .eq("campaign_id", id);
@@ -603,6 +668,12 @@ export async function listCampaignRecipients(id: string, query: CampaignRecipien
     request = request.is("processed_at", null);
   } else if (query.filter === "failed") {
     request = request.or("push_status.eq.failed,email_status.eq.failed,in_app_status.eq.failed");
+  } else if (query.filter === "opened") {
+    request = request.not("email_opened_at", "is", null);
+  } else if (query.filter === "clicked") {
+    request = request.not("email_clicked_at", "is", null);
+  } else if (query.filter === "not_opened") {
+    request = request.eq("email_status", "sent").is("email_opened_at", null);
   }
   const { data, error, count } = await request.order("created_at").range(from, from + query.pageSize - 1);
   if (error) {
@@ -629,7 +700,15 @@ export async function sendTestToSelf(actorId: string, actorEmail: string | null,
   const context = await loadContext(raw);
   const me = (await personVars([actorId])).get(actorId);
   const content = renderFor(
-    { title: raw.title, body: raw.body, link_url: raw.link_url ?? null, email_subject: raw.email_subject ?? null, email_body: raw.email_body ?? null },
+    {
+      title: raw.title,
+      body: raw.body,
+      link_url: raw.link_url ?? null,
+      email_subject: raw.email_subject ?? null,
+      email_body: raw.email_body ?? null,
+      email_heading: raw.email_heading ?? null,
+      email_button_label: raw.email_button_label ?? null,
+    },
     context,
     me
   );
@@ -654,8 +733,21 @@ export async function sendTestToSelf(actorId: string, actorEmail: string | null,
     } else {
       try {
         const rendered = renderEmailBody(input.email_body!);
-        const email = wrapEmail({ subject: input.email_subject!, bodyHtml: rendered.html, bodyText: rendered.text, ctaUrl: input.link_url });
-        await sendEmail({ to: actorEmail, subject: `[Test] ${input.email_subject}`, html: email.html, text: email.text });
+        const design = raw.email_design ?? "plain";
+        const assets = design === "plain" ? { listings: [], offer: null } : await loadMarketingAssets({ ...raw, email_design: design });
+        const email = buildMarketingEmail({
+          design,
+          subject: input.email_subject!,
+          heading: input.email_heading,
+          bodyHtml: rendered.html,
+          bodyText: rendered.text,
+          imageUrl: raw.email_image_url,
+          buttonLabel: input.email_button_label,
+          linkUrl: input.link_url,
+          assets,
+          unsubscribeUrl: `${apiBaseUrl()}/v1/email/unsubscribe?token=preview`,
+        });
+        await sendEmail({ to: actorEmail, subject: `[Test] ${input.email_subject}`, html: email.html, text: email.text, stream: "marketing" });
         result.email = { ok: true, detail: `Sent to ${actorEmail}.` };
       } catch (error) {
         result.email = { ok: false, detail: error instanceof Error ? error.message.slice(0, 300) : "Failed." };
@@ -675,11 +767,51 @@ export async function renderPreview(actorId: string, input: RenderPreviewInput) 
   const userId = input.user_id ?? actorId;
   const person = (await personVars([userId])).get(userId) ?? {};
   const content = renderFor(
-    { title: input.title, body: input.body, link_url: input.link_url ?? null, email_subject: input.email_subject ?? null, email_body: input.email_body ?? null },
+    {
+      title: input.title,
+      body: input.body,
+      link_url: input.link_url ?? null,
+      email_subject: input.email_subject ?? null,
+      email_body: input.email_body ?? null,
+      email_heading: input.email_heading ?? null,
+      email_button_label: input.email_button_label ?? null,
+    },
     context,
     person
   );
-  const used = new Set([input.title, input.body, input.email_subject ?? "", input.email_body ?? ""].join(" ").match(/\{([a-z_]+)/g)?.map((m) => m.slice(1)) ?? []);
+  const used = new Set(
+    [input.title, input.body, input.email_subject ?? "", input.email_body ?? "", input.email_heading ?? "", input.email_button_label ?? ""]
+      .join(" ")
+      .match(/\{([a-z_]+)/g)
+      ?.map((m) => m.slice(1)) ?? []
+  );
   const missing = VARIABLES.filter((v) => v.scope === "person" && used.has(v.key) && !person[v.key]).map((v) => v.key);
-  return { ...content, user_id: userId, missing };
+  // The whole email, as it will arrive (light/dark is chosen by the viewer).
+  let email_html: string | null = null;
+  let email_text: string | null = null;
+  let email_problem: string | null = null;
+  if (content.email_subject && content.email_body) {
+    try {
+      const design = input.email_design ?? "plain";
+      const assets = design === "plain" ? { listings: [], offer: null } : await loadMarketingAssets({ ...input, email_design: design });
+      const rendered = renderEmailBody(content.email_body);
+      const email = buildMarketingEmail({
+        design,
+        subject: content.email_subject,
+        heading: content.email_heading,
+        bodyHtml: rendered.html,
+        bodyText: rendered.text,
+        imageUrl: input.email_image_url,
+        buttonLabel: content.email_button_label,
+        linkUrl: content.link_url,
+        assets,
+        unsubscribeUrl: `${apiBaseUrl()}/v1/email/unsubscribe?token=preview`,
+      });
+      email_html = email.html;
+      email_text = email.text;
+    } catch (error) {
+      email_problem = error instanceof Error ? error.message : "Couldn't build the email.";
+    }
+  }
+  return { ...content, user_id: userId, missing, email_html, email_text, email_problem };
 }

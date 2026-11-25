@@ -14,17 +14,22 @@ export interface NotificationTemplate {
   email_subject: string | null;
   email_body: string | null;
   channels: ("in_app" | "push" | "email")[];
+  email_design: "plain" | "spotlight" | "collection" | "offer" | "news";
+  email_heading: string | null;
+  email_image_url: string | null;
+  email_button_label: string | null;
   is_builtin: boolean;
   created_at: string;
   updated_at: string;
   uses: number;
 }
 
-const COLUMNS = "id, name, category, description, needs, title, body, email_subject, email_body, channels, is_builtin, created_at, updated_at";
+const COLUMNS =
+  "id, name, category, description, needs, title, body, email_subject, email_body, channels, email_design, email_heading, email_image_url, email_button_label, is_builtin, created_at, updated_at";
 
 /** Variables must match what the template needs picked: listing variables need `needs: listing`. */
-function checkTemplate(t: { title: string; body: string; email_subject?: string | null; email_body?: string | null; needs?: string | null }) {
-  checkVariables([t.title, t.body, t.email_subject, t.email_body], { listing: t.needs === "listing", offer: t.needs === "offer" });
+function checkTemplate(t: { title: string; body: string; email_subject?: string | null; email_body?: string | null; email_heading?: string | null; email_button_label?: string | null; needs?: string | null }) {
+  checkVariables([t.title, t.body, t.email_subject, t.email_body, t.email_heading, t.email_button_label], { listing: t.needs === "listing", offer: t.needs === "offer" });
 }
 
 async function usesOf(ids: string[]): Promise<Map<string, number>> {

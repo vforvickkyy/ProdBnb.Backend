@@ -96,7 +96,7 @@ export function checkVariables(texts: (string | null | undefined)[], context: { 
 const money = (minor: number) => `₹${(minor / 100).toLocaleString("en-IN", { maximumFractionDigits: minor % 100 ? 2 : 0 })}`;
 const UNIT: Record<string, string> = { hourly: "/hour", half_day: "/half day", day: "/day", multi_day: "/day" };
 
-function slugify(text: string): string {
+export function slugify(text: string): string {
   return text
     .normalize("NFKD")
     .replace(/[̀-ͯ]/g, "")
@@ -198,6 +198,8 @@ export interface RenderableContent {
   link_url: string | null;
   email_subject: string | null;
   email_body: string | null;
+  email_heading?: string | null;
+  email_button_label?: string | null;
 }
 
 /** The content one person receives. */
@@ -209,5 +211,7 @@ export function renderFor(content: RenderableContent, context: CampaignContext, 
     link_url: content.link_url ?? context.listing?.url ?? null,
     email_subject: render(content.email_subject, vars),
     email_body: render(content.email_body, vars),
+    email_heading: render(content.email_heading ?? null, vars),
+    email_button_label: render(content.email_button_label ?? null, vars)?.slice(0, 40) ?? null,
   };
 }
