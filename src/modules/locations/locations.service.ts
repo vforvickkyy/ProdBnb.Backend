@@ -279,20 +279,49 @@ function sortedAmenityRefs(rows: RawLocationDetailRow["location_amenities"], kin
     .sort((a, b) => a.position - b.position || a.name.localeCompare(b.name));
 }
 
+/**
+ * Fields a public viewer has no use for: internal moderation state, the listing ID, and the raw
+ * privacy columns (the moved point is already in latitude/longitude). Removed outright from a
+ * non-owner's response rather than nulled, so they can't be scraped from the network tab.
+ */
+const OWNER_ONLY_FIELDS = [
+  "listing_code",
+  "moderation_reason",
+  "suspended_by_host_suspension",
+  "public_latitude",
+  "public_longitude",
+  "show_exact_location",
+] as const;
+
+export function publicShape<T extends object>(location: T): T {
+  const out = { ...location } as Record<string, unknown>;
+  for (const key of OWNER_ONLY_FIELDS) delete out[key];
+  return out as T;
+}
+
+/** "Chopra" -> "C." -- the public only ever sees the host's first name and last initial. */
+export function publicHost(host: HostPublicSummary | null): HostPublicSummary | null {
+  if (!host) return null;
+  const initial = host.last_name?.trim().charAt(0);
+  return { ...host, last_name: initial ? `${initial.toUpperCase()}.` : null };
+}
+
 function flattenDetail(row: RawLocationDetailRow, host: HostPublicSummary | null, viewer: LocationViewer): LocationDetail {
   const { location_categories, location_amenities, location_use_cases, location_media, location_pricing, ...summary } =
     row as RawLocationDetailRow;
   const active = location_pricing.filter((p) => p.is_active);
-  const hidePrices = summary.price_on_request && !seesEverything(summary, viewer);
+  const owner = seesEverything(summary, viewer);
+  const hidePrices = summary.price_on_request && !owner;
+  const base = forViewer(summary as LocationSummary, viewer);
   return {
-    ...forViewer(summary as LocationSummary, viewer),
+    ...(owner ? base : publicShape(base)),
     ...precisionFor(summary as LocationSummary, viewer),
     categories: location_categories.map((r) => r.categories),
     amenities: sortedAmenityRefs(location_amenities, "amenity"),
     rules: sortedAmenityRefs(location_amenities, "rule"),
     use_cases: location_use_cases.map((r) => r.use_cases),
     media: location_media.map(toPublicMediaItem).sort((a, b) => a.position - b.position),
-    host,
+    host: owner ? host : publicHost(host),
     // Active pricing only — booking_options is a marketplace/booking-facing
     // field, not a management one, so it's filtered the same way regardless
     // of who's viewing (the owner/admin management view of inactive pricing

@@ -202,7 +202,7 @@ describe("search & discovery", () => {
   it("filters by city", async () => {
     // The city's own name matches "Mumbai" and "Mumbai, Maharashtra" alike (the website's city
     // pages), so listings other tests left behind in Mumbai may be here too: only check ours.
-    const res = await request(app).get("/v1/locations").query({ city: "Mumbai", pageSize: 100 });
+    const res = await request(app).get("/v1/locations").query({ city: "Mumbai", pageSize: 60 });
     expect(ids(res)).toContain(mumbaiVilla);
     expect(ids(res)).not.toContain(londonWarehouse);
   });

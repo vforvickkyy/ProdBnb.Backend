@@ -152,7 +152,7 @@ describe("admin: locations", () => {
       // response has no reason leak:
       const publicView = await request(app).get(`/v1/locations/${locationId}`);
       expect(publicView.status).toBe(200);
-      expect(publicView.body.data.moderation_reason).toBeNull();
+      expect(publicView.body.data).not.toHaveProperty("moderation_reason");
     });
   });
 

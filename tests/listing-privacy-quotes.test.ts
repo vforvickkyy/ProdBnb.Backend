@@ -88,11 +88,38 @@ describe("listing address privacy, price on request, shoot details", () => {
       }
     });
 
+    it("sends the public nothing internal: no listing ID, moderation state, raw privacy columns or host surname", async () => {
+      await adminClient.from("profiles").update({ first_name: "Hema", last_name: "Hostwala" }).eq("id", host.id);
+      for (const res of [await request(app).get(`/v1/locations/${privateId}`), await request(app).get(`/v1/locations/${privateId}`).set(auth(booker))]) {
+        const l = res.body.data;
+        for (const key of ["listing_code", "moderation_reason", "suspended_by_host_suspension", "public_latitude", "public_longitude", "show_exact_location"]) {
+          expect(l, key).not.toHaveProperty(key);
+        }
+        expect(l.host).toMatchObject({ first_name: "Hema", last_name: "H." });
+        expect(JSON.stringify(l)).not.toContain("Hostwala");
+      }
+      const own = (await request(app).get(`/v1/locations/${privateId}`).set(auth(host))).body.data;
+      expect(own).toHaveProperty("listing_code");
+      expect(own).toHaveProperty("show_exact_location", false);
+    });
+
     it("keeps the same approximate point between reads and edits that don't move the pin", async () => {
       const first = (await request(app).get(`/v1/locations/${privateId}`)).body.data;
       expect((await request(app).patch(`/v1/locations/${privateId}`).set(auth(host)).send({ description: "Now with a pool." })).status).toBe(200);
       const second = (await request(app).get(`/v1/locations/${privateId}`)).body.data;
       expect([second.latitude, second.longitude]).toEqual([first.latitude, first.longitude]);
+    });
+
+    it("uses one fixed secret offset: moving the pin moves the shown point by exactly as much, so edits can't be averaged", async () => {
+      const before = (await request(app).get(`/v1/locations/${privateId}`)).body.data;
+      const moved = { latitude: REAL.latitude + 0.01, longitude: REAL.longitude + 0.01 };
+      expect((await request(app).patch(`/v1/locations/${privateId}`).set(auth(host)).send(moved)).status).toBe(200);
+      const after = (await request(app).get(`/v1/locations/${privateId}`)).body.data;
+      expect(after.latitude - before.latitude).toBeCloseTo(0.01, 4);
+      expect(after.longitude - before.longitude).toBeCloseTo(0.01, 3);
+      expect((await request(app).patch(`/v1/locations/${privateId}`).set(auth(host)).send(REAL)).status).toBe(200);
+      const back = (await request(app).get(`/v1/locations/${privateId}`)).body.data;
+      expect([back.latitude, back.longitude]).toEqual([before.latitude, before.longitude]);
     });
 
     it("shows the host and the team the full address and real pin", async () => {

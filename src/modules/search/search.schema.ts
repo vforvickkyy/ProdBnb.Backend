@@ -52,7 +52,7 @@ export const searchLocationsQuerySchema = z
     has_props: flag.optional(),
     sort: sortSchema.optional(),
     page: z.coerce.number().int().min(1).default(1),
-    pageSize: z.coerce.number().int().min(1).max(100).default(20),
+    pageSize: z.coerce.number().int().min(1).max(60).default(20),
   })
   .strict()
   .refine((data) => data.capacity_min === undefined || data.capacity_max === undefined || data.capacity_min <= data.capacity_max, {
