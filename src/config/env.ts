@@ -143,6 +143,9 @@ const baseEnvSchema = z.object({
   // Supabase "Send Email" hook secret (Authentication -> Hooks; looks like "v1,whsec_..."). When
   // set, sign-up / reset / sign-in emails are sent by us in the brand design.
   AUTH_EMAIL_HOOK_SECRET: z.string().regex(/^(v1,)?whsec_/).optional(),
+  // Supabase "Send SMS" hook secret (Authentication -> Hooks). When set, sign-in and phone
+  // verification codes go through our SMS system (any provider chosen in the admin).
+  AUTH_SMS_HOOK_SECRET: z.string().regex(/^(v1,)?whsec_/).optional(),
   WEBSITE_REVALIDATE_SECRET: z.string().min(16).optional(),
 
   // Which PaymentProvider implementation is active (see

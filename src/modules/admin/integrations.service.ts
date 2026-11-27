@@ -108,7 +108,8 @@ const CHECK_TIMEOUT_MS = 5000;
 /** How to switch phone login on, shown while it is off. The SMS keys live in Supabase only. */
 export const PHONE_LOGIN_SETUP =
   "Off. To switch it on: Supabase dashboard → Authentication → Sign In / Providers → Phone → enable, " +
-  "choose an SMS provider (Twilio Verify is quickest for India; MSG91 needs DLT registration) and paste its keys. " +
+  "then Authentication → Hooks → Send SMS hook → HTTPS → <API address>/v1/auth/sms-hook, and put its secret in the backend's " +
+  "AUTH_SMS_HOOK_SECRET. Codes then go through Messaging → SMS (any provider, test mode before DLT). " +
   "Do it in both heken-staging and heken-production. The apps and website start offering it straight away.";
 
 interface AuthSettings {

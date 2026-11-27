@@ -18,6 +18,8 @@ import { publicContentRouter } from "./modules/content/content.routes";
 import { accountRouter } from "./modules/account/account.routes";
 import { hostRequestsRouter } from "./modules/hostRequests/hostRequests.routes";
 import { emailActionsRouter } from "./modules/email/email.routes";
+import { postAuthSmsHook, postSmsDeliveryReport } from "./modules/sms/hooks";
+import { smsMeRouter } from "./modules/sms/sms.routes";
 import { hostPayoutsRouter } from "./modules/payouts/payouts.routes";
 import { contactsRouter } from "./modules/bookings/contacts.routes";
 import { hostCouponsRouter, publicOffersRouter } from "./modules/coupons/coupons.routes";
@@ -102,6 +104,10 @@ export function createApp(): Express {
   app.post("/v1/webhooks/resend", express.raw({ type: "application/json", limit: "256kb" }), postResendWebhook);
   // Supabase auth "Send Email" hook: signed over the raw body (Standard Webhooks).
   app.post("/v1/auth/email-hook", express.raw({ type: "application/json", limit: "64kb" }), postAuthEmailHook);
+  // Supabase auth "Send SMS" hook (sign-in and verification codes), signed the same way.
+  app.post("/v1/auth/sms-hook", express.raw({ type: "application/json", limit: "64kb" }), postAuthSmsHook);
+  // SMS delivery reports from the provider (JSON, form or query string; checked by a token).
+  app.all("/v1/webhooks/sms/:provider", express.raw({ type: () => true, limit: "256kb" }), postSmsDeliveryReport);
 
   app.use(generalLimiter);
   app.use(express.json());
@@ -168,6 +174,7 @@ export function createApp(): Express {
   app.use("/v1", accountRouter);
   app.use("/v1", hostRequestsRouter);
   app.use("/v1", emailActionsRouter);
+  app.use("/v1", smsMeRouter);
   app.use("/v1", hostPayoutsRouter);
   app.use("/v1", contactsRouter);
   app.use("/v1", publicOffersRouter);

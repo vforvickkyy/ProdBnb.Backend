@@ -1,4 +1,5 @@
 import { processEmailOutbox, queueBookingReminders } from "../email/outbox.service";
+import { processSmsOutbox } from "../sms/outbox.service";
 import { timingSafeEqual } from "crypto";
 import { Request, Response } from "express";
 import { UnauthenticatedError, ValidationError } from "../../errors/AppError";
@@ -343,7 +344,8 @@ export async function postDispatchJobsHandler(req: Request, res: Response): Prom
     // couldn't go the first time (retries), in the time left.
     const reminders = await queueBookingReminders().catch((e) => ({ error: e instanceof Error ? e.message.slice(0, 200) : "failed" }));
     const emails = await processEmailOutbox(Date.now() + 7_000).catch((e) => ({ error: e instanceof Error ? e.message.slice(0, 200) : "failed" }));
-    const summary = { ...campaigns, reminders, emails };
+    const sms = await processSmsOutbox(Date.now() + 4_000).catch((e) => ({ error: e instanceof Error ? e.message.slice(0, 200) : "failed" }));
+    const summary = { ...campaigns, reminders, emails, sms };
     await adminClient
       .from("background_jobs_config")
       .update({ last_run_at: startedAt, last_run_ok: true, last_run_summary: summary })

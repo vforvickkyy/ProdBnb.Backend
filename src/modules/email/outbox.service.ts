@@ -2,6 +2,7 @@ import { NotFoundError, ValidationError } from "../../errors/AppError";
 import { adminClient } from "../../lib/supabase";
 import { smtpCredentials } from "../outreach/channels.service";
 import { sendEmail } from "../outreach/email";
+import { queueSmsForEmail } from "../sms/outbox.service";
 import { emailOf } from "./context";
 import { buildEmail, EMAIL_TEMPLATES, EmailTemplate } from "./templates";
 
@@ -56,6 +57,8 @@ export interface QueueEmailInput {
 
 /** Queues an email and tries to send it now. Never throws. */
 export async function queueEmail(input: QueueEmailInput): Promise<void> {
+  // The matching text message (booking, payment, payout...), on its own: it never blocks the email.
+  await queueSmsForEmail(input);
   try {
     const to = await emailOf(input.userId);
     if (!to) {
