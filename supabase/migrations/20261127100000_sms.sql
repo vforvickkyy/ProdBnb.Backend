@@ -148,6 +148,43 @@ grant execute on function public.sms_provider_save(text, jsonb, text, uuid) to s
 grant execute on function public.sms_provider_secret(text) to service_role;
 grant execute on function public.sms_provider_remove(text) to service_role;
 
+/** The Supabase "Send SMS" hook secret, pasted in the admin (Vault). Null clears it. */
+create function public.sms_hook_secret_save(_secret text) returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  _id uuid;
+begin
+  select id into _id from vault.secrets where name = 'prodbnb_sms_hook_secret';
+  if _secret is null then
+    if _id is not null then
+      delete from vault.secrets where id = _id;
+    end if;
+    return;
+  end if;
+  if _id is null then
+    perform vault.create_secret(_secret, 'prodbnb_sms_hook_secret', 'Supabase Send SMS hook secret');
+  else
+    perform vault.update_secret(_id, _secret, 'prodbnb_sms_hook_secret', 'Supabase Send SMS hook secret');
+  end if;
+end $$;
+
+create function public.sms_hook_secret() returns text
+language sql
+security definer
+set search_path = ''
+stable
+as $$
+  select decrypted_secret from vault.decrypted_secrets where name = 'prodbnb_sms_hook_secret';
+$$;
+
+revoke all on function public.sms_hook_secret_save(text) from public, anon, authenticated;
+revoke all on function public.sms_hook_secret() from public, anon, authenticated;
+grant execute on function public.sms_hook_secret_save(text) to service_role;
+grant execute on function public.sms_hook_secret() to service_role;
+
 -- 3. Templates -------------------------------------------------------------------------------------
 
 create table public.sms_templates (

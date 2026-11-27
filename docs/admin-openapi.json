@@ -6644,13 +6644,26 @@
           },
           "sign_in_hook_ready": {
             "type": "boolean"
+          },
+          "sign_in_hook_url": {
+            "type": "string"
+          },
+          "sign_in_hook_source": {
+            "type": "string",
+            "nullable": true,
+            "enum": [
+              "backend",
+              "admin"
+            ]
           }
         },
         "required": [
           "settings",
           "providers",
           "report_urls",
-          "sign_in_hook_ready"
+          "sign_in_hook_ready",
+          "sign_in_hook_url",
+          "sign_in_hook_source"
         ]
       },
       "SmsTemplate": {
@@ -22709,6 +22722,70 @@
                     "maximum": 30
                   }
                 }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/SmsOverview"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Missing/invalid bearer token"
+          },
+          "403": {
+            "description": "Authenticated but not an admin"
+          },
+          "404": {
+            "description": "Not found"
+          }
+        }
+      }
+    },
+    "/sms/hook-secret": {
+      "put": {
+        "tags": [
+          "Admin",
+          "Messaging"
+        ],
+        "summary": "Save (or clear with null) the Supabase Send SMS hook secret, kept in Vault (channels.manage)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "secret": {
+                    "type": "string",
+                    "nullable": true
+                  }
+                },
+                "required": [
+                  "secret"
+                ]
               }
             }
           }

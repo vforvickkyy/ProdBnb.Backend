@@ -1,10 +1,9 @@
 import { Request, Response } from "express";
 import { timingSafeEqual } from "crypto";
-import { env } from "../../config/env";
 import { verifySvixSignature } from "../email/resendWebhook";
 import { applyDeliveryReports, sendAuthCode, SmsCodeError } from "./outbox.service";
 import { isProviderId, PROVIDERS } from "./providers";
-import { smsSettings } from "./settings.service";
+import { smsHookSecret, smsSettings } from "./settings.service";
 
 /**
  * Supabase "Send SMS" hook (Supabase -> Authentication -> Hooks): every sign-in and phone
@@ -25,7 +24,7 @@ export function setSmsHookSecretForTesting(secret: string | null | undefined): v
 }
 
 export async function postAuthSmsHook(req: Request, res: Response): Promise<void> {
-  const raw = secretOverride !== undefined ? secretOverride : env.AUTH_SMS_HOOK_SECRET;
+  const raw = secretOverride !== undefined ? secretOverride : await smsHookSecret().catch(() => null);
   if (!raw) {
     res.status(503).json({ error: { http_code: 503, message: "SMS hook secret isn't set." } });
     return;

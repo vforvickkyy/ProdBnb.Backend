@@ -260,6 +260,27 @@ describe("SMS system", () => {
     await adminClient.from("sms_outbox").delete().eq("to_phone", "+919000000099");
   });
 
+  it("the hook secret can be pasted in the admin instead of a backend setting", async () => {
+    setSmsHookSecretForTesting(undefined);
+    try {
+      const bad = await request(app).put("/v1/admin/sms/hook-secret").set(auth(admin)).send({ secret: "not-a-secret" });
+      expect(bad.status).toBe(400);
+      const saved = await request(app).put("/v1/admin/sms/hook-secret").set(auth(admin)).send({ secret: `v1,${SECRET}` });
+      expect(saved.status).toBe(200);
+      expect(saved.body.data).toMatchObject({ sign_in_hook_ready: true, sign_in_hook_source: "admin" });
+      expect(JSON.stringify(saved.body)).not.toContain(SECRET);
+      await adminClient.from("sms_settings").update({ otp_per_hour: 30 }).eq("singleton", true);
+      clearSmsCache();
+      const body = JSON.stringify({ user: { phone: "919000000014" }, sms: { otp: "777888" } });
+      expect((await request(app).post("/v1/auth/sms-hook").set(signed(body)).send(body)).status).toBe(200);
+      const cleared = await request(app).put("/v1/admin/sms/hook-secret").set(auth(admin)).send({ secret: null });
+      expect(cleared.body.data.sign_in_hook_ready).toBe(false);
+    } finally {
+      await adminClient.from("sms_outbox").delete().eq("to_phone", "+919000000014");
+      setSmsHookSecretForTesting(SECRET);
+    }
+  });
+
   it("each provider reads its own delivery reports", () => {
     expect(PROVIDERS.twilio.parseReports({ MessageSid: "SM1", MessageStatus: "delivered" })).toEqual([{ messageId: "SM1", status: "delivered" }]);
     expect(PROVIDERS.twilio.parseReports({ MessageSid: "SM1", MessageStatus: "queued" })).toEqual([]);

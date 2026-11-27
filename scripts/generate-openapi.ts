@@ -3242,6 +3242,8 @@ const smsOverviewSchema = z
     ),
     report_urls: z.record(z.string()),
     sign_in_hook_ready: z.boolean(),
+    sign_in_hook_url: z.string(),
+    sign_in_hook_source: z.enum(["backend", "admin"]).nullable(),
   })
   .openapi("SmsOverview");
 const smsPreviewSchema = z.object({ text: z.string(), encoding: z.string(), characters: z.number().int(), segments: z.number().int() });
@@ -3317,6 +3319,15 @@ registry.registerPath({
       },
     },
   },
+  responses: { "200": okResponse(smsOverviewSchema), ...errorResponses },
+});
+registry.registerPath({
+  method: "put",
+  path: "/sms/hook-secret",
+  tags: ["Admin", "Messaging"],
+  summary: "Save (or clear with null) the Supabase Send SMS hook secret, kept in Vault (channels.manage)",
+  security,
+  request: { body: { content: { "application/json": { schema: z.object({ secret: z.string().nullable() }) } } } },
   responses: { "200": okResponse(smsOverviewSchema), ...errorResponses },
 });
 registry.registerPath({

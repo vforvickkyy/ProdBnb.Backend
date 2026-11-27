@@ -8,7 +8,7 @@ import { requirePermission as can } from "../admin/permissions";
 import { SAMPLE_VARS } from "./content";
 import { listSms, listTemplates, phoneOf, previewTemplate, resendSms, sendTestSms, smsSummary, updateTemplate } from "./outbox.service";
 import { SMS_PROVIDERS } from "./providers";
-import { removeProvider, saveProvider, smsOverview, updateSmsSettings } from "./settings.service";
+import { removeProvider, saveProvider, saveSmsHookSecret, smsOverview, updateSmsSettings } from "./settings.service";
 import { dltForm, maskPhone, placeholders } from "./text";
 
 /** The signed-in person's SMS switch (account settings on the website and apps). */
@@ -64,6 +64,13 @@ const settingsBody = z
 
 adminSmsRouter.patch("/sms/settings", can("channels.manage"), validate({ body: settingsBody }), async (req: Request, res: Response) => {
   await updateSmsSettings(req.user!.id, req.valid!.body as z.infer<typeof settingsBody>);
+  ok(res, await smsOverview());
+});
+
+const hookSecretBody = z.object({ secret: z.string().trim().max(500).nullable() }).strict();
+
+adminSmsRouter.put("/sms/hook-secret", can("channels.manage"), validate({ body: hookSecretBody }), async (req: Request, res: Response) => {
+  await saveSmsHookSecret(req.user!.id, (req.valid!.body as z.infer<typeof hookSecretBody>).secret);
   ok(res, await smsOverview());
 });
 

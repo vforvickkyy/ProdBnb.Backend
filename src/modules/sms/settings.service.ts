@@ -105,7 +105,30 @@ export function reportUrl(provider: SmsProviderId, token: string): string {
   return `${env.API_BASE_URL.replace(/\/$/, "")}/v1/webhooks/sms/${provider}?token=${token}`;
 }
 
-export async function smsOverview(): Promise<{ settings: Omit<SmsSettingsRow, "webhook_token">; providers: ProviderStatus[]; report_urls: Record<string, string>; sign_in_hook_ready: boolean }> {
+let hookSecretCache: { value: string | null; at: number } | null = null;
+
+/** The Supabase "Send SMS" hook secret: the backend setting if set, else the one pasted in the admin. */
+export async function smsHookSecret(): Promise<string | null> {
+  if (env.AUTH_SMS_HOOK_SECRET) return env.AUTH_SMS_HOOK_SECRET;
+  if (hookSecretCache && Date.now() - hookSecretCache.at < CACHE_TTL_MS) return hookSecretCache.value;
+  const { data, error } = await adminClient.rpc("sms_hook_secret");
+  if (error) throw error;
+  hookSecretCache = { value: typeof data === "string" && data ? data : null, at: Date.now() };
+  return hookSecretCache.value;
+}
+
+export async function saveSmsHookSecret(actorId: string, secret: string | null): Promise<void> {
+  const value = secret?.trim() || null;
+  if (value && !/^(v1,)?whsec_[A-Za-z0-9+/=]{20,}$/.test(value)) {
+    throw new ValidationError('That isn\'t a hook secret. In Supabase it looks like "v1,whsec_…".');
+  }
+  const { error } = await adminClient.rpc("sms_hook_secret_save", { _secret: value });
+  if (error) throw error;
+  hookSecretCache = null;
+  await writeAuditLog(actorId, value ? "ADMIN_CONNECTED_CHANNEL" : "ADMIN_DISCONNECTED_CHANNEL", "channel", SMS_AUDIT_TARGET, null, { channel: "sms:sign-in-hook" });
+}
+
+export async function smsOverview(): Promise<{ settings: Omit<SmsSettingsRow, "webhook_token">; providers: ProviderStatus[]; report_urls: Record<string, string>; sign_in_hook_ready: boolean; sign_in_hook_url: string; sign_in_hook_source: "backend" | "admin" | null }> {
   const settings = await smsSettings();
   const { data, error } = await adminClient.from("sms_providers").select("provider, config, last_tested_at, last_test_ok, last_test_error, updated_at");
   if (error) throw error;
@@ -131,7 +154,9 @@ export async function smsOverview(): Promise<{ settings: Omit<SmsSettingsRow, "w
     settings: rest,
     providers,
     report_urls: Object.fromEntries(providers.map((p) => [p.id, reportUrl(p.id, token)])),
-    sign_in_hook_ready: Boolean(env.AUTH_SMS_HOOK_SECRET),
+    sign_in_hook_ready: Boolean(await smsHookSecret()),
+    sign_in_hook_url: `${env.API_BASE_URL.replace(/\/$/, "")}/v1/auth/sms-hook`,
+    sign_in_hook_source: env.AUTH_SMS_HOOK_SECRET ? "backend" : (await smsHookSecret()) ? "admin" : null,
   };
 }
 
