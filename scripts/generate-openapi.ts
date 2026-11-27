@@ -3200,6 +3200,233 @@ registry.registerPath({
   },
 });
 
+// -- SMS (Messaging -> SMS) ---------------------------------------------------------------------------
+
+const smsProviderIdSchema = z.enum(["msg91", "twilio", "twofactor", "gupshup"]);
+const smsStatusSchema = z.enum(["queued", "sending", "sent", "delivered", "failed", "skipped"]);
+const smsOverviewSchema = z
+  .object({
+    settings: z.object({
+      mode: z.enum(["off", "test", "live"]),
+      active_provider: smsProviderIdSchema.nullable(),
+      sender_id: z.string().nullable(),
+      dlt_entity_id: z.string().nullable(),
+      test_numbers: z.array(z.string()),
+      otp_per_hour: z.number().int(),
+      updated_at: z.string(),
+    }),
+    providers: z.array(
+      z.object({
+        id: smsProviderIdSchema,
+        name: z.string(),
+        website: z.string(),
+        connected: z.boolean(),
+        active: z.boolean(),
+        config: z.record(z.string()),
+        fields: z.array(
+          z.object({
+            key: z.string(),
+            label: z.string(),
+            secret: z.boolean(),
+            required: z.boolean(),
+            placeholder: z.string().optional(),
+            help: z.string().optional(),
+            saved: z.boolean(),
+          })
+        ),
+        report_setup: z.string(),
+        last_tested_at: z.string().nullable(),
+        last_test_ok: z.boolean().nullable(),
+        last_test_error: z.string().nullable(),
+      })
+    ),
+    report_urls: z.record(z.string()),
+    sign_in_hook_ready: z.boolean(),
+  })
+  .openapi("SmsOverview");
+const smsPreviewSchema = z.object({ text: z.string(), encoding: z.string(), characters: z.number().int(), segments: z.number().int() });
+const smsTemplateSchema = z
+  .object({
+    key: z.string(),
+    name: z.string(),
+    audience: z.enum(["booker", "host", "everyone"]),
+    category: z.enum(["otp", "transactional", "service"]),
+    body: z.string(),
+    dlt_template_id: z.string().nullable(),
+    provider_template_id: z.string().nullable(),
+    enabled: z.boolean(),
+    sort_order: z.number().int(),
+    updated_at: z.string(),
+    dlt_text: z.string(),
+    variables: z.array(z.string()),
+    preview: smsPreviewSchema,
+  })
+  .openapi("SmsTemplate");
+const adminSmsSchema = z
+  .object({
+    id: z.string().uuid(),
+    user_id: z.string().uuid().nullable(),
+    to_phone: z.string(),
+    to_phone_masked: z.string().optional(),
+    template: z.string(),
+    idempotency_key: z.string(),
+    data: z.record(z.unknown()),
+    body: z.string().nullable(),
+    segments: z.number().int().nullable(),
+    status: smsStatusSchema,
+    mode: z.enum(["test", "live"]),
+    provider: z.string().nullable(),
+    provider_message_id: z.string().nullable(),
+    attempts: z.number().int(),
+    last_error: z.string().nullable(),
+    send_after: z.string(),
+    sent_at: z.string().nullable(),
+    delivered_at: z.string().nullable(),
+    created_at: z.string(),
+    updated_at: z.string(),
+  })
+  .openapi("AdminSms");
+
+registry.registerPath({
+  method: "get",
+  path: "/sms/settings",
+  tags: ["Admin", "Messaging"],
+  summary: "SMS mode, providers (never their keys) and delivery-report addresses (campaigns.view)",
+  security,
+  responses: { "200": okResponse(smsOverviewSchema), ...errorResponses },
+});
+registry.registerPath({
+  method: "patch",
+  path: "/sms/settings",
+  tags: ["Admin", "Messaging"],
+  summary: "Change SMS mode, provider, DLT sender and entity id, test numbers (channels.manage)",
+  security,
+  request: {
+    body: {
+      content: {
+        "application/json": {
+          schema: z.object({
+            mode: z.enum(["off", "test", "live"]).optional(),
+            active_provider: smsProviderIdSchema.nullable().optional(),
+            sender_id: z.string().nullable().optional(),
+            dlt_entity_id: z.string().nullable().optional(),
+            test_numbers: z.array(z.string()).optional(),
+            otp_per_hour: z.number().int().min(1).max(30).optional(),
+          }),
+        },
+      },
+    },
+  },
+  responses: { "200": okResponse(smsOverviewSchema), ...errorResponses },
+});
+registry.registerPath({
+  method: "put",
+  path: "/sms/providers/{provider}",
+  tags: ["Admin", "Messaging"],
+  summary: "Connect a provider or change its settings; empty secret fields keep the stored key (channels.manage)",
+  security,
+  request: {
+    params: z.object({ provider: smsProviderIdSchema }),
+    body: { content: { "application/json": { schema: z.record(z.string()) } } },
+  },
+  responses: { "200": okResponse(smsOverviewSchema), ...errorResponses },
+});
+registry.registerPath({
+  method: "delete",
+  path: "/sms/providers/{provider}",
+  tags: ["Admin", "Messaging"],
+  summary: "Disconnect a provider and delete its key (channels.manage)",
+  security,
+  request: { params: z.object({ provider: smsProviderIdSchema }) },
+  responses: { "200": okResponse(smsOverviewSchema), ...errorResponses },
+});
+registry.registerPath({
+  method: "get",
+  path: "/sms/templates",
+  tags: ["Admin", "Messaging"],
+  summary: "Every text: wording, DLT form, DLT template id, preview (campaigns.view)",
+  security,
+  responses: { "200": okResponse(z.array(smsTemplateSchema)), ...errorResponses },
+});
+registry.registerPath({
+  method: "patch",
+  path: "/sms/templates/{key}",
+  tags: ["Admin", "Messaging"],
+  summary: "Edit a text's wording, DLT template id or switch it off (channels.manage)",
+  security,
+  request: {
+    params: z.object({ key: z.string() }),
+    body: {
+      content: {
+        "application/json": {
+          schema: z.object({
+            body: z.string().optional(),
+            dlt_template_id: z.string().nullable().optional(),
+            provider_template_id: z.string().nullable().optional(),
+            enabled: z.boolean().optional(),
+          }),
+        },
+      },
+    },
+  },
+  responses: { "200": okResponse(smsTemplateSchema), ...errorResponses },
+});
+registry.registerPath({
+  method: "post",
+  path: "/sms/preview",
+  tags: ["Admin", "Messaging"],
+  summary: "Preview wording with example values, its length and DLT form (campaigns.view)",
+  security,
+  request: { body: { content: { "application/json": { schema: z.object({ body: z.string() }) } } } },
+  responses: {
+    "200": okResponse(smsPreviewSchema.extend({ dlt_text: z.string(), sample_values: z.record(z.union([z.string(), z.number(), z.null()])) })),
+    ...errorResponses,
+  },
+});
+registry.registerPath({
+  method: "post",
+  path: "/sms/test",
+  tags: ["Admin", "Messaging"],
+  summary: "Send one text with example values to a number (channels.manage)",
+  security,
+  request: { body: { content: { "application/json": { schema: z.object({ phone: z.string(), template: z.string().optional() }) } } } },
+  responses: { "200": okResponse(adminSmsSchema), ...errorResponses },
+});
+registry.registerPath({
+  method: "get",
+  path: "/sms",
+  tags: ["Admin", "Messaging"],
+  summary: "Texts sent or waiting, newest first (campaigns.view)",
+  security,
+  request: {
+    query: z.object({
+      status: smsStatusSchema.optional(),
+      template: z.string().optional(),
+      search: z.string().optional(),
+      page: z.coerce.number().int().min(1).default(1),
+      pageSize: z.coerce.number().int().min(1).max(100).default(25),
+    }),
+  },
+  responses: { "200": paginatedResponse(adminSmsSchema), ...errorResponses },
+});
+registry.registerPath({
+  method: "get",
+  path: "/sms/summary",
+  tags: ["Admin", "Messaging"],
+  summary: "Texts in each state over the last 7 days, and how many were test-only (campaigns.view)",
+  security,
+  responses: { "200": okResponse(z.record(z.string(), z.number().int())), ...errorResponses },
+});
+registry.registerPath({
+  method: "post",
+  path: "/sms/{id}/resend",
+  tags: ["Admin", "Messaging"],
+  summary: "Send a failed or skipped text again (campaigns.send)",
+  security,
+  request: { params: z.object({ id: z.string().uuid() }) },
+  responses: { "200": okResponse(adminSmsSchema), ...errorResponses },
+});
+
 const generator = new OpenApiGeneratorV3(registry.definitions);
 const document = generator.generateDocument({
   openapi: "3.0.0",
