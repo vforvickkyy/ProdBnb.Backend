@@ -89,7 +89,7 @@ export class FCMProvider implements NotificationProvider {
             data: input.data,
             android: {
               priority: "HIGH",
-              notification: { sound: "default", ...(input.threadId ? { tag: input.threadId } : {}) },
+              notification: { sound: "default", channel_id: androidChannelFor(input.category), ...(input.threadId ? { tag: input.threadId } : {}) },
             },
           },
         }),
@@ -110,4 +110,11 @@ export class FCMProvider implements NotificationProvider {
       return { status: "failed", providerMessageId: null, errorReason: error instanceof Error ? error.message.slice(0, 200) : "FCM error" };
     }
   }
+}
+
+/** The Android app's notification channels (co.heken.app PushChannels): people can mute each kind. */
+export function androidChannelFor(category: string | null | undefined): "messages" | "bookings" | "general" {
+  if (category === "PRODBNB_MESSAGE") return "messages";
+  if (category === "PRODBNB_BOOKING") return "bookings";
+  return "general";
 }
